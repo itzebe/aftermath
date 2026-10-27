@@ -4,6 +4,16 @@
  */
 
 import path from "node:path";
+import { loadEnvConfig } from "@next/env";
+
+/**
+ * Next.js loads `.env*` for the web app automatically, but standalone scripts
+ * run through `tsx` do not. Loading once here (idempotent) keeps the seed and
+ * verification scripts reading the same `.env.local` the app does, without
+ * duplicating the credentials into a second file. `@next/env` is already a
+ * Next.js dependency, so no new package is introduced.
+ */
+loadEnvConfig(process.cwd(), process.env.NODE_ENV !== "production");
 
 export interface AftermathConfig {
   memory: {

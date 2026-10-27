@@ -18,7 +18,7 @@ export default async function OverviewPage() {
     );
   }
 
-  const { counts, configuration, tatumHealth, memoryHealth, mainnetRequirement, evaluation } =
+  const { counts, configuration, tatumHealth, memoryHealth, memoryStatus, mainnetRequirement, evaluation } =
     overview;
 
   return (
@@ -30,7 +30,21 @@ export default async function OverviewPage() {
           right={<RunScenariosButton />}
         />
 
-        {!configuration.memory.isLive ? (
+        {memoryStatus.state === "MAINNET_AUTH_FAILED" ? (
+          <div className="mb-4">
+            <Notice tone="bad" title="Walrus Memory credentials rejected">
+              The relayer is reachable but refused the delegate credentials, so
+              no Mainnet write can be claimed. {memoryStatus.detail}
+            </Notice>
+          </div>
+        ) : configuration.memory.isLive && !memoryStatus.authenticated ? (
+          <div className="mb-4">
+            <Notice tone="warn" title="Walrus Memory authentication unverified">
+              The relayer is reachable but the credential check did not confirm
+              the delegate key. {memoryStatus.detail}
+            </Notice>
+          </div>
+        ) : !configuration.memory.isLive ? (
           <div className="mb-4">
             <Notice tone="warn" title="Simulated memory backend in use">
               {configuration.memory.reason}
@@ -114,8 +128,22 @@ export default async function OverviewPage() {
                 Relayer health
               </div>
               <div className="mt-1.5 flex items-center gap-2">
-                <Pill tone={memoryHealth.ok ? "ok" : "bad"}>
-                  {memoryHealth.ok ? "reachable" : "unreachable"}
+                <Pill
+                  tone={
+                    memoryStatus.state === "MAINNET_AUTH_FAILED"
+                      ? "bad"
+                      : memoryStatus.authenticated
+                        ? "ok"
+                        : "warn"
+                  }
+                >
+                  {memoryStatus.authenticated
+                    ? "credentials accepted"
+                    : memoryStatus.state === "MAINNET_AUTH_FAILED"
+                      ? "credentials rejected"
+                      : memoryStatus.reachable
+                        ? "reachable · auth unverified"
+                        : "unreachable"}
                 </Pill>
                 {memoryHealth.relayerVersion ? (
                   <span className="mono text-[0.6875rem] text-paper-500">
@@ -124,7 +152,7 @@ export default async function OverviewPage() {
                 ) : null}
               </div>
               <div className="mt-2 text-[0.75rem] leading-relaxed text-paper-300">
-                {memoryHealth.detail}
+                {memoryStatus.detail}
               </div>
             </div>
           </div>

@@ -55,6 +55,30 @@ interface StubOptions {
   waitThrows?: boolean;
   blobId?: string;
   recallFindsBlob?: boolean;
+  /** Omit listNamespaces entirely to model a client without the credential probe. */
+  omitListNamespaces?: boolean;
+  /** Make the authenticated probe fail in a specific way. */
+  authProbe?: "ok" | "auth" | "upstream" | "network";
+}
+
+function authError(kind: "auth" | "upstream" | "network"): Error {
+  if (kind === "auth") {
+    const e = new Error(
+      "401 from relayer: typically wrong private key, key not registered on this account",
+    ) as Error & { status?: number; serverCode?: string };
+    e.status = 401;
+    e.serverCode = "AUTH_REJECTED";
+    return e;
+  }
+  if (kind === "upstream") {
+    const e = new Error(
+      "Walrus Memory temporarily cannot verify credentials (upstream unavailable).",
+    ) as Error & { status?: number; serverCode?: string };
+    e.status = 503;
+    e.serverCode = "AUTH_UPSTREAM_UNAVAILABLE";
+    return e;
+  }
+  return new Error("fetch failed: socket hang up");
 }
 
 function stubClient(opts: StubOptions = {}) {
@@ -91,6 +115,13 @@ function stubClient(opts: StubOptions = {}) {
       };
     }),
   };
+  if (!opts.omitListNamespaces) {
+    client.listNamespaces = vi.fn(async () => {
+      const probe = opts.authProbe ?? "ok";
+      if (probe !== "ok") throw authError(probe);
+      return { namespaces: [{ name: "aftermath", memory_count: 0 }], has_more: false };
+    });
+  }
   return { client, calls };
 }
 
@@ -251,5 +282,78 @@ describe("MemWalMemoryAdapter recall", () => {
     };
     const hits = await adapter(client).recallRelevantLessons("anything");
     expect(hits[0].record).toBeUndefined();
+  });
+});
+
+describe("MemWalMemoryAdapter credential status", () => {
+  it("reports MAINNET_AUTH_CONFIRMED only after an authenticated call succeeds", async () => {
+    const { client } = stubClient({ authProbe: "ok" });
+    const s = await adapter(client).status();
+    expect(s.state).toBe("MAINNET_AUTH_CONFIRMED");
+    expect(s.authenticated).toBe(true);
+    expect(s.reachable).toBe(true);
+    expect(s.authFailed).toBe(false);
+  });
+
+  it("reports MAINNET_AUTH_FAILED when the relayer refuses the credentials", async () => {
+    const { client } = stubClient({ authProbe: "auth" });
+    const s = await adapter(client).status();
+    expect(s.state).toBe("MAINNET_AUTH_FAILED");
+    expect(s.authFailed).toBe(true);
+    expect(s.authenticated).toBe(false);
+    // The transport still worked; only the credentials were rejected.
+    expect(s.reachable).toBe(true);
+    expect(s.serverCode).toBe("AUTH_REJECTED");
+  });
+
+  it("treats an auth-upstream 503 as an outage, not a bad key", async () => {
+    const { client } = stubClient({ authProbe: "upstream" });
+    const s = await adapter(client).status();
+    expect(s.state).toBe("MAINNET_UNAVAILABLE");
+    expect(s.authUpstreamUnavailable).toBe(true);
+    expect(s.authFailed).toBe(false);
+    expect(s.authenticated).toBe(false);
+  });
+
+  it("never claims authentication when the probe fails for an unknown reason", async () => {
+    const { client } = stubClient({ authProbe: "network" });
+    const s = await adapter(client).status();
+    expect(s.authenticated).toBe(false);
+    expect(s.authFailed).toBe(false);
+    expect(s.state).toBe("MAINNET_CONNECTED");
+  });
+
+  it("reports unreachable when neither the health nor the auth probe connects", async () => {
+    const { client } = stubClient({ healthOk: false, authProbe: "network" });
+    const s = await adapter(client).status();
+    expect(s.reachable).toBe(false);
+    expect(s.authenticated).toBe(false);
+    expect(s.state).toBe("MAINNET_UNAVAILABLE");
+  });
+
+  it("still reports authenticated when only the health endpoint fails", async () => {
+    // A working signed call is stronger evidence than a failing unauthenticated
+    // probe, so authentication must win over the health check.
+    const { client } = stubClient({ healthOk: false, authProbe: "ok" });
+    const s = await adapter(client).status();
+    expect(s.authenticated).toBe(true);
+    expect(s.state).toBe("MAINNET_AUTH_CONFIRMED");
+  });
+
+  it("does not claim authentication when the client lacks the credential probe", async () => {
+    const { client } = stubClient({ omitListNamespaces: true });
+    const s = await adapter(client).status();
+    expect(s.authenticated).toBe(false);
+    expect(s.state).toBe("MAINNET_CONNECTED");
+    expect(s.detail).toMatch(/unverified/i);
+  });
+
+  it("refuses to attempt a write when the credentials are already rejected", async () => {
+    const { client, calls } = stubClient({ authProbe: "auth" });
+    const receipt = await adapter(client).rememberLesson(lesson());
+    expect(receipt.state).toBe("failed");
+    expect(receipt.error).toMatch(/credentials rejected/i);
+    // The signed write must not even be submitted.
+    expect(calls.remember).toBe(0);
   });
 });

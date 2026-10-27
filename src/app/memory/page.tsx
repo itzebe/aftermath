@@ -31,9 +31,27 @@ interface MemoryWrite {
   text: string;
 }
 
+interface MemoryStatusPayload {
+  state:
+    | "SIMULATED_BACKEND"
+    | "MAINNET_CONNECTED"
+    | "MAINNET_AUTH_CONFIRMED"
+    | "MAINNET_WRITE_CONFIRMED"
+    | "MAINNET_RECALL_CONFIRMED"
+    | "MAINNET_AUTH_FAILED"
+    | "MAINNET_UNAVAILABLE";
+  reachable: boolean;
+  authenticated: boolean;
+  authFailed: boolean;
+  authUpstreamUnavailable: boolean;
+  serverCode?: string;
+  detail: string;
+}
+
 interface MemoryResponse {
   writes: MemoryWrite[];
   health: { ok: boolean; detail: string; relayerVersion?: string; writeReady?: boolean };
+  status: MemoryStatusPayload;
   backend: string;
   isLive: boolean;
   reason: string;
@@ -45,6 +63,31 @@ const STATE_TONE: Record<WriteState, "neutral" | "warn" | "ok" | "bad"> = {
   processing: "warn",
   completed: "ok",
   failed: "bad",
+};
+
+/**
+ * How to present the backend state. A reachable-but-unauthenticated relayer is
+ * a warning, never a success: the credentials were not accepted, so no Mainnet
+ * write can be claimed.
+ */
+const BACKEND_STATE_TONE: Record<MemoryStatusPayload["state"], "ok" | "warn" | "bad"> = {
+  SIMULATED_BACKEND: "warn",
+  MAINNET_CONNECTED: "warn",
+  MAINNET_AUTH_CONFIRMED: "ok",
+  MAINNET_WRITE_CONFIRMED: "ok",
+  MAINNET_RECALL_CONFIRMED: "ok",
+  MAINNET_AUTH_FAILED: "bad",
+  MAINNET_UNAVAILABLE: "bad",
+};
+
+const BACKEND_STATE_LABEL: Record<MemoryStatusPayload["state"], string> = {
+  SIMULATED_BACKEND: "Simulated backend",
+  MAINNET_CONNECTED: "Mainnet reachable · auth unverified",
+  MAINNET_AUTH_CONFIRMED: "Mainnet connected · credentials accepted",
+  MAINNET_WRITE_CONFIRMED: "Mainnet write confirmed",
+  MAINNET_RECALL_CONFIRMED: "Mainnet recall confirmed",
+  MAINNET_AUTH_FAILED: "Mainnet credentials rejected",
+  MAINNET_UNAVAILABLE: "Mainnet unavailable",
 };
 
 export default function MemoryPage() {
@@ -115,7 +158,20 @@ export default function MemoryPage() {
         }
       />
 
-      {!data.isLive ? (
+      {data.status.state === "MAINNET_AUTH_FAILED" ? (
+        <Notice tone="bad" title="Walrus Memory credentials rejected">
+          The relayer at {data.backend} is reachable, but it refused the delegate
+          credentials, so no Mainnet write can be attempted or claimed.{" "}
+          {data.status.serverCode ? `Server code: ${data.status.serverCode}. ` : ""}
+          {data.status.detail}
+        </Notice>
+      ) : !data.status.authenticated && data.isLive ? (
+        <Notice tone="warn" title="Walrus Memory authentication unverified">
+          The relayer is reachable but the credential check did not confirm the
+          delegate key. Mainnet writes are not counted as connected until an
+          authenticated call succeeds. {data.status.detail}
+        </Notice>
+      ) : !data.isLive ? (
         <Notice tone="warn" title="Walrus Memory is not configured">
           {data.reason}
         </Notice>
@@ -131,6 +187,35 @@ export default function MemoryPage() {
           {verifyResult}
         </Notice>
       ) : null}
+
+      <Panel
+        title="Backend state"
+        hint="Configured account vs. confirmed service, and submitted vs. confirmed writes, stated separately."
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <Pill tone={BACKEND_STATE_TONE[data.status.state]}>
+            {BACKEND_STATE_LABEL[data.status.state]}
+          </Pill>
+          <span className="mono text-[0.6875rem] text-paper-500">
+            {data.backend}
+          </span>
+        </div>
+        <div className="mt-2 grid gap-1 text-[0.75rem] leading-relaxed text-paper-300">
+          <div>
+            Relayer transport:{" "}
+            <span className="mono">
+              {data.status.reachable ? "reachable" : "not reached"}
+            </span>
+          </div>
+          <div>
+            Credentials accepted:{" "}
+            <span className="mono">
+              {data.status.authenticated ? "yes" : "no / unverified"}
+            </span>
+          </div>
+          <div className="text-paper-400">{data.status.detail}</div>
+        </div>
+      </Panel>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Metric

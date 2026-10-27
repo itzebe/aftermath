@@ -38,8 +38,26 @@ async function main(): Promise<number> {
   console.log("");
 
   const health = await memory.adapter.validateMemoryAvailability();
+  const status = await memory.adapter.status();
   console.log(`memory health  : ${health.ok ? "ok" : "unavailable"} — ${health.detail}`);
+  console.log(`backend state  : ${status.state}`);
+  console.log(`authenticated  : ${status.authenticated ? "yes" : "no"}`);
+  console.log(`relayer transport: ${status.reachable ? "reachable" : "not reached"}`);
   console.log("");
+
+  if (status.authFailed) {
+    console.log(
+      "STOP: the relayer is reachable but rejected the Walrus Memory credentials.\n" +
+        "No Mainnet write can be attempted, so this run cannot satisfy the\n" +
+        "requirement. Fix the credentials and retry:\n" +
+        "  - the account ID must be a MemWalAccount object id (0x...), not a wallet address\n" +
+        "  - the delegate public key must be registered on that account, on the SAME network\n" +
+        "  - the relayer must be the Mainnet relayer for a Mainnet account\n" +
+        `Detail: ${status.detail}\n`,
+    );
+    store.close();
+    return 1;
+  }
 
   if (!memory.adapter.isLive) {
     console.log(

@@ -7,6 +7,7 @@ import {
   type BackendHealth,
   type MemoryAdapter,
   type MemoryBackendId,
+  type MemoryStatus,
   type MemoryWriteReceipt,
   type RecallOptions,
   type RecalledLesson,
@@ -43,6 +44,19 @@ export class SimulatedMemoryAdapter implements MemoryAdapter {
 
   async validateMemoryAvailability(): Promise<BackendHealth> {
     return this.initialize();
+  }
+
+  async status(): Promise<MemoryStatus> {
+    return {
+      state: "SIMULATED_BACKEND",
+      reachable: false,
+      authenticated: false,
+      authFailed: false,
+      authUpstreamUnavailable: false,
+      detail:
+        "Simulated in-process memory backend. No Walrus Memory network call is " +
+        "made, so there is no Mainnet connection or authentication to report.",
+    };
   }
 
   private async writeText(

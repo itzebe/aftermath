@@ -61,6 +61,40 @@ export interface BackendHealth {
   writeReady?: boolean;
 }
 
+/**
+ * The single, honest statement of where the memory backend stands.
+ *
+ * The distinction that matters most is between the transport reaching the
+ * relayer (`MAINNET_CONNECTED`) and the delegate credentials actually being
+ * accepted (`MAINNET_AUTH_CONFIRMED`). An unauthenticated `/health` probe can
+ * succeed while every signed call is refused with 401, so a reachable relayer
+ * must never be presented as a working one.
+ */
+export type MemoryBackendState =
+  | "SIMULATED_BACKEND"
+  | "MAINNET_CONNECTED"
+  | "MAINNET_AUTH_CONFIRMED"
+  | "MAINNET_WRITE_CONFIRMED"
+  | "MAINNET_RECALL_CONFIRMED"
+  | "MAINNET_AUTH_FAILED"
+  | "MAINNET_UNAVAILABLE";
+
+export interface MemoryStatus {
+  /** The label shown in the UI. Never optimistic: it reflects the last probe. */
+  state: MemoryBackendState;
+  /** Transport to the relayer succeeded. Does NOT imply authentication. */
+  reachable: boolean;
+  /** An authenticated (signed) call succeeded. This is the real "connected". */
+  authenticated: boolean;
+  /** The relayer explicitly refused the credentials (HTTP 401). */
+  authFailed: boolean;
+  /** The relayer could not verify credentials because it was unavailable. */
+  authUpstreamUnavailable: boolean;
+  /** Machine-readable server code, when the relayer supplied one. */
+  serverCode?: string;
+  detail: string;
+}
+
 export interface RecallOptions {
   limit?: number;
   namespace?: string;
@@ -84,6 +118,16 @@ export interface MemoryAdapter {
 
   initialize(): Promise<BackendHealth>;
   validateMemoryAvailability(): Promise<BackendHealth>;
+
+  /**
+   * Full status, including whether the credentials are actually accepted.
+   *
+   * `validateMemoryAvailability()` only proves the relayer answers; this proves
+   * the delegate key is valid by making one authenticated (signed) call. The UI
+   * must use this, not the health probe, to decide whether to claim Mainnet
+   * operation.
+   */
+  status(): Promise<MemoryStatus>;
 
   rememberIncident(incident: Incident): Promise<MemoryWriteReceipt>;
   rememberLesson(lesson: CorrectiveLessonRecord): Promise<MemoryWriteReceipt>;

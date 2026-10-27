@@ -7,6 +7,7 @@ import {
   type BackendHealth,
   type MemoryAdapter,
   type MemoryBackendId,
+  type MemoryStatus,
   type MemoryWriteReceipt,
   type RecallOptions,
   type RecalledLesson,
@@ -49,6 +50,15 @@ export interface MemWalClientLike {
   }): Promise<{
     results: Array<{ blob_id: string; text: string; distance: number; created_at?: string }>;
   }>;
+  /**
+   * Authenticated read used as the credential probe. `listNamespaces` is a
+   * signed (delegate-key) call, so a 401 here means the credentials were
+   * rejected — unlike `health()`, which is unauthenticated and cannot tell.
+   */
+  listNamespaces?(options?: {
+    limit?: number;
+    cursor?: string;
+  }): Promise<{ namespaces: Array<{ name: string; memory_count: number }>; has_more: boolean }>;
   destroy?(): void;
 }
 
@@ -153,6 +163,114 @@ export class MemWalMemoryAdapter implements MemoryAdapter {
     }
   }
 
+  /**
+   * Classify a relayer error without guessing. A 401 is an explicit credential
+   * rejection; a 503 tagged `AUTH_UPSTREAM_UNAVAILABLE` means the relayer could
+   * not verify credentials at all, which is an outage, not a bad key. Anything
+   * else is treated as transport trouble and never as an authentication result.
+   */
+  private classifyAuthError(err: unknown): {
+    authFailed: boolean;
+    upstreamUnavailable: boolean;
+    serverCode?: string;
+    detail: string;
+  } {
+    const e = err as { message?: string; status?: number; serverCode?: string };
+    const message = redact(e?.message ?? String(err));
+    const status = typeof e?.status === "number" ? e.status : undefined;
+    const serverCode = e?.serverCode;
+    const upstreamUnavailable =
+      status === 503 || /AUTH_UPSTREAM_UNAVAILABLE/.test(message);
+    const authFailed =
+      status === 401 || /AUTH_REJECTED/.test(message) || /401 from relayer/.test(message);
+    return { authFailed, upstreamUnavailable, serverCode, detail: message };
+  }
+
+  async status(): Promise<MemoryStatus> {
+    if (!this.client) {
+      try {
+        this.client = this.buildClient();
+      } catch (err) {
+        return {
+          state: "MAINNET_UNAVAILABLE",
+          reachable: false,
+          authenticated: false,
+          authFailed: false,
+          authUpstreamUnavailable: false,
+          detail: `Walrus Memory client could not be built: ${redact((err as Error).message)}`,
+        };
+      }
+    }
+
+    const health = await this.probeHealth();
+
+    // An authenticated call is the only proof the delegate key is accepted.
+    // Some stand-ins (tests) omit listNamespaces; then we can only report
+    // reachability, never claim authentication we did not prove.
+    if (typeof this.client.listNamespaces !== "function") {
+      return {
+        state: health.ok ? "MAINNET_CONNECTED" : "MAINNET_UNAVAILABLE",
+        reachable: health.ok,
+        authenticated: false,
+        authFailed: false,
+        authUpstreamUnavailable: false,
+        detail: health.ok
+          ? `${health.detail} Credential check unavailable on this client, so authentication is unverified.`
+          : health.detail,
+      };
+    }
+
+    try {
+      await this.client.listNamespaces({ limit: 1 });
+      return {
+        state: "MAINNET_AUTH_CONFIRMED",
+        reachable: true,
+        authenticated: true,
+        authFailed: false,
+        authUpstreamUnavailable: false,
+        detail: `${health.detail} Delegate credentials accepted by the relayer.`,
+      };
+    } catch (err) {
+      const cls = this.classifyAuthError(err);
+      if (cls.authFailed) {
+        return {
+          state: "MAINNET_AUTH_FAILED",
+          reachable: true,
+          authenticated: false,
+          authFailed: true,
+          authUpstreamUnavailable: false,
+          serverCode: cls.serverCode,
+          detail:
+            "The relayer is reachable but rejected the Walrus Memory credentials. " +
+            `No Mainnet writes will be attempted. ${cls.detail}`,
+        };
+      }
+      if (cls.upstreamUnavailable) {
+        return {
+          state: "MAINNET_UNAVAILABLE",
+          reachable: true,
+          authenticated: false,
+          authFailed: false,
+          authUpstreamUnavailable: true,
+          serverCode: cls.serverCode,
+          detail:
+            "The relayer could not verify credentials because its own upstream is " +
+            `unavailable. This is an outage, not a bad key. ${cls.detail}`,
+        };
+      }
+      return {
+        state: health.ok ? "MAINNET_CONNECTED" : "MAINNET_UNAVAILABLE",
+        reachable: health.ok,
+        authenticated: false,
+        authFailed: false,
+        authUpstreamUnavailable: false,
+        detail:
+          "Reached the relayer but could not complete the credential check: " +
+          `${cls.detail}. Authentication is therefore unverified.`,
+      };
+    }
+  }
+
   private async writeText(
     kind: "incident" | "lesson",
     text: string,
@@ -176,6 +294,18 @@ export class MemWalMemoryAdapter implements MemoryAdapter {
         ...base,
         state: "failed",
         error: `memory backend unavailable: ${health.detail}`,
+      };
+    }
+
+    // Refuse to submit a signed write when the credentials are already known to
+    // be rejected. Attempting anyway would only produce the same 401, and the
+    // ledger must not look like a write that might have landed.
+    const backendStatus = await this.status();
+    if (backendStatus.authFailed) {
+      return {
+        ...base,
+        state: "failed",
+        error: `credentials rejected by the relayer; write not attempted: ${backendStatus.detail}`,
       };
     }
 

@@ -65,6 +65,7 @@ export interface OverviewPayload {
   configuration: ConfigurationStatus;
   tatumHealth: Awaited<ReturnType<ReturnType<typeof runtime>["suiVerifier"]["health"]>>;
   memoryHealth: Awaited<ReturnType<ReturnType<typeof runtime>["memory"]["adapter"]["validateMemoryAvailability"]>>;
+  memoryStatus: Awaited<ReturnType<ReturnType<typeof runtime>["memory"]["adapter"]["status"]>>;
   mainnetRequirement: {
     required: number;
     completedLive: number;
@@ -79,9 +80,10 @@ export interface OverviewPayload {
 export async function getOverview(): Promise<OverviewPayload> {
   const rt = runtime();
   const counts = rt.store.counts();
-  const [tatumHealth, memoryHealth] = await Promise.all([
+  const [tatumHealth, memoryHealth, memoryStatus] = await Promise.all([
     rt.suiVerifier.health(),
     rt.memory.adapter.validateMemoryAvailability(),
+    rt.memory.adapter.status(),
   ]);
 
   const lastRun = rt.store.listScenarioRuns(1)[0] as
@@ -102,6 +104,7 @@ export async function getOverview(): Promise<OverviewPayload> {
     configuration: configurationStatus(),
     tatumHealth,
     memoryHealth,
+    memoryStatus,
     mainnetRequirement: {
       required,
       completedLive,

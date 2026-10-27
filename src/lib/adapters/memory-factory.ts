@@ -25,7 +25,8 @@ export function resolveMemoryAdapter(
       adapter: new SimulatedMemoryAdapter(config.memory.namespace),
       reason:
         "AFTERMATH_FORCE_MOCK_MEMORY=1 is set, so the simulated memory " +
-        "backend is in use. Mainnet memory counts will be 0.",
+        "backend is in use. Writes here are NOT stored on Walrus Mainnet and " +
+        "do not count toward the required Mainnet total.",
       degraded: true,
     };
     return cached;
