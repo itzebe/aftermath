@@ -1,0 +1,160 @@
+import type {
+  CorrectiveLessonRecord,
+  Incident,
+  Provenance,
+} from "@/lib/schemas";
+
+/** Where a memory backend actually writes. Surfaced verbatim in the UI. */
+export type MemoryBackendId =
+  | "memwal-mainnet"
+  | "memwal-staging"
+  | "memwal-unknown"
+  | "simulated";
+
+/** Lifecycle of a single memory write, as required by the brief. */
+export type MemoryWriteState =
+  | "requested"
+  | "processing"
+  | "completed"
+  | "failed";
+
+export interface MemoryWriteReceipt {
+  /** Local identifier for this write attempt (stable across polling). */
+  writeId: string;
+  /** What was written: incident summary or corrective lesson. */
+  kind: "incident" | "lesson";
+  /** The relayer job id, when one was returned. */
+  jobId: string | null;
+  state: MemoryWriteState;
+  /** Walrus blob id, only populated once the write actually completes. */
+  blobId?: string;
+  owner?: string;
+  namespace?: string;
+  error?: string;
+  /** True only after a recall query returned this record back. */
+  recallVerified: boolean;
+  recallMatches?: number;
+  backend: MemoryBackendId;
+  provenance: Provenance;
+  requestedAt: string;
+  completedAt?: string;
+  /** The exact text submitted, kept for auditability. */
+  text: string;
+}
+
+export interface RecalledLesson {
+  blobId: string;
+  text: string;
+  distance: number;
+  createdAt?: string;
+  /** Parsed lesson record, when the text is a valid corrective_lesson JSON. */
+  record?: CorrectiveLessonRecord;
+  provenance: Provenance;
+}
+
+export interface BackendHealth {
+  ok: boolean;
+  detail: string;
+  /** Relayer-reported version fields, when available. */
+  relayerVersion?: string;
+  apiVersion?: string;
+  writeReady?: boolean;
+}
+
+export interface RecallOptions {
+  limit?: number;
+  namespace?: string;
+  /** `recent` asks the relayer to order by write time rather than similarity. */
+  sort?: "relevance" | "recent";
+  maxDistance?: number;
+}
+
+/**
+ * Server-side adapter for the persistent lesson store.
+ *
+ * Two implementations exist: a real Walrus Memory (MemWal) adapter and an
+ * explicitly-labelled simulated adapter used for tests and for environments
+ * with no credentials. Callers must never present simulated state as real.
+ */
+export interface MemoryAdapter {
+  readonly backend: MemoryBackendId;
+  readonly provenance: Provenance;
+  /** True when this adapter talks to a real relayer. */
+  readonly isLive: boolean;
+
+  initialize(): Promise<BackendHealth>;
+  validateMemoryAvailability(): Promise<BackendHealth>;
+
+  rememberIncident(incident: Incident): Promise<MemoryWriteReceipt>;
+  rememberLesson(lesson: CorrectiveLessonRecord): Promise<MemoryWriteReceipt>;
+
+  /** Poll a previously accepted write until it completes or fails. */
+  waitForWriteCompletion(jobId: string): Promise<MemoryWriteReceipt>;
+
+  recallRelevantLessons(
+    query: string,
+    options?: RecallOptions,
+  ): Promise<RecalledLesson[]>;
+
+  /** Confirm a completed write is retrievable by recall. */
+  verifyRecall(receipt: MemoryWriteReceipt): Promise<MemoryWriteReceipt>;
+}
+
+/**
+ * Canonical text form of a lesson. Walrus Memory stores text; the structured
+ * record is embedded as JSON so it round-trips through recall unchanged.
+ */
+export function lessonToMemoryText(lesson: CorrectiveLessonRecord): string {
+  return [
+    `corrective_lesson:${lesson.domain}:${lesson.failure_pattern}`,
+    lesson.corrective_rule,
+    JSON.stringify(lesson),
+  ].join("\n");
+}
+
+export function incidentToMemoryText(incident: Incident): string {
+  const evidence = incident.evidenceReferences
+    .map((e) => `${e.kind}:${e.ref}`)
+    .join(", ");
+  return [
+    `incident:${incident.domain}:${incident.actionType}`,
+    `intended: ${incident.intendedOutcome}`,
+    `claimed: ${incident.claimedOutcome?.claim ?? "(none)"}`,
+    `evidence: ${evidence || "(none)"}`,
+    JSON.stringify({
+      type: "incident_record",
+      incident_id: incident.incidentId,
+      domain: incident.domain,
+      action_type: incident.actionType,
+      execution_id: incident.executionId,
+      intended_outcome: incident.intendedOutcome,
+      claimed_outcome: incident.claimedOutcome?.claim ?? null,
+      evidence_references: incident.evidenceReferences,
+      status: incident.currentStatus,
+      created_at: incident.createdAt,
+      provenance: incident.provenance,
+    }),
+  ].join("\n");
+}
+
+/** Extract an embedded corrective lesson from recalled memory text. */
+export function parseLessonFromMemoryText(
+  text: string,
+): CorrectiveLessonRecord | undefined {
+  const start = text.indexOf("{");
+  if (start === -1) return undefined;
+  const candidates = [text.slice(start)];
+  const lastBrace = text.lastIndexOf("}");
+  if (lastBrace > start) candidates.push(text.slice(start, lastBrace + 1));
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && parsed.type === "corrective_lesson") {
+        return parsed as CorrectiveLessonRecord;
+      }
+    } catch {
+      // try the next candidate slice
+    }
+  }
+  return undefined;
+}

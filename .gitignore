@@ -1,0 +1,22 @@
+node_modules/
+.next/
+out/
+build/
+dist/
+coverage/
+.env
+.env.local
+.env*.local
+*.log
+.DS_Store
+# Runtime state: SQLite index, harness scratch space, generated artifacts.
+data/
+
+# Agent working memory (session notes, not part of the submission).
+.openhands/
+test-results/
+playwright-report/
+blob-report/
+.aftermath-data/
+next-env.d.ts
+tsconfig.tsbuildinfo
