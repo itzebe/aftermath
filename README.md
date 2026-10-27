@@ -12,9 +12,32 @@ what does the authoritative source actually say, and what should happen next
 time this pattern appears?
 
 - Hackathon: **Total Recall** (Tatum × Walrus)
+- Primary track: **Smart Agents for Real Life**
 - Deadline: 10 November 2026, 17:00 UTC
-- Technical blog (GitHub Pages): <https://itzebe.github.io/aftermath/>
-- Blog source: [`docs/BLOG.md`](docs/BLOG.md)
+- Published article (Medium): [AFTERMATH — Every failure should leave a safeguard](https://medium.com/@jonathanebi05/aftermath-every-failure-should-leave-a-safeguard-25446fdbcd71)
+- Rendered article (GitHub Pages): <https://itzebe.github.io/aftermath/>
+- Article source: [`docs/BLOG.md`](docs/BLOG.md)
+
+---
+
+## Technical Blog
+
+The write-up of AFTERMATH is published externally on Medium:
+
+**[AFTERMATH — Every failure should leave a safeguard](https://medium.com/@jonathanebi05/aftermath-every-failure-should-leave-a-safeguard-25446fdbcd71)**
+
+The article covers the problem AFTERMATH addresses, the design principle that
+shaped it (*a claim is not evidence*), how the seven-stage pipeline works, the
+Walrus Memory and Tatum Sui integrations, the evaluation results, and the
+lessons learned while building it — including what is deliberately not finished.
+It is published externally (Medium), and the same text is versioned in this
+repository as [`docs/BLOG.md`](docs/BLOG.md), which is the canonical source.
+
+The repository also renders that source to a static page on GitHub Pages:
+<https://itzebe.github.io/aftermath/>. Both links point at the same article;
+Medium is the externally published copy, and GitHub Pages is the
+repository-owned mirror. See [Publishing the blog](#publishing-the-blog) for how
+the static page is built and deployed.
 
 ---
 
@@ -317,18 +340,21 @@ As of the last run, against the real services:
 
 ## Publishing the blog
 
-The technical blog lives in [`docs/BLOG.md`](docs/BLOG.md) and is published to
-GitHub Pages as a standalone static page. It is built by
+The technical blog lives in [`docs/BLOG.md`](docs/BLOG.md). The same article is
+published externally on
+[Medium](https://medium.com/@jonathanebi05/aftermath-every-failure-should-leave-a-safeguard-25446fdbcd71),
+and this repository renders it to a static page on GitHub Pages:
+<https://itzebe.github.io/aftermath/>. The Pages page is built by
 [`.github/workflows/pages.yml`](.github/workflows/pages.yml) from the isolated
 package in [`blog/`](blog), which has its own `package.json` and never touches
 the application's dependencies or build.
 
-One-time setup: in **Settings → Pages → Build and deployment**, set **Source**
-to **GitHub Actions**. The workflow's own token can deploy but cannot enable
-Pages, so this single setting is done by hand. After that, run the workflow once
-from the **Actions** tab (workflow_dispatch) to publish immediately; subsequent
-pushes to `master` that change `docs/BLOG.md`, `blog/**`, or the workflow itself
-rebuild and redeploy automatically. To build and preview locally:
+The Pages site is deployed through the **GitHub Actions** source. The
+workflow's own token can deploy but cannot enable Pages, so that setting was
+made once by hand in **Settings → Pages → Build and deployment**. Pushes to
+`master` that change `docs/BLOG.md`, `blog/**`, or the workflow itself rebuild
+and redeploy automatically; the workflow can also be run on demand from the
+**Actions** tab (workflow_dispatch). To build and preview locally:
 
 ```bash
 cd blog
