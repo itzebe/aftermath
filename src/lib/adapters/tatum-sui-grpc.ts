@@ -1,6 +1,9 @@
-import { SuiGrpcClient, GrpcWebFetchTransport } from "@mysten/sui/grpc";
+import { SuiGrpcClient } from "@mysten/sui/grpc";
+import { GrpcTransport } from "@protobuf-ts/grpc-transport";
+import { ChannelCredentials } from "@grpc/grpc-js";
 import { EvidenceAssessmentSchema } from "@/lib/schemas";
 import { redact } from "@/lib/util/redact";
+import { withRateLimitRetry, type RetryOptions } from "@/lib/adapters/tatum-retry";
 import {
   TatumSuiTransportError,
   type FailureKind,
@@ -11,6 +14,8 @@ export interface TatumSuiGrpcConfig {
   grpcUrl: string;
   apiKey: string | null;
   timeoutMs: number;
+  /** Overridable so tests exercise retry logic without real backoff delays. */
+  retry?: RetryOptions;
 }
 
 /**
@@ -37,6 +42,8 @@ export interface SuiGrpcClientLike {
       response: { chainId?: string; chain?: string };
     }>;
   };
+  /** Present on the real client; releases the underlying gRPC channel. */
+  close?(): void;
 }
 
 export interface GrpcTransactionOutcome {
@@ -75,9 +82,11 @@ export interface SuiGrpcTransportOptions {
  * message. gRPC is therefore the supported interface for full-node reads, and
  * this adapter is the primary verifier.
  *
- * The transport is the official `@mysten/sui/grpc` client (gRPC-web over
- * HTTPS), which already speaks the `sui.rpc.v2` protos. No proto files are
- * vendored or generated here.
+ * The transport is the official `@mysten/sui/grpc` client over the
+ * `@protobuf-ts/grpc-transport` native gRPC channel, which already speaks the
+ * `sui.rpc.v2` protos. No proto files are vendored or generated here. Native
+ * gRPC is required rather than gRPC-Web because Tatum's gateway answers with
+ * `content-type: application/grpc`, which the gRPC-Web transport rejects.
  *
  * Contract of this adapter mirrors the JSON-RPC adapter exactly:
  *   - A transport failure is UNKNOWN, never VERIFIED_FAILURE.
@@ -89,6 +98,7 @@ export interface SuiGrpcTransportOptions {
  */
 export class TatumSuiGrpcAdapter {
   readonly sourceName = "Tatum Sui Mainnet gRPC";
+  private cachedClient: SuiGrpcClientLike | undefined;
 
   constructor(
     private readonly config: TatumSuiGrpcConfig,
@@ -122,7 +132,10 @@ export class TatumSuiGrpcAdapter {
     }
     try {
       const client = this.client();
-      const info = await client.ledgerService.getServiceInfo({});
+      const info = await withRateLimitRetry(
+        () => client.ledgerService.getServiceInfo({}),
+        this.config.retry,
+      );
       return {
         ok: true,
         detail: `Tatum Sui Mainnet gRPC reachable and authenticated (chain ${info.response.chain ?? "?"}).`,
@@ -146,10 +159,14 @@ export class TatumSuiGrpcAdapter {
 
     let outcome: GrpcTransactionOutcome;
     try {
-      outcome = await this.client().getTransaction({
-        digest,
-        include: { effects: true },
-      });
+      outcome = await withRateLimitRetry(
+        () =>
+          this.client().getTransaction({
+            digest,
+            include: { effects: true },
+          }),
+        this.config.retry,
+      );
     } catch (err) {
       return this.transportFailure(err, reference, observedAt);
     }
@@ -263,11 +280,15 @@ export class TatumSuiGrpcAdapter {
   async discoverRecentDigests(limit = 20): Promise<string[]> {
     if (!this.config.apiKey) return [];
     try {
-      const page = await this.client().listTransactions({
-        limit: Math.min(limit, 50),
-        order: "descending",
-        include: { effects: false },
-      });
+      const page = await withRateLimitRetry(
+        () =>
+          this.client().listTransactions({
+            limit: Math.min(limit, 50),
+            order: "descending",
+            include: { effects: false },
+          }),
+        this.config.retry,
+      );
       return page.transactions
         .map((t) => (t.Transaction ?? t.FailedTransaction)?.digest)
         .filter((d): d is string => typeof d === "string" && d.length > 0);
@@ -277,11 +298,24 @@ export class TatumSuiGrpcAdapter {
   }
 
   private client(): SuiGrpcClientLike {
-    return this.clientFactory({
+    // One channel per adapter. A native gRPC channel owns a TCP connection and
+    // a keepalive timer; creating one per call would leak both, and would keep
+    // short-lived scripts alive. The memoised client is released by `close()`.
+    this.cachedClient ??= this.clientFactory({
       grpcUrl: this.config.grpcUrl,
       apiKey: this.config.apiKey ?? "",
       timeoutMs: this.config.timeoutMs,
     });
+    return this.cachedClient;
+  }
+
+  /**
+   * Release the underlying gRPC channel. Long-lived servers never need this,
+   * but scripts and tests must call it or the process will not exit.
+   */
+  close(): void {
+    this.cachedClient?.close?.();
+    this.cachedClient = undefined;
   }
 
   private transportFailure(
@@ -362,10 +396,25 @@ export class TatumSuiGrpcAdapter {
   }
 }
 
-/** The default client: official `@mysten/sui/grpc` over gRPC-web with the API key as metadata. */
+/**
+ * The default client: official `@mysten/sui/grpc` over *native* gRPC with the
+ * API key as request metadata.
+ *
+ * Tatum's Sui gRPC gateway speaks native gRPC over HTTP/2 and answers every
+ * call with `content-type: application/grpc`. The gRPC-Web transport shipped
+ * with `@mysten/sui/grpc` accepts only the `application/grpc-web*` content
+ * types and throws "unexpected response content type: application/grpc" on the
+ * first call, so it cannot be used here. `@protobuf-ts/grpc-transport` (over
+ * `@grpc/grpc-js`) is the same client library family with a real HTTP/2 gRPC
+ * channel, and the `SuiGrpcClient` accepts it directly.
+ *
+ * `host` must be host:port — the scheme is supplied by the channel credentials,
+ * not the URL.
+ */
 function defaultClient(opts: SuiGrpcTransportOptions): SuiGrpcClientLike {
-  const transport = new GrpcWebFetchTransport({
-    baseUrl: opts.grpcUrl,
+  const transport = new GrpcTransport({
+    host: toGrpcHost(opts.grpcUrl),
+    channelCredentials: ChannelCredentials.createSsl(),
     meta: { "x-api-key": opts.apiKey },
     timeout: opts.timeoutMs,
   });
@@ -373,6 +422,13 @@ function defaultClient(opts: SuiGrpcTransportOptions): SuiGrpcClientLike {
     network: "mainnet",
     transport,
   }) as unknown as SuiGrpcClientLike;
+}
+
+/** Strip the scheme and any path from a gRPC URL, yielding `host:port`. */
+export function toGrpcHost(grpcUrl: string): string {
+  const withoutScheme = grpcUrl.replace(/^https?:\/\//i, "");
+  const host = withoutScheme.split("/")[0];
+  return host.includes(":") ? host : `${host}:443`;
 }
 
 interface ClassifiedError {

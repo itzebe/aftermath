@@ -31,6 +31,8 @@ export class TatumSuiTransportError extends Error {
     message: string,
     readonly kind: FailureKind,
     readonly httpStatus?: number,
+    /** Server-advised wait before retrying, when the response carried one. */
+    readonly retryAfterMs?: number,
   ) {
     super(message);
     this.name = "TatumSuiTransportError";
@@ -63,8 +65,16 @@ export interface SuiTransactionLookupResult {
 }
 
 /**
- * Read-only Sui transaction verification through Tatum's documented Sui Mainnet
- * JSON-RPC gateway.
+ * Read-only Sui transaction verification through Tatum's Sui Mainnet JSON-RPC
+ * gateway.
+ *
+ * LEGACY / NOT WIRED INTO PRODUCTION. Tatum's gateway host
+ * (`https://sui-mainnet.gateway.tatum.io`) no longer serves JSON-RPC: `POST /`
+ * returns HTTP 404 and the only interface it advertises is GraphQL. The live
+ * finance path therefore uses the gRPC verifier with the GraphQL verifier as
+ * fallback (`buildSuiVerifier` in `src/lib/demos/finance.ts`). This class is
+ * retained because the JSON-RPC contract and its failure semantics are still
+ * exercised by tests and may be revived if Tatum restores a JSON-RPC endpoint.
  *
  * Contract of this adapter:
  *   - A transport failure (timeout, network error, auth failure, bad JSON) is

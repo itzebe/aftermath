@@ -23,7 +23,7 @@ function config(overrides: Partial<AftermathConfig["memory"]> = {}): AftermathCo
       forceSimulated: false,
       ...overrides,
     },
-    tatum: { rpcUrl: "https://sui-mainnet.gateway.tatum.io", grpcUrl: "https://sui-mainnet-grpc.gateway.tatum.io", apiKey: null, timeoutMs: 12000 },
+    tatum: { rpcUrl: "https://sui-mainnet.gateway.tatum.io", grpcUrl: "https://sui-mainnet-grpc.gateway.tatum.io", graphqlUrl: "https://sui-mainnet.gateway.tatum.io/graphql", apiKey: null, timeoutMs: 12000 },
     dbPath: ":memory:",
     harnessDir: "/tmp/aftermath-harness",
   };

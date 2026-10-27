@@ -18,6 +18,12 @@ export interface SuiVerifier {
    * rather than invent a digest.
    */
   discoverRecentDigests(limit?: number): Promise<string[]>;
+  /**
+   * Release any long-lived transport (a native gRPC channel owns a TCP
+   * connection and keepalive timer). Optional: server code never calls it,
+   * but scripts and tests must, or the process will not exit.
+   */
+  close?(): void;
 }
 
 /**
@@ -112,5 +118,10 @@ export class CompositeSuiVerifier implements SuiVerifier {
     }
     if (this.fallback.configured) return this.fallback.discoverRecentDigests(limit);
     return [];
+  }
+
+  close(): void {
+    this.primary.close?.();
+    this.fallback.close?.();
   }
 }

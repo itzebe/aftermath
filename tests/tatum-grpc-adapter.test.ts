@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   TatumSuiGrpcAdapter,
   classifyError,
+  toGrpcHost,
   type GrpcTransactionOutcome,
   type SuiGrpcClientLike,
 } from "@/lib/adapters/tatum-sui-grpc";
@@ -442,5 +443,21 @@ describe("CompositeSuiVerifier", () => {
       fakeVerifier("jsonrpc", { digests: ["J1"] }),
     );
     expect(await composite.discoverRecentDigests()).toEqual(["J1"]);
+  });
+});
+
+describe("toGrpcHost — the native gRPC channel needs host:port", () => {
+  it("strips the scheme and appends the default TLS port", () => {
+    expect(toGrpcHost("https://sui-mainnet-grpc.gateway.tatum.io")).toBe(
+      "sui-mainnet-grpc.gateway.tatum.io:443",
+    );
+  });
+
+  it("strips a trailing path", () => {
+    expect(toGrpcHost("https://example.com/some/path")).toBe("example.com:443");
+  });
+
+  it("preserves an explicit port", () => {
+    expect(toGrpcHost("https://example.com:8443")).toBe("example.com:8443");
   });
 });

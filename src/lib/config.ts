@@ -4,7 +4,8 @@
  */
 
 import path from "node:path";
-import { loadEnvConfig } from "@next/env";
+import { existsSync, readFileSync } from "node:fs";
+import { loadEnvConfig, processEnv } from "@next/env";
 
 /**
  * Next.js loads `.env*` for the web app automatically, but standalone scripts
@@ -14,6 +15,23 @@ import { loadEnvConfig } from "@next/env";
  * Next.js dependency, so no new package is introduced.
  */
 loadEnvConfig(process.cwd(), process.env.NODE_ENV !== "production");
+
+// `@next/env` deliberately excludes `.env.local` when NODE_ENV === "test" (the
+// value Vitest forces), so the opt-in live tests would never see the real
+// credentials. Load that one file explicitly only when the live smoke suite is
+// requested — never during ordinary unit runs, which must stay hermetic and
+// must not reach the network.
+if (process.env.NODE_ENV === "test" && process.env.AFTERMATH_LIVE_SMOKE) {
+  const envLocal = path.resolve(process.cwd(), ".env.local");
+  if (existsSync(envLocal)) {
+    processEnv(
+      [{ path: ".env.local", contents: readFileSync(envLocal, "utf8"), env: {} }],
+      process.cwd(),
+      console,
+      false,
+    );
+  }
+}
 
 export interface AftermathConfig {
   memory: {
@@ -26,6 +44,7 @@ export interface AftermathConfig {
   tatum: {
     rpcUrl: string;
     grpcUrl: string;
+    graphqlUrl: string;
     apiKey: string | null;
     timeoutMs: number;
   };
@@ -56,6 +75,11 @@ export function loadConfig(): AftermathConfig {
       grpcUrl:
         optional("TATUM_SUI_GRPC_URL") ??
         "https://sui-mainnet-grpc.gateway.tatum.io",
+      // The JSON-RPC interface at `rpcUrl` is no longer served by Tatum's
+      // gateway; the same host now exposes GraphQL at `/graphql`.
+      graphqlUrl:
+        optional("TATUM_SUI_GRAPHQL_URL") ??
+        "https://sui-mainnet.gateway.tatum.io/graphql",
       apiKey: optional("TATUM_API_KEY"),
       timeoutMs: Number(optional("TATUM_TIMEOUT_MS") ?? "12000"),
     },

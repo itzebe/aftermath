@@ -1,5 +1,5 @@
-import { TatumSuiAdapter } from "@/lib/adapters/tatum-sui";
 import { TatumSuiGrpcAdapter } from "@/lib/adapters/tatum-sui-grpc";
+import { TatumSuiGraphqlAdapter } from "@/lib/adapters/tatum-sui-graphql";
 import {
   CompositeSuiVerifier,
   type SuiVerifier,
@@ -15,12 +15,14 @@ import type { AftermathConfig } from "@/lib/config";
  * is exercised end to end.
  *
  * The primary interface is gRPC, because Sui Foundation has disabled JSON-RPC
- * on Mainnet full nodes and documents gRPC as the replacement. JSON-RPC is kept
- * only as a fallback for when gRPC cannot answer at all.
+ * on Mainnet full nodes and documents gRPC as the replacement. The fallback is
+ * GraphQL: Tatum's Sui gateway host that used to serve JSON-RPC now serves
+ * GraphQL at `/graphql`, so GraphQL is the supported HTTP fallback when the
+ * gRPC channel cannot answer.
  */
 
 /**
- * Build the Sui verifier the finance path uses: gRPC first, JSON-RPC fallback.
+ * Build the Sui verifier the finance path uses: gRPC first, GraphQL fallback.
  * Both are read-only; neither can broadcast a transaction.
  */
 export function buildSuiVerifier(config: AftermathConfig["tatum"]): SuiVerifier {
@@ -29,8 +31,12 @@ export function buildSuiVerifier(config: AftermathConfig["tatum"]): SuiVerifier 
     apiKey: config.apiKey,
     timeoutMs: config.timeoutMs,
   });
-  const jsonRpc = new TatumSuiAdapter(config);
-  return new CompositeSuiVerifier(grpc, jsonRpc);
+  const graphql = new TatumSuiGraphqlAdapter({
+    graphqlUrl: config.graphqlUrl,
+    apiKey: config.apiKey,
+    timeoutMs: config.timeoutMs,
+  });
+  return new CompositeSuiVerifier(grpc, graphql);
 }
 
 export interface DiscoveredDigest {
@@ -92,8 +98,8 @@ export async function runFinanceEvidenceCases(
       apiKey: null,
       timeoutMs: 12000,
     }),
-    new TatumSuiAdapter({
-      rpcUrl: "https://sui-mainnet.gateway.tatum.io",
+    new TatumSuiGraphqlAdapter({
+      graphqlUrl: "https://sui-mainnet.gateway.tatum.io/graphql",
       apiKey: null,
       timeoutMs: 12000,
     }),

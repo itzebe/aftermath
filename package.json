@@ -2,7 +2,7 @@
   "name": "aftermath",
   "version": "0.1.0",
   "private": true,
-  "description": "AFTERMATH \u2014 Every failure should leave a safeguard. Evidence-based failure prevention with persistent Walrus Memory.",
+  "description": "AFTERMATH — Every failure should leave a safeguard. Evidence-based failure prevention with persistent Walrus Memory.",
   "engines": {
     "node": ">=20.0.0"
   },
@@ -22,7 +22,9 @@
     "recall:demo": "tsx scripts/recall-demo.ts"
   },
   "dependencies": {
+    "@grpc/grpc-js": "^1.14.6",
     "@mysten-incubation/memwal": "^0.1.10",
+    "@protobuf-ts/grpc-transport": "^2.11.1",
     "next": "^15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

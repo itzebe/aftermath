@@ -15,7 +15,7 @@ import {
 } from "@/components/ui";
 
 interface EvaluationResponse {
-  metrics: EvaluationMetrics;
+  metrics: EvaluationMetrics | null;
   outcomes: ScenarioOutcome[];
 }
 
@@ -48,6 +48,24 @@ export default function EvaluationPage() {
   if (!data) return <Loading label="Loading evaluation…" />;
 
   const m = data.metrics;
+
+  // No run recorded yet: the API returns null metrics, which must render as an
+  // explicit empty state rather than a client-side crash on `m.scenarios`.
+  if (!m) {
+    return (
+      <div className="space-y-5">
+        <SectionTitle
+          title="Learning Evaluation"
+          hint="Did the activated safeguards actually change the outcome? These figures are measured over the controlled scenarios in the last run. They are scenario measurements, not claims about production reliability."
+        />
+        <EmptyState title="No scenario run recorded yet">
+          Run the demonstrations from the Overview page. Every metric on this
+          page is derived from that run and nothing else.
+        </EmptyState>
+      </div>
+    );
+  }
+
   const pct = (n: number) => `${(n * 100).toFixed(0)}%`;
 
   return (

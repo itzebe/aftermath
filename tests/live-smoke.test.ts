@@ -3,7 +3,9 @@ import { MemWal } from "@mysten-incubation/memwal";
 import { MemWalMemoryAdapter } from "@/lib/adapters/memwal-memory";
 import { TatumSuiAdapter } from "@/lib/adapters/tatum-sui";
 import { TatumSuiGrpcAdapter } from "@/lib/adapters/tatum-sui-grpc";
+import { TatumSuiGraphqlAdapter } from "@/lib/adapters/tatum-sui-graphql";
 import { loadConfig } from "@/lib/config";
+import { buildSuiVerifier, runFinanceEvidenceCases } from "@/lib/demos/finance";
 
 /**
  * Opt-in live smoke tests.
@@ -136,4 +138,98 @@ maybe("live smoke: Tatum Sui gRPC gateway (primary interface)", () => {
     expect(result.assessment.status).not.toBe("VERIFIED_FAILURE");
     expect(result.transportOk).toBe(false);
   }, 30_000);
+});
+
+// Positive live tests: these require a real TATUM_API_KEY and are skipped when
+// it is absent, so a keyless CI run still passes.
+const hasTatumKey = Boolean(loadConfig().tatum.apiKey);
+
+maybe("live smoke: Tatum Sui gRPC gateway (authenticated reads)", () => {
+  it.runIf(hasTatumKey)(
+    "authenticates and returns real Mainnet ledger data",
+    async () => {
+      const config = loadConfig();
+      const adapter = new TatumSuiGrpcAdapter(config.tatum);
+      const health = await adapter.health();
+      expect(health.ok).toBe(true);
+      expect(health.chainIdentifier).toBeTruthy();
+
+      const digests = await adapter.discoverRecentDigests(5);
+      expect(digests.length).toBeGreaterThan(0);
+
+      const result = await adapter.verifyTransaction(digests[0]);
+      expect(result.transportOk).toBe(true);
+      expect(["VERIFIED_SUCCESS", "VERIFIED_FAILURE"]).toContain(
+        result.assessment.status,
+      );
+      expect(result.assessment.verified).toBe(true);
+      adapter.close();
+    },
+    60_000,
+  );
+});
+
+maybe("live smoke: Tatum Sui GraphQL gateway (authenticated reads)", () => {
+  it.runIf(hasTatumKey)(
+    "authenticates and returns real Mainnet ledger data",
+    async () => {
+      const config = loadConfig();
+      const adapter = new TatumSuiGraphqlAdapter(config.tatum);
+      const health = await adapter.health();
+      expect(health.ok).toBe(true);
+      expect(health.chainIdentifier).toBeTruthy();
+
+      const digests = await adapter.discoverRecentDigests(5);
+      expect(digests.length).toBeGreaterThan(0);
+
+      const result = await adapter.verifyTransaction(digests[0]);
+      expect(result.transportOk).toBe(true);
+      expect(["VERIFIED_SUCCESS", "VERIFIED_FAILURE"]).toContain(
+        result.assessment.status,
+      );
+      expect(result.assessment.verified).toBe(true);
+    },
+    60_000,
+  );
+
+  it("maps a rejected API key to UNKNOWN, never to a failed transaction", async () => {
+    const adapter = new TatumSuiGraphqlAdapter({
+      graphqlUrl: "https://sui-mainnet.gateway.tatum.io/graphql",
+      apiKey: "definitely-not-a-valid-key",
+      timeoutMs: 15_000,
+    });
+    const result = await adapter.verifyTransaction(
+      "91LGR7dJZnfx8PHnAK7qrSQDH8fpcmamGJfomfC8vVuM",
+    );
+    expect(result.assessment.status).toBe("UNKNOWN");
+    expect(result.assessment.status).not.toBe("VERIFIED_FAILURE");
+    expect(result.transportOk).toBe(false);
+  }, 30_000);
+});
+
+maybe("live smoke: finance evidence cases over the real ledger", () => {
+  it.runIf(hasTatumKey)(
+    "produces successful and unsuccessful cases from genuine chain data",
+    async () => {
+      const config = loadConfig();
+      const verifier = buildSuiVerifier(config.tatum);
+      const { cases, digestsFound } = await runFinanceEvidenceCases(verifier, {
+        scanLimit: 10,
+      });
+      expect(digestsFound).toBeGreaterThan(0);
+      for (const c of cases) {
+        if (!c.simulated) {
+          expect(c.digestOrigin).toBe("chain");
+          expect(c.digest).toBeTruthy();
+        }
+      }
+      const unavailable = cases.find(
+        (c) => c.scenarioId === "finance-unavailable-evidence",
+      );
+      expect(unavailable?.simulated).toBe(true);
+      expect(unavailable?.status).toBe("UNKNOWN");
+      verifier.close?.();
+    },
+    90_000,
+  );
 });
