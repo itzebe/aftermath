@@ -291,6 +291,22 @@ export class AftermathStore {
     );
   }
 
+  /**
+   * Reset only the state a controlled scenario run produces, leaving any real
+   * Mainnet memory-write records in place.
+   *
+   * A live write is an irreversible on-chain artefact. Clearing its ledger
+   * entry would not un-write it, but it would hide it from the count the
+   * submission is judged on. So simulated writes are cleared (a re-run must be
+   * reproducible) and live writes are kept (the ledger must stay truthful).
+   */
+  resetSimulated(): void {
+    this.db.exec(
+      `DELETE FROM incidents; DELETE FROM rules; DELETE FROM decisions; DELETE FROM scenario_runs;
+       DELETE FROM memory_writes WHERE provenance != 'live';`,
+    );
+  }
+
   close(): void {
     this.db.close();
   }

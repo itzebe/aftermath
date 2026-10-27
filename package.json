@@ -17,7 +17,8 @@
     "test:e2e": "playwright test",
     "seed": "tsx scripts/seed.ts",
     "seed:check": "tsx scripts/seed.ts --check",
-    "keygen": "tsx scripts/generate-delegate-key.ts"
+    "keygen": "tsx scripts/generate-delegate-key.ts",
+    "test:live": "AFTERMATH_LIVE_SMOKE=1 vitest run tests/live-smoke.test.ts"
   },
   "dependencies": {
     "@mysten-incubation/memwal": "^0.1.10",

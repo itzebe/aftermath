@@ -108,7 +108,7 @@ export class MemWalMemoryAdapter implements MemoryAdapter {
   private async doInitialize(): Promise<BackendHealth> {
     try {
       this.client = this.buildClient();
-      return await this.validateMemoryAvailability();
+      return await this.probeHealth();
     } catch (err) {
       const e = err as Error;
       return {
@@ -119,6 +119,22 @@ export class MemWalMemoryAdapter implements MemoryAdapter {
   }
 
   async validateMemoryAvailability(): Promise<BackendHealth> {
+    // Lazily build so this method is safe to call on its own, not only after
+    // initialize(). A caller should never have to know the order.
+    if (!this.client) {
+      try {
+        this.client = this.buildClient();
+      } catch (err) {
+        return {
+          ok: false,
+          detail: `Walrus Memory client could not be built: ${redact((err as Error).message)}`,
+        };
+      }
+    }
+    return this.probeHealth();
+  }
+
+  private async probeHealth(): Promise<BackendHealth> {
     if (!this.client) {
       return { ok: false, detail: "Client not initialized." };
     }

@@ -98,6 +98,17 @@ export interface MemoryAdapter {
 
   /** Confirm a completed write is retrievable by recall. */
   verifyRecall(receipt: MemoryWriteReceipt): Promise<MemoryWriteReceipt>;
+
+  /**
+   * Clear the backend's contents, if clearing is meaningful for it.
+   *
+   * Only the simulated backend implements this. Real Walrus Memory is durable
+   * and append-only from the application's point of view: there is no way to
+   * un-write a Mainnet blob, so the live adapter deliberately leaves this
+   * undefined. A scenario run clears simulated state to stay reproducible and
+   * never touches Mainnet memory.
+   */
+  reset?(): Promise<void>;
 }
 
 /**

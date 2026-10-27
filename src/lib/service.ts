@@ -112,6 +112,13 @@ export async function getOverview(): Promise<OverviewPayload> {
 
 export async function runScenarios(): Promise<DemoRunResult> {
   const rt = runtime();
+  // A scenario run is a controlled demonstration, so it starts from a known
+  // state. Without this, incidents, rules, and simulated memories accumulate
+  // across runs and the same button produces different numbers each time.
+  // Live Mainnet write records are preserved: they are irreversible on-chain
+  // artefacts and the ledger must keep counting them.
+  rt.store.resetSimulated();
+  await rt.memory.adapter.reset?.();
   const result = await runAllScenarios({
     config: loadConfig(),
     store: rt.store,

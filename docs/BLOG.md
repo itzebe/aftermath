@@ -176,6 +176,8 @@ Running the eight controlled scenarios produces:
 | Baseline (first-occurrence) scenarios | 6 |
 | Repeat scenarios | 2 |
 | Unsupported claims caught | 3 / 4 |
+| Unsupported claims unresolved (`UNKNOWN`) | 1 |
+| Unsupported claims allowed to stand | 0 |
 | Baseline failure rate | 67% |
 | Repeat prevention rate | 100% |
 | Repeat failures that slipped through | 0 |
@@ -193,9 +195,23 @@ The two repeat scenarios are the point of the product:
 Both were prevented. Zero valid actions were blocked. That second number matters
 as much as the first: safe behaviour is not the same as denying everything.
 
-One unsupported claim out of four resolves to `UNKNOWN` rather than being caught
-as a failure, and that is correct. It is the finance case where no Tatum key is
-configured. The engine cannot establish success *or* failure, so it says so.
+The four unsupported claims split into three buckets, and the split is the honest
+part. Three were refused by an explicit safeguard decision (`BLOCK` or
+`REQUIRE_VERIFICATION`): the failing coding tests, the coding regression, and the
+finance claim with no Tatum key configured. One resolved to `UNKNOWN` — the
+first-occurrence coding claim, made before any rule existed, where the test
+harness produced no usable evidence, so the engine can establish neither success
+nor failure and says exactly that. Crucially, **zero** unsupported claims were
+allowed to stand: no `ALLOW` was ever issued against a claim the evidence did not
+support. The `UNKNOWN` case is not a hole in the safeguard; it is the engine
+refusing to guess on the first occurrence, which is what leaves something for the
+safeguard to learn from.
+
+Re-running the demonstration reproduces these numbers exactly. A scenario run
+clears the simulated incident, rule, and memory state first, so the same button
+always produces the same figures. Real Mainnet write records are deliberately
+preserved, because a completed on-chain write cannot be un-done and the ledger
+must keep counting it.
 
 ## The honest part
 

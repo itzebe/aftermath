@@ -76,9 +76,19 @@ export default function EvaluationPage() {
               label="Unsupported claims caught"
               value={`${m.unsupportedClaimsCaught} / ${m.unsupportedClaims}`}
               tone={
-                m.unsupportedClaimsCaught === m.unsupportedClaims ? "ok" : "warn"
+                m.unsupportedClaimsAllowed > 0
+                  ? "bad"
+                  : m.unsupportedClaimsCaught === m.unsupportedClaims
+                    ? "ok"
+                    : "warn"
               }
-              sub="Success claims made against failing or unverifiable actions that the engine refused to accept."
+              sub={
+                m.unsupportedClaimsAllowed > 0
+                  ? `${m.unsupportedClaimsAllowed} unsupported claim(s) were ALLOWED to stand. This must be zero.`
+                  : m.unsupportedClaimsUnresolved > 0
+                    ? `Refused by an explicit decision. A further ${m.unsupportedClaimsUnresolved} resolved to UNKNOWN — not accepted, but no safeguard governed them yet. None were allowed.`
+                    : "Success claims made against failing or unverifiable actions that the engine refused to accept."
+              }
             />
             <Metric
               label="Repeat prevention"

@@ -193,13 +193,21 @@ as verified once step 4 returns it back.
 npm run typecheck   # tsc --noEmit
 npm run lint        # eslint
 npm test            # vitest: unit + integration
+npm run test:live   # opt-in smoke tests against the real relayer and gateway
 npm run test:e2e    # playwright: browser tests (needs a running server)
 ```
 
 The suite covers the Tatum adapter's transport-versus-outcome separation, the
-memory adapter's write lifecycle, the rule engine's validation gating, the
-decision engine's evidence-governs-memory property, the coding harness wiring,
-and the full eight-scenario pipeline end to end.
+live memory adapter's write lifecycle (accepted vs. completed vs. failed), the
+rule engine's validation gating, the decision engine's evidence-governs-memory
+property, the coding harness wiring, and the full eight-scenario pipeline end to
+end.
+
+`npm run test:live` is skipped by default because it contacts real services. It
+proves the production code path reaches the Mainnet relayer (unauthenticated
+`health`) and that unregistered credentials are refused rather than silently
+treated as a successful write. It also confirms that a rejected Tatum key maps
+to `UNKNOWN`, never to a failed transaction.
 
 ---
 

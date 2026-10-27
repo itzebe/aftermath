@@ -142,4 +142,14 @@ export class SimulatedMemoryAdapter implements MemoryAdapter {
     const matches = hits.filter((h) => h.blobId === receipt.blobId).length;
     return { ...receipt, recallVerified: matches > 0, recallMatches: matches };
   }
+
+  /**
+   * Clear simulated memory so a scenario re-run is reproducible. This is
+   * deliberately absent from the live adapter: Mainnet memory is durable and
+   * must survive across runs.
+   */
+  async reset(): Promise<void> {
+    this.client.clear();
+    this.sequence = 0;
+  }
 }

@@ -32,6 +32,8 @@ export interface WorkflowStateStore {
     failureReason?: string,
   ): Promise<WorkflowStateRecord>;
   reset(workflowId: string): Promise<void>;
+  /** Clear every workflow record, so a scenario run starts from a known state. */
+  resetAll(): Promise<void>;
 }
 
 export function emptyWorkflowState(workflowId: string): WorkflowStateRecord {
@@ -87,5 +89,9 @@ export class InMemoryWorkflowStateStore implements WorkflowStateStore {
 
   async reset(workflowId: string): Promise<void> {
     this.records.delete(workflowId);
+  }
+
+  async resetAll(): Promise<void> {
+    this.records.clear();
   }
 }

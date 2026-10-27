@@ -79,6 +79,13 @@ export async function runAllScenarios(deps: {
   const { config, store, memory, workflowStore } = deps;
   const scenarios: ScenarioRunReport[] = [];
 
+  // A scenario run is a controlled demonstration, so it must start from a
+  // known state. The workflow store is the only store that survives between
+  // runs (the incident store is reset separately); without this, a second run
+  // would see the prerequisite already completed and the workflow scenarios
+  // would invert. Reset it here so every run reproduces the first.
+  await workflowStore.resetAll();
+
   // ---- CODING ------------------------------------------------------------
   const codingBase = path.join(config.harnessDir, "coding");
   const buggy = await setupCodingHarness(codingBase, "buggy");
