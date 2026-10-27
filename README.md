@@ -43,7 +43,7 @@ For each attempted action, the engine runs a fixed pipeline:
 
 | Domain | Failure prevented | Authoritative evidence |
 | --- | --- | --- |
-| **Finance** | Reporting a Sui transaction as successful without checking the chain | Tatum Sui Mainnet gRPC (primary), JSON-RPC fallback (transaction execution status) |
+| **Finance** | Reporting a Sui transaction as successful without checking the chain | Tatum Sui Mainnet gRPC (primary), GraphQL fallback (transaction execution status) |
 | **Coding** | Reporting a bug fixed without running the tests | The real `node --test` process: exit code and pass/fail counts |
 | **Workflow** | Repeating an operation whose prerequisite was never met | Persisted application state and prerequisite checks |
 
@@ -141,9 +141,10 @@ cannot create the account for you.
 
 | Variable | Meaning |
 | --- | --- |
-| `TATUM_API_KEY` | Tatum API key, sent as `x-api-key` (gRPC metadata) and `X-API-Key` (JSON-RPC). Server-side only. |
+| `TATUM_API_KEY` | Tatum API key, sent as `x-api-key` (gRPC metadata) and `x-api-key` (GraphQL). Server-side only. |
 | `TATUM_SUI_GRPC_URL` | Primary interface. Defaults to `https://sui-mainnet-grpc.gateway.tatum.io`. |
-| `TATUM_SUI_RPC_URL` | Fallback interface. Defaults to `https://sui-mainnet.gateway.tatum.io`. |
+| `TATUM_SUI_RPC_URL` | Legacy JSON-RPC URL; no longer served by Tatum. Defaults to `https://sui-mainnet.gateway.tatum.io`. |
+| `TATUM_SUI_GRAPHQL_URL` | Fallback interface. Defaults to `https://sui-mainnet.gateway.tatum.io/graphql`. |
 | `TATUM_TIMEOUT_MS` | Per-request timeout. Defaults to `12000`. |
 
 ### Application
@@ -157,38 +158,41 @@ cannot create the account for you.
 
 ## Verifying the integrations
 
-### Tatum Sui verification (gRPC primary, JSON-RPC fallback)
+### Tatum Sui verification (gRPC primary, GraphQL fallback)
 
 Sui Foundation has disabled JSON-RPC on Mainnet full nodes and documents gRPC as
 the supported replacement. Tatum's own Sui documentation carries a
 JSON-RPC-to-gRPC migration guide with the same message. The finance adapter
-therefore uses gRPC as the primary interface and keeps JSON-RPC only as a
-fallback for when gRPC cannot complete a lookup.
+therefore uses gRPC as the primary interface and keeps a GraphQL fallback for
+when gRPC cannot complete a lookup. Tatum's gateway host
+(`https://sui-mainnet.gateway.tatum.io`) no longer serves JSON-RPC — `POST /`
+returns HTTP 404 — and now exposes GraphQL at `/graphql` on that same host.
 
 Primary interface (gRPC), confirmed against <https://docs.tatum.io/reference/rpc-sui>:
 
 - Base URL: `https://sui-mainnet-grpc.gateway.tatum.io`
 - Auth: the API key as gRPC metadata (`x-api-key`)
-- Transport: the official `@mysten/sui/grpc` client (`SuiGrpcClient` over
-  gRPC-web). No proto files are vendored or generated.
+- Transport: the official `@mysten/sui/grpc` client over a native gRPC channel
+  (`@protobuf-ts/grpc-transport` + `@grpc/grpc-js`). Native gRPC is required
+  because Tatum's gateway answers with `content-type: application/grpc`, which
+  the gRPC-web transport rejects. No proto files are vendored or generated.
 - Methods used: `ledgerService.getServiceInfo` (health),
-  `ledgerService.getTransaction` (verification), `listTransactions` (digest
-  discovery)
+  `getTransaction` (verification), `listTransactions` (digest discovery)
 
-Fallback interface (JSON-RPC), same documentation:
+Fallback interface (GraphQL), same host:
 
-- Base URL: `https://sui-mainnet.gateway.tatum.io`
+- Base URL: `https://sui-mainnet.gateway.tatum.io/graphql`
 - Auth header: `x-api-key`
-- Methods used: `sui_getChainIdentifier` (health), `sui_getTransactionBlock`
-  (verification), `suix_queryTransactionBlocks` (digest discovery)
+- Operations used: the `transactionEffects(digest:)` query for verification and
+  a recent-transactions query for digest discovery
 
 The composite verifier prefers gRPC and falls back **only** when the gRPC
 request could not complete at all (timeout, network, auth, or server error). A
 definitive answer — success, failure, or "the node holds no such transaction" —
 is returned immediately, so a digest is never queried twice when the first
 interface already answered. The interface that produced each assessment is
-recorded in `evidenceType` (`tatum_sui_grpc` or `tatum_sui_json_rpc`), so the UI
-and audit trail never claim gRPC evidence that actually came from JSON-RPC.
+recorded in `evidenceType` (`tatum_sui_grpc` or `tatum_sui_graphql`), so the UI
+and audit trail never claim gRPC evidence that actually came from GraphQL.
 
 The adapter's contract:
 
@@ -233,7 +237,7 @@ npm run typecheck   # tsc --noEmit
 npm run lint        # eslint
 npm test            # vitest: unit + integration
 npm run test:live   # opt-in smoke tests against the real relayer and gateway
-npm run test:e2e    # playwright: browser tests (needs a running server)
+npm run test:e2e    # playwright: browser tests (auto-starts a mock-backend server on 12001)
 ```
 
 The suite covers the Tatum adapters' transport-versus-outcome separation, the
@@ -246,8 +250,11 @@ end.
 `npm run test:live` is skipped by default because it contacts real services. It
 proves the production code path reaches the Mainnet relayer (unauthenticated
 `health`) and that unregistered credentials are refused rather than silently
-treated as a successful write. It also confirms that a rejected Tatum key — over
-both gRPC and JSON-RPC — maps to `UNKNOWN`, never to a failed transaction.
+treated as a successful write. With credentials present it additionally reads
+real Mainnet ledger data through the authenticated gateway and produces genuine
+successful and unsuccessful evidence cases from on-chain transactions. It also
+confirms that a rejected Tatum key — over both gRPC and GraphQL — maps to
+`UNKNOWN`, never to a failed transaction.
 
 ---
 
@@ -264,9 +271,11 @@ src/
     runtime.ts            Server-side singletons (all secrets live here)
     adapters/
       evidence.ts         Evidence adapter interface
-      tatum-sui.ts        Tatum Sui JSON-RPC (fallback, read-only)
+      tatum-sui.ts        Tatum Sui JSON-RPC (legacy, read-only, not wired)
+      tatum-sui-graphql.ts Tatum Sui GraphQL (fallback, read-only)
       tatum-sui-grpc.ts   Tatum Sui gRPC (primary, read-only)
-      sui-verifier.ts     Composite verifier: gRPC first, JSON-RPC fallback
+      tatum-retry.ts      Rate-limit-aware retry shared by both interfaces
+      sui-verifier.ts     Composite verifier: gRPC first, GraphQL fallback
       finance-evidence.ts Finance domain adapter
       coding-harness.ts   Real `node --test` harness
       coding-evidence.ts  Coding domain adapter
@@ -291,13 +300,18 @@ As of the last run, against the real services:
 
 - **Walrus Memory Mainnet.** The delegate credentials authenticate against the
   Mainnet relayer (`https://relayer.memory.walrus.xyz`), namespace `aftermath`.
-  The relayer reports the namespace holds its memories, all distinct blob ids
-  and all retrievable by a recall query. The count is stated by the relayer, not
-  asserted here.
+  Completed, recall-verified Mainnet writes are well past the required ten, and
+  the relayer reports the namespace's own memory count. A write is counted only
+  after `waitForRememberJob` returns a blob id *and* a recall query returns the
+  record; the counts shown in the UI are read from that ledger, not asserted
+  here. Simulated writes are tracked separately and excluded from the Mainnet
+  total.
 - **Tatum Sui.** The read-only Sui adapter is wired to the documented gRPC
-  primary with a JSON-RPC fallback. It is **not** configured with an API key, so
-  the live finance cases resolve to `UNKNOWN` rather than guessing. That is the
-  correct answer for missing evidence, not a failure of the demonstration.
+  primary with a GraphQL fallback, authenticated with a server-side API key.
+  Health reports the live chain identifier; finance evidence cases are produced
+  from genuine Mainnet transactions (both successful and unsuccessful). No
+  transaction is ever broadcast. When evidence is unavailable the case resolves
+  to `UNKNOWN` rather than guessing.
 
 ## Known limitations
 

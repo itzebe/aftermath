@@ -150,21 +150,30 @@ warning was load-bearing. The Sui documentation states it plainly:
 
 So my first implementation — Tatum's Sui Mainnet JSON-RPC gateway — was a real
 defect, not a stylistic choice. I migrated to gRPC as the primary interface and
-kept JSON-RPC only as an explicit fallback.
+kept an HTTP fallback for when gRPC cannot answer.
 
-Tatum's own Sui page documents both interfaces side by side, which is where I
-took the endpoints and the method names from rather than relying on the brief's
-summary:
+That fallback was originally JSON-RPC, and then reality caught up with the
+warning a second time. When I probed the gateway host directly, `POST /`
+returned HTTP 404 and `/jsonrpc` returned 404 too — Tatum had already removed
+JSON-RPC from that host. The same host now serves **GraphQL** at `/graphql`. So
+the fallback became GraphQL, and the JSON-RPC adapter is retained only as a
+documented, unwired legacy reference.
+
+Tatum's own Sui page documents both the gRPC gateway and the host, which is
+where I took the endpoints from rather than relying on the brief's summary:
 
 | Interface | Base URL | Used for |
 | --- | --- | --- |
 | gRPC (primary) | `https://sui-mainnet-grpc.gateway.tatum.io` | health, verification, discovery |
-| JSON-RPC (fallback) | `https://sui-mainnet.gateway.tatum.io` | health, verification, discovery |
+| GraphQL (fallback) | `https://sui-mainnet.gateway.tatum.io/graphql` | health, verification, discovery |
 
-The API key travels as `x-api-key` — gRPC metadata on the gRPC path, a request
-header on the JSON-RPC path. The gRPC client is the official `@mysten/sui/grpc`
-client (`SuiGrpcClient` over gRPC-web), so no proto files are vendored or
-generated. The methods I use are the ones Tatum documents for that gateway:
+The API key travels as `x-api-key` on both paths — gRPC metadata on the gRPC
+path, a request header on the GraphQL path. The gRPC client is the official
+`@mysten/sui/grpc` client over a **native** gRPC channel (`@protobuf-ts/grpc-transport`
++ `@grpc/grpc-js`), so no proto files are vendored or generated. Native, not
+gRPC-web: Tatum's gateway answers with `content-type: application/grpc`, and the
+gRPC-web transport refuses that content type. The methods I use are the ones
+Tatum documents for that gateway:
 
 - `sui.rpc.v2.LedgerService/GetServiceInfo` for a health check
 - `sui.rpc.v2.LedgerService/GetTransaction` for authoritative execution status
@@ -198,12 +207,25 @@ The gRPC transport makes that separation clean: a genuine answer arrives as a
 failure to answer arrives as a thrown gRPC status code. The adapter maps the
 former to `VERIFIED_SUCCESS`/`VERIFIED_FAILURE` and the latter to `UNKNOWN`.
 
-The composite verifier prefers gRPC and falls back to JSON-RPC **only** when the
+**The rate limit is real, and it is shared.** Tatum's Sui gateway enforces a
+budget of roughly three requests per second per key, and the budget is shared
+across the gRPC and GraphQL interfaces rather than per-interface. The fourth
+rapid request comes back as HTTP `429` with `retry-after: 1` on the GraphQL path
+and `RESOURCE_EXHAUSTED` on the gRPC path. A demonstration that discovers recent
+digests and then verifies each one is exactly the burst that trips it. The fix is
+a small retry helper that retries *only* genuine rate limits — never a 401, never
+a 500 — honours the server's `Retry-After`, and backs off exponentially. It is
+wired into health, verification, and discovery on both interfaces, and its delay
+is injectable so the unit tests run without waiting. This is the kind of thing
+that only shows up when you actually point the code at the live service: the
+endpoint answers perfectly in isolation and fails the moment real work arrives.
+
+The composite verifier prefers gRPC and falls back to GraphQL **only** when the
 gRPC request could not complete at all. A definitive answer — success, failure,
 or "no such transaction" — is returned immediately, so a digest is never queried
 twice when the first interface already answered. Each assessment records which
-interface produced it (`tatum_sui_grpc` or `tatum_sui_json_rpc`), so the UI and
-the audit trail never claim gRPC evidence that actually came from JSON-RPC.
+interface produced it (`tatum_sui_grpc` or `tatum_sui_graphql`), so the UI and
+the audit trail never claim gRPC evidence that actually came from GraphQL.
 
 This integration is read-only. No transaction is broadcast, and no wallet key or
 seed phrase is ever requested. The gRPC gateway exposes a
@@ -212,22 +234,28 @@ never calls it.
 
 ## What I measured
 
-Running the eight controlled scenarios produces:
+Running the controlled scenarios produces:
 
 | Metric | Value |
 | --- | --- |
-| Scenarios | 8 |
+| Scenarios | 8 controlled (9 with a live Tatum key, which adds a real-ledger case) |
 | Baseline (first-occurrence) scenarios | 6 |
 | Repeat scenarios | 2 |
-| Unsupported claims caught | 3 / 4 |
-| Unsupported claims unresolved (`UNKNOWN`) | 1 |
+| Unsupported claims caught | 4 / 4 |
+| Unsupported claims unresolved (`UNKNOWN`) | 0 |
 | Unsupported claims allowed to stand | 0 |
-| Baseline failure rate | 67% |
+| Baseline failure rate | 57% |
 | Repeat prevention rate | 100% |
 | Repeat failures that slipped through | 0 |
 | False-block rate | 0% |
 | Evidence-unavailable rate | 25% |
 | Memory retrieval relevance | 100% |
+
+These are the figures from the last verified run with the Tatum key configured.
+Without a key the finance claim resolves to `UNKNOWN` instead, which moves the
+"unsupported claims caught" count to 3 / 4 and leaves one unresolved. Both
+outcomes are honest; the difference is only whether the authoritative source was
+reachable.
 
 The two repeat scenarios are the point of the product:
 
@@ -239,17 +267,20 @@ The two repeat scenarios are the point of the product:
 Both were prevented. Zero valid actions were blocked. That second number matters
 as much as the first: safe behaviour is not the same as denying everything.
 
-The four unsupported claims split into three buckets, and the split is the honest
-part. Three were refused by an explicit safeguard decision (`BLOCK` or
-`REQUIRE_VERIFICATION`): the failing coding tests, the coding regression, and the
-finance claim with no Tatum key configured. One resolved to `UNKNOWN` — the
-first-occurrence coding claim, made before any rule existed, where the test
-harness produced no usable evidence, so the engine can establish neither success
-nor failure and says exactly that. Crucially, **zero** unsupported claims were
-allowed to stand: no `ALLOW` was ever issued against a claim the evidence did not
-support. The `UNKNOWN` case is not a hole in the safeguard; it is the engine
-refusing to guess on the first occurrence, which is what leaves something for the
-safeguard to learn from.
+The four unsupported claims were all refused by an explicit safeguard decision
+(`BLOCK` or `REQUIRE_VERIFICATION`): the failing coding tests, the coding
+regression, the workflow first attempt, and the finance claim. Crucially,
+**zero** unsupported claims were allowed to stand: no `ALLOW` was ever issued
+against a claim the evidence did not support.
+
+The finance claim is worth dwelling on, because it is the case that changes with
+the environment. With a Tatum key configured, the engine reaches the authoritative
+ledger, finds no successful execution behind the claim, and requires verification
+— a definite refusal. Without a key, the same claim resolves to `UNKNOWN`: the
+engine can establish neither success nor failure and says exactly that. It never
+converts a missing credential into a verdict, in either direction. That
+`UNKNOWN` case is not a hole in the safeguard; it is the engine refusing to guess,
+which is what leaves something for the safeguard to learn from.
 
 Re-running the demonstration reproduces these numbers exactly. A scenario run
 clears the simulated incident, rule, and memory state first, so the same button
@@ -326,10 +357,11 @@ it is diagnosed; a rule is enforced only after validation.
 
 ## What is not finished
 
-- The live finance cases require a Tatum API key. Without one, the finance
-  demonstration resolves to `UNKNOWN`, which is the honest answer. The adapter
-  is wired and its transport is verified against the gateway; only the
-  credential is missing.
+- The live finance cases require a Tatum API key. With one configured they read
+  genuine Mainnet transactions and produce real successful and unsuccessful
+  evidence cases; without one, the finance demonstration resolves to `UNKNOWN`,
+  which is the honest answer. The adapter is wired and its transport is verified
+  against the gateway.
 - The coding and workflow harnesses are controlled demonstrations, not
   general-purpose platforms. That is by design — the brief's non-goals are
   explicit about it.
