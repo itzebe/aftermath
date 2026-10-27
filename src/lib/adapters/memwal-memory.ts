@@ -1,4 +1,5 @@
 import { MemWal } from "@mysten-incubation/memwal";
+import { createHash } from "node:crypto";
 import type { CorrectiveLessonRecord, Incident } from "@/lib/schemas";
 import {
   incidentToMemoryText,
@@ -377,11 +378,16 @@ export class MemWalMemoryAdapter implements MemoryAdapter {
   }
 
   rememberLesson(lesson: CorrectiveLessonRecord): Promise<MemoryWriteReceipt> {
-    return this.writeText(
-      "lesson",
-      lessonToMemoryText(lesson),
-      `lesson:${lesson.domain}:${lesson.failure_pattern}:${lesson.scope}:v${lesson.rule_version}`,
-    );
+    const text = lessonToMemoryText(lesson);
+    // The idempotency key must identify the *content*, not the lesson class.
+    // Two distinct incidents can yield lessons with the same
+    // domain/pattern/scope/version but different observations; keying on the
+    // class alone makes the relayer reject the second with
+    // `409 idempotency_key was already used for a request with different
+    // content`. Hashing the exact text keeps true retries idempotent while
+    // letting genuinely different lessons through.
+    const contentHash = createHash("sha256").update(text).digest("hex").slice(0, 32);
+    return this.writeText("lesson", text, `lesson:${contentHash}`);
   }
 
   async waitForWriteCompletion(jobId: string): Promise<MemoryWriteReceipt> {

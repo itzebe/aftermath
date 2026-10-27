@@ -46,9 +46,14 @@ function replacer() {
   };
 }
 
-/** Replace the middle of a secret with dots, for display of what IS set. */
+/**
+ * Describe a configured value without revealing any of it.
+ *
+ * Callers pass credentials here (a delegate private key, an account id, an API
+ * key). Even a short prefix or suffix narrows an attacker's search space, so
+ * only the length is reported. An unset value is reported as such.
+ */
 export function maskSecret(value: string | null | undefined): string {
   if (!value) return "(not set)";
-  if (value.length <= 8) return "*".repeat(value.length);
-  return `${value.slice(0, 4)}…${value.slice(-4)} (${value.length} chars)`;
+  return `(${value.length} chars, hidden)`;
 }

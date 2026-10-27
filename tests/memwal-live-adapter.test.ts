@@ -218,12 +218,27 @@ describe("MemWalMemoryAdapter write lifecycle", () => {
 });
 
 describe("MemWalMemoryAdapter idempotency", () => {
-  it("sends a stable idempotency key per lesson", async () => {
+  it("keys a lesson by its content, so a retry is idempotent", async () => {
     const { client, calls } = stubClient();
-    await adapter(client).rememberLesson(lesson());
-    expect(calls.idempotencyKeys[0]).toBe(
-      "lesson:coding:unsupported_completion_claim:coding:report_bug_fixed:v1",
-    );
+    const a = adapter(client);
+    await a.rememberLesson(lesson());
+    await a.rememberLesson(lesson());
+    expect(calls.idempotencyKeys[0]).toBe(calls.idempotencyKeys[1]);
+    expect(calls.idempotencyKeys[0]).toMatch(/^lesson:[0-9a-f]{32}$/);
+  });
+
+  it("gives distinct lessons in one run distinct idempotency keys", async () => {
+    // Two different incidents can produce lessons with the same class
+    // (domain/pattern/scope/version) but different observations. Keying on the
+    // class alone made the relayer reject the second with a 409
+    // "idempotency_key was already used for a request with different content".
+    const { client, calls } = stubClient();
+    const a = adapter(client);
+    const l1 = lesson();
+    const l2 = { ...lesson(), observation: "a different observation", incident_id: "inc-2" };
+    await a.rememberLesson(l1);
+    await a.rememberLesson(l2);
+    expect(calls.idempotencyKeys[0]).not.toBe(calls.idempotencyKeys[1]);
   });
 
   it("sends a distinct idempotency key per incident", async () => {

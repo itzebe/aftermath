@@ -18,7 +18,8 @@
     "seed": "tsx scripts/seed.ts",
     "seed:check": "tsx scripts/seed.ts --check",
     "keygen": "tsx scripts/generate-delegate-key.ts",
-    "test:live": "AFTERMATH_LIVE_SMOKE=1 vitest run tests/live-smoke.test.ts"
+    "test:live": "AFTERMATH_LIVE_SMOKE=1 vitest run tests/live-smoke.test.ts",
+    "recall:demo": "tsx scripts/recall-demo.ts"
   },
   "dependencies": {
     "@mysten-incubation/memwal": "^0.1.10",
