@@ -325,9 +325,10 @@ the application's dependencies or build.
 
 One-time setup: in **Settings → Pages → Build and deployment**, set **Source**
 to **GitHub Actions**. The workflow's own token can deploy but cannot enable
-Pages, so this single setting is done by hand. After that, any push to `master`
-that changes `docs/BLOG.md`, `blog/**`, or the workflow itself rebuilds and
-redeploys the page. To build and preview locally:
+Pages, so this single setting is done by hand. After that, run the workflow once
+from the **Actions** tab (workflow_dispatch) to publish immediately; subsequent
+pushes to `master` that change `docs/BLOG.md`, `blog/**`, or the workflow itself
+rebuild and redeploy automatically. To build and preview locally:
 
 ```bash
 cd blog
