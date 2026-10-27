@@ -127,7 +127,7 @@ committed. See `.env.example` for the full list.
 
 | Variable | Meaning |
 | --- | --- |
-| `MEMWAL_PRIVATE_KEY` | Ed25519 delegate key (hex or `suiprivkey1…`). Server-side only. |
+| `MEMWAL_PRIVATE_KEY` | Ed25519 delegate key (hex or `suiprivkey1…`). Server-side only. `MEMWAL_KEY` is accepted as an alias. |
 | `MEMWAL_ACCOUNT_ID` | `MemWalAccount` object id on Sui mainnet. |
 | `MEMWAL_SERVER_URL` | Relayer URL. Defaults to the **Mainnet** relayer. |
 | `MEMWAL_NAMESPACE` | Memory namespace. Defaults to `aftermath`. |

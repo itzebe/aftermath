@@ -251,6 +251,21 @@ Running the controlled scenarios produces:
 | Evidence-unavailable rate | 25% |
 | Memory retrieval relevance | 100% |
 
+The suites behind those figures, as last run:
+
+| Suite | Command | Result |
+| --- | --- | --- |
+| Type check | `npm run typecheck` | clean |
+| Lint | `npm run lint` | clean |
+| Unit + integration (hermetic) | `npm test` | 184 passed, 11 skipped |
+| Live smoke (real relayer + gateway) | `npm run test:live` | 11 passed |
+| Browser (simulated backend) | `npm run test:e2e` | 7 passed |
+
+The unit suite is hermetic — it makes no network calls — which is why it is
+distinct from the live smoke suite. The browser suite runs against a simulated
+memory backend on purpose: its whole subject is that the UI labels simulated
+state honestly, so it must be pointed at a backend it knows is simulated.
+
 These are the figures from the last verified run with the Tatum key configured.
 Without a key the finance claim resolves to `UNKNOWN` instead, which moves the
 "unsupported claims caught" count to 3 / 4 and leaves one unresolved. Both
@@ -317,6 +332,13 @@ conflating them would be dishonest in one direction or the other:
 A single counter cannot be honest about both "what did this process do" and
 "what is actually on chain". So there are two.
 
+As of this submission, the operator's own instance reports **51 completed Mainnet
+writes, all 51 recall-verified**, with zero simulated writes in that total — read
+straight from `GET /api/overview` on the running application, not asserted from
+memory. That is five times the required ten. The number is reproducible by
+anyone who configures their own credentials and runs the scenarios; it is not a
+claim about a hosted service, because there is no hosted service.
+
 **The evaluation metrics describe the scenarios, not production.** They are
 computed over eight reproducible scenarios. I have not measured production
 reliability, and I do not claim to have improved it.
@@ -379,7 +401,11 @@ asserted:
 
 ## Try it
 
+Source: <https://github.com/itzebe/aftermath>
+
 ```bash
+git clone https://github.com/itzebe/aftermath.git
+cd aftermath
 npm install
 cp .env.example .env.local   # add credentials
 npm run dev                  # http://localhost:12000
