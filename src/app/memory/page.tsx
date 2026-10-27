@@ -45,6 +45,7 @@ interface MemoryStatusPayload {
   authFailed: boolean;
   authUpstreamUnavailable: boolean;
   serverCode?: string;
+  namespaceMemoryCount?: number;
   detail: string;
 }
 
@@ -213,6 +214,14 @@ export default function MemoryPage() {
               {data.status.authenticated ? "yes" : "no / unverified"}
             </span>
           </div>
+          {typeof data.status.namespaceMemoryCount === "number" ? (
+            <div>
+              Memories in namespace{" "}
+              <span className="mono">{data.backend}</span>{" "}
+              <span className="mono">(authoritative, relayer-reported)</span>:{" "}
+              <span className="mono">{data.status.namespaceMemoryCount}</span>
+            </div>
+          ) : null}
           <div className="text-paper-400">{data.status.detail}</div>
         </div>
       </Panel>
@@ -222,7 +231,7 @@ export default function MemoryPage() {
           label="Mainnet writes completed"
           value={`${completedLive.length} / 10`}
           tone={completedLive.length >= 10 ? "ok" : "bad"}
-          sub="The submission requires at least ten completed writes on Walrus Mainnet."
+          sub="Writes this instance submitted and confirmed. The counter reads this instance's own ledger; a fresh deployment starts at zero even though earlier Mainnet writes persist in the namespace below."
         />
         <Metric
           label="Recall verified"

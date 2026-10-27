@@ -271,8 +271,20 @@ real.
 Memory credentials are absent — as they are in a fresh clone — the app does not
 pretend. It runs on the SDK's in-process mock, stamps every write
 `provenance: simulated`, and states plainly in the UI that those writes are not
-stored on Walrus Mainnet and do not count toward the requirement. The dashboard
-reads `Mainnet writes completed: 0 / 10` and does not pad the number.
+stored on Walrus Mainnet and do not count toward the requirement.
+
+With credentials configured, the app reports two numbers side by side, because
+conflating them would be dishonest in one direction or the other:
+
+- **Completed Mainnet writes** reads this instance's own ledger. It counts only
+  writes that reached a blob id and were confirmed retrievable by recall. On a
+  fresh deployment this is zero, because the ledger is empty.
+- **Memories in namespace** is the count the relayer itself reports for the
+  namespace, read from the same signed call that proves the credentials work. It
+  does not reset when the index is rebuilt.
+
+A single counter cannot be honest about both "what did this process do" and
+"what is actually on chain". So there are two.
 
 **The evaluation metrics describe the scenarios, not production.** They are
 computed over eight reproducible scenarios. I have not measured production
@@ -314,15 +326,24 @@ it is diagnosed; a rule is enforced only after validation.
 
 ## What is not finished
 
-- The ten Mainnet writes require a Walrus Memory account and delegate key, which
-  are created in the playground by the account owner. The application cannot and
-  should not create them. With credentials present, `npm run seed` performs and
-  reports the writes.
 - The live finance cases require a Tatum API key. Without one, the finance
-  demonstration resolves to `UNKNOWN`, which is the honest answer.
+  demonstration resolves to `UNKNOWN`, which is the honest answer. The adapter
+  is wired and its transport is verified against the gateway; only the
+  credential is missing.
 - The coding and workflow harnesses are controlled demonstrations, not
   general-purpose platforms. That is by design — the brief's non-goals are
   explicit about it.
+
+What *is* finished, and was verified against the real services rather than
+asserted:
+
+- The Walrus Memory account and delegate key were created by the account owner
+  in the playground, as the brief requires — the application cannot and should
+  not create them. With the delegate key configured, the Mainnet relayer
+  authenticates the credentials, the scenarios write genuine memories, each
+  write is awaited to a blob id, and a recall query returns the records back.
+  The relayer reports the true namespace total, which the UI shows separately
+  from this instance's own ledger.
 
 ## Try it
 

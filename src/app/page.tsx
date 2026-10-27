@@ -80,12 +80,12 @@ export default async function OverviewPage() {
           title="Walrus Memory"
           hint="A write only counts once the relayer job completes and returns a blob id, and recall confirms the record is retrievable."
         />
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-4">
           <Metric
             label="Completed Mainnet writes"
             value={mainnetRequirement.completedLive}
             tone={mainnetRequirement.satisfied ? "ok" : "warn"}
-            sub={`Requirement: ${mainnetRequirement.required}. ${
+            sub={`This instance's ledger. Requirement: ${mainnetRequirement.required}. ${
               mainnetRequirement.satisfied
                 ? "Satisfied."
                 : `${mainnetRequirement.remaining} still required.`
@@ -96,6 +96,21 @@ export default async function OverviewPage() {
             value={mainnetRequirement.recallVerified}
             tone={mainnetRequirement.recallVerified > 0 ? "ok" : "neutral"}
             sub="Writes confirmed retrievable by a recall query."
+          />
+          <Metric
+            label="Memories in namespace"
+            value={
+              typeof memoryStatus.namespaceMemoryCount === "number"
+                ? memoryStatus.namespaceMemoryCount
+                : "—"
+            }
+            tone={
+              typeof memoryStatus.namespaceMemoryCount === "number" &&
+              memoryStatus.namespaceMemoryCount >= 10
+                ? "ok"
+                : "neutral"
+            }
+            sub="Authoritative count the relayer reports for the namespace, independent of this instance's ledger."
           />
           <Metric
             label="Simulated writes"

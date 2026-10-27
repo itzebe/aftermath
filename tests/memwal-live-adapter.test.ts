@@ -59,6 +59,8 @@ interface StubOptions {
   omitListNamespaces?: boolean;
   /** Make the authenticated probe fail in a specific way. */
   authProbe?: "ok" | "auth" | "upstream" | "network";
+  /** Memory count the relayer reports for the configured namespace. */
+  namespaceMemoryCount?: number;
 }
 
 function authError(kind: "auth" | "upstream" | "network"): Error {
@@ -119,7 +121,12 @@ function stubClient(opts: StubOptions = {}) {
     client.listNamespaces = vi.fn(async () => {
       const probe = opts.authProbe ?? "ok";
       if (probe !== "ok") throw authError(probe);
-      return { namespaces: [{ name: "aftermath", memory_count: 0 }], has_more: false };
+      return {
+        namespaces: [
+          { name: "aftermath", memory_count: opts.namespaceMemoryCount ?? 0 },
+        ],
+        has_more: false,
+      };
     });
   }
   return { client, calls };
@@ -221,8 +228,11 @@ describe("MemWalMemoryAdapter idempotency", () => {
   it("keys a lesson by its content, so a retry is idempotent", async () => {
     const { client, calls } = stubClient();
     const a = adapter(client);
-    await a.rememberLesson(lesson());
-    await a.rememberLesson(lesson());
+    // A retry resends the *same* lesson. Building a fresh lesson would embed a
+    // new timestamp and therefore genuinely different content.
+    const retry = lesson();
+    await a.rememberLesson(retry);
+    await a.rememberLesson(retry);
     expect(calls.idempotencyKeys[0]).toBe(calls.idempotencyKeys[1]);
     expect(calls.idempotencyKeys[0]).toMatch(/^lesson:[0-9a-f]{32}$/);
   });
@@ -308,6 +318,15 @@ describe("MemWalMemoryAdapter credential status", () => {
     expect(s.authenticated).toBe(true);
     expect(s.reachable).toBe(true);
     expect(s.authFailed).toBe(false);
+  });
+
+  it("surfaces the authoritative namespace memory count from the signed call", async () => {
+    // On a fresh deployment the local ledger is empty, so the relayer's own
+    // count for the namespace is the honest way to show memories exist.
+    const { client } = stubClient({ authProbe: "ok", namespaceMemoryCount: 26 });
+    const s = await adapter(client).status();
+    expect(s.namespaceMemoryCount).toBe(26);
+    expect(s.detail).toMatch(/26 memories/i);
   });
 
   it("reports MAINNET_AUTH_FAILED when the relayer refuses the credentials", async () => {

@@ -222,14 +222,23 @@ export class MemWalMemoryAdapter implements MemoryAdapter {
     }
 
     try {
-      await this.client.listNamespaces({ limit: 1 });
+      const ns = await this.client.listNamespaces({ limit: 50 });
+      const current = ns.namespaces.find(
+        (n) => n.name === this.config.memory.namespace,
+      );
+      const namespaceMemoryCount = current?.memory_count;
       return {
         state: "MAINNET_AUTH_CONFIRMED",
         reachable: true,
         authenticated: true,
         authFailed: false,
         authUpstreamUnavailable: false,
-        detail: `${health.detail} Delegate credentials accepted by the relayer.`,
+        ...(namespaceMemoryCount !== undefined ? { namespaceMemoryCount } : {}),
+        detail:
+          `${health.detail} Delegate credentials accepted by the relayer.` +
+          (namespaceMemoryCount !== undefined
+            ? ` Namespace "${this.config.memory.namespace}" holds ${namespaceMemoryCount} memor${namespaceMemoryCount === 1 ? "y" : "ies"}.`
+            : ""),
       };
     } catch (err) {
       const cls = this.classifyAuthError(err);

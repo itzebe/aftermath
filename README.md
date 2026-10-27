@@ -58,6 +58,21 @@ that those writes are **not** stored on Walrus Mainnet and do **not** count
 toward the requirement. The dashboard shows `Mainnet writes completed: N / 10`
 and never pads the number.
 
+With credentials present, the writes are real. The Overview and Memory pages
+report two numbers separately, because they mean different things:
+
+- **Completed Mainnet writes** — writes *this instance* submitted, awaited to a
+  blob id, and confirmed retrievable by recall. This reads the local SQLite
+  ledger, so a fresh deployment starts at zero.
+- **Memories in namespace** — the authoritative count the relayer reports for
+  the configured namespace. This comes from the same signed `listNamespaces`
+  call that proves authentication, so it is independent of the local ledger and
+  does not reset when the index is rebuilt.
+
+Reporting both is deliberate. A deployment that has lost its ledger should not
+claim zero memories exist on chain, and a local counter should not be mistaken
+for the on-chain total.
+
 ---
 
 ## Quick start
@@ -270,13 +285,27 @@ src/
     demos/                The eight controlled scenarios
 ```
 
+## Verified state
+
+As of the last run, against the real services:
+
+- **Walrus Memory Mainnet.** The delegate credentials authenticate against the
+  Mainnet relayer (`https://relayer.memory.walrus.xyz`), namespace `aftermath`.
+  The relayer reports the namespace holds its memories, all distinct blob ids
+  and all retrievable by a recall query. The count is stated by the relayer, not
+  asserted here.
+- **Tatum Sui.** The read-only Sui adapter is wired to the documented gRPC
+  primary with a JSON-RPC fallback. It is **not** configured with an API key, so
+  the live finance cases resolve to `UNKNOWN` rather than guessing. That is the
+  correct answer for missing evidence, not a failure of the demonstration.
+
 ## Known limitations
 
 - The coding and workflow demonstrations are controlled harnesses, not a
   general-purpose coding or automation platform. They are labelled as such in
   the UI.
-- The finance demonstration cannot run without a Tatum API key. It reports
-  `UNKNOWN` rather than guessing.
+- The finance demonstration cannot produce a live on-chain verdict without a
+  Tatum API key. It reports `UNKNOWN` rather than guessing.
 - The evaluation metrics are measured over the eight controlled scenarios. They
   describe those scenarios; they are not claims about production reliability.
 - The workflow state store is in-process. It is a reproducible harness, not a

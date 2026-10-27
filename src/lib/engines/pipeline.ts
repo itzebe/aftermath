@@ -58,6 +58,12 @@ export class IncidentPipeline {
       preconditions?: Precondition[];
       mode?: "claim" | "preflight";
       persistIncidentMemory?: boolean;
+      /**
+       * Set false to evaluate a decision without writing a lesson. Used by the
+       * read-only recall demonstration, which must not add new Mainnet records
+       * on every run.
+       */
+      persistLessonMemory?: boolean;
     } = {},
   ): Promise<ProcessResult> {
     const validated = IncidentInputSchema.parse(input);
@@ -139,7 +145,7 @@ export class IncidentPipeline {
       });
     }
 
-    if (diagnosis.actionable) {
+    if (diagnosis.actionable && options.persistLessonMemory !== false) {
       // A lesson is persisted even when the rule could not be activated. The
       // brief requires lessons to be storable before they become enforceable
       // rules, so `validation_status` records which of the two this is.

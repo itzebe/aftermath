@@ -92,6 +92,18 @@ export interface MemoryStatus {
   authUpstreamUnavailable: boolean;
   /** Machine-readable server code, when the relayer supplied one. */
   serverCode?: string;
+  /**
+   * Number of memories the relayer reports in the configured namespace.
+   *
+   * This is authoritative on-chain state, read from the same signed
+   * `listNamespaces` call that proves authentication. It is deliberately
+   * separate from the local write ledger: the ledger only knows about writes
+   * *this instance* attempted, while this count reflects every memory already
+   * in the namespace — including writes made by earlier runs or other
+   * processes. On a fresh deployment the ledger starts empty, so this is the
+   * honest way to show that the namespace really holds memories.
+   */
+  namespaceMemoryCount?: number;
   detail: string;
 }
 

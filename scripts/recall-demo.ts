@@ -75,7 +75,10 @@ async function main(): Promise<number> {
     memory: memory.adapter,
     store,
   });
-  const live = await livePipeline.process(financeIncident());
+  const live = await livePipeline.process(financeIncident(), {
+    persistIncidentMemory: false,
+    persistLessonMemory: false,
+  });
 
   // ---- ARM B: the control — an empty store, i.e. before any lesson existed --
   const controlStore = new AftermathStore(":memory:");
@@ -84,7 +87,10 @@ async function main(): Promise<number> {
     memory: new SimulatedMemoryAdapter("recall-demo-control"),
     store: controlStore,
   });
-  const control = await controlPipeline.process(financeIncident());
+  const control = await controlPipeline.process(financeIncident(), {
+    persistIncidentMemory: false,
+    persistLessonMemory: false,
+  });
 
   console.log("Evidence (identical in both arms)");
   console.log("─────────────────────────────────");
