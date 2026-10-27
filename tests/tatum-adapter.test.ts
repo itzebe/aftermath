@@ -188,4 +188,42 @@ describe("FinanceEvidenceAdapter", () => {
     expect(a.status).toBe("UNKNOWN");
     expect(a.verified).toBe(false);
   });
+
+  it("takes its interface label from the verifier, not from a hardcoded string", () => {
+    const adapter = new FinanceEvidenceAdapter({
+      sourceName: "Some Future Interface",
+      configured: true,
+      health: async () => ({ ok: true, detail: "" }),
+      verifyTransaction: async () => {
+        throw new Error("not called");
+      },
+      discoverRecentDigests: async () => [],
+    });
+    expect(adapter.sourceName).toBe("Some Future Interface");
+  });
+
+  it("propagates the verifier's evidenceType unchanged", async () => {
+    const adapter = new FinanceEvidenceAdapter({
+      sourceName: "grpc-first",
+      configured: true,
+      health: async () => ({ ok: true, detail: "" }),
+      verifyTransaction: async () => ({
+        transportOk: true,
+        assessment: {
+          status: "VERIFIED_SUCCESS",
+          verified: true,
+          evidenceType: "tatum_sui_grpc",
+          evidenceReference: "sui:tx:D",
+          observedAt: new Date().toISOString(),
+          explanation: "ok",
+        },
+      }),
+      discoverRecentDigests: async () => [],
+    });
+    const a = await adapter.verifyEvidence(
+      incidentWith([{ kind: "sui_tx_digest", ref: "D" }]),
+    );
+    expect(a.evidenceType).toBe("tatum_sui_grpc");
+    expect(a.status).toBe("VERIFIED_SUCCESS");
+  });
 });

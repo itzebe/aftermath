@@ -1,6 +1,7 @@
 import { loadConfig, type AftermathConfig } from "@/lib/config";
 import { resolveMemoryAdapter, type MemoryAdapterResolution } from "@/lib/adapters/memory-factory";
-import { TatumSuiAdapter } from "@/lib/adapters/tatum-sui";
+import { buildSuiVerifier } from "@/lib/demos/finance";
+import type { SuiVerifier } from "@/lib/adapters/sui-verifier";
 import { FinanceEvidenceAdapter } from "@/lib/adapters/finance-evidence";
 import { AftermathStore } from "@/lib/db/store";
 import { IncidentPipeline } from "@/lib/engines/pipeline";
@@ -16,7 +17,7 @@ export interface Runtime {
   config: AftermathConfig;
   store: AftermathStore;
   memory: MemoryAdapterResolution;
-  tatum: TatumSuiAdapter;
+  suiVerifier: SuiVerifier;
   financePipeline: IncidentPipeline;
   workflowStore: InMemoryWorkflowStateStore;
   workflowPipeline: IncidentPipeline;
@@ -30,8 +31,8 @@ function build(): Runtime {
   const config = loadConfig();
   const store = new AftermathStore(config.dbPath);
   const memory = resolveMemoryAdapter(config);
-  const tatum = new TatumSuiAdapter(config.tatum);
-  const financeEvidence = new FinanceEvidenceAdapter(tatum);
+  const suiVerifier = buildSuiVerifier(config.tatum);
+  const financeEvidence = new FinanceEvidenceAdapter(suiVerifier);
 
   const workflowStore = new InMemoryWorkflowStateStore();
   const workflowEvidence = new WorkflowEvidenceAdapter({
@@ -43,7 +44,7 @@ function build(): Runtime {
     config,
     store,
     memory,
-    tatum,
+    suiVerifier,
     financePipeline: new IncidentPipeline({
       evidence: financeEvidence,
       memory: memory.adapter,

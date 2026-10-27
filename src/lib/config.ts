@@ -15,6 +15,7 @@ export interface AftermathConfig {
   };
   tatum: {
     rpcUrl: string;
+    grpcUrl: string;
     apiKey: string | null;
     timeoutMs: number;
   };
@@ -42,6 +43,9 @@ export function loadConfig(): AftermathConfig {
       rpcUrl:
         optional("TATUM_SUI_RPC_URL") ??
         "https://sui-mainnet.gateway.tatum.io",
+      grpcUrl:
+        optional("TATUM_SUI_GRPC_URL") ??
+        "https://sui-mainnet-grpc.gateway.tatum.io",
       apiKey: optional("TATUM_API_KEY"),
       timeoutMs: Number(optional("TATUM_TIMEOUT_MS") ?? "12000"),
     },

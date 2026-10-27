@@ -2,7 +2,6 @@ import path from "node:path";
 import type { ProcessResult } from "@/lib/engines/pipeline";
 import { IncidentPipeline } from "@/lib/engines/pipeline";
 import type { ScenarioOutcome } from "@/lib/engines/evaluation";
-import { TatumSuiAdapter } from "@/lib/adapters/tatum-sui";
 import { FinanceEvidenceAdapter } from "@/lib/adapters/finance-evidence";
 import { WorkflowEvidenceAdapter } from "@/lib/adapters/workflow-evidence";
 import type { InMemoryWorkflowStateStore } from "@/lib/adapters/workflow-state";
@@ -16,7 +15,7 @@ import {
   runHarnessOnce,
   setupCodingHarness,
 } from "@/lib/demos/coding";
-import { runFinanceEvidenceCases } from "@/lib/demos/finance";
+import { buildSuiVerifier, runFinanceEvidenceCases } from "@/lib/demos/finance";
 import { DEPLOY_WORKFLOW } from "@/lib/demos/workflow";
 
 export interface ScenarioRunReport {
@@ -403,14 +402,14 @@ export async function runAllScenarios(deps: {
   });
 
   // ---- FINANCE -----------------------------------------------------------
-  const tatum = new TatumSuiAdapter(config.tatum);
+  const tatum = buildSuiVerifier(config.tatum);
   const financeEvidence = new FinanceEvidenceAdapter(tatum);
   const financePipeline = new IncidentPipeline({
     evidence: financeEvidence,
     memory,
     store,
   });
-  const financeCases = await runFinanceEvidenceCases(config.tatum);
+  const financeCases = await runFinanceEvidenceCases(tatum);
 
   // F1: unavailable evidence. The agent claims success; the engine must not
   //     accept it and must not claim the transaction failed either.

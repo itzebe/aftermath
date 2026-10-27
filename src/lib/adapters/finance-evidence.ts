@@ -1,19 +1,27 @@
 import { EvidenceAssessmentSchema, type EvidenceAssessment, type Incident } from "@/lib/schemas";
 import type { EvidenceAdapter } from "@/lib/adapters/evidence";
-import type { TatumSuiAdapter } from "@/lib/adapters/tatum-sui";
+import type { SuiVerifier } from "@/lib/adapters/sui-verifier";
 
 /**
  * Finance-domain evidence adapter.
  *
- * The authoritative source is Tatum's Sui Mainnet JSON-RPC gateway. The adapter
- * never accepts a client-supplied "success" as evidence, and a failed lookup is
- * reported as UNKNOWN rather than as a failed transaction.
+ * The authoritative source is Tatum's Sui Mainnet gateway. Sui Foundation has
+ * disabled JSON-RPC on Mainnet full nodes and documents gRPC as the supported
+ * replacement, so the verifier this adapter is given prefers gRPC and only
+ * falls back to JSON-RPC when gRPC cannot answer at all.
+ *
+ * The adapter never accepts a client-supplied "success" as evidence, and a
+ * failed lookup is reported as UNKNOWN rather than as a failed transaction.
+ * The exact interface that produced an assessment is carried on the assessment
+ * itself (`evidenceType`), never asserted by this adapter's prose.
  */
 export class FinanceEvidenceAdapter implements EvidenceAdapter {
   readonly domain = "finance" as const;
-  readonly sourceName = "Tatum Sui Mainnet JSON-RPC (sui_getTransactionBlock)";
+  readonly sourceName: string;
 
-  constructor(private readonly tatum: TatumSuiAdapter) {}
+  constructor(private readonly sui: SuiVerifier) {
+    this.sourceName = sui.sourceName;
+  }
 
   async verifyEvidence(incident: Incident): Promise<EvidenceAssessment> {
     const digest = extractDigest(incident);
@@ -22,7 +30,7 @@ export class FinanceEvidenceAdapter implements EvidenceAdapter {
       return EvidenceAssessmentSchema.parse({
         status: "UNKNOWN",
         verified: false,
-        evidenceType: "tatum_sui_json_rpc",
+        evidenceType: "tatum_sui_unconfigured",
         evidenceReference: `finance:tx:${incident.executionId}`,
         observedAt: new Date().toISOString(),
         explanation:
@@ -32,11 +40,11 @@ export class FinanceEvidenceAdapter implements EvidenceAdapter {
       });
     }
 
-    if (!this.tatum.configured) {
+    if (!this.sui.configured) {
       return EvidenceAssessmentSchema.parse({
         status: "UNKNOWN",
         verified: false,
-        evidenceType: "tatum_sui_json_rpc",
+        evidenceType: "tatum_sui_unconfigured",
         evidenceReference: `sui:tx:${digest}`,
         observedAt: new Date().toISOString(),
         explanation:
@@ -46,7 +54,7 @@ export class FinanceEvidenceAdapter implements EvidenceAdapter {
       });
     }
 
-    const { assessment } = await this.tatum.verifyTransaction(digest);
+    const { assessment } = await this.sui.verifyTransaction(digest);
     return assessment;
   }
 }

@@ -139,32 +139,76 @@ creating a duplicate memory.
 
 ### Tatum Sui RPC
 
-The finance adapter uses Tatum's documented Sui Mainnet JSON-RPC gateway. I
-fetched the current documentation and confirmed the endpoint, the auth header,
-and the method names against it rather than relying on the brief's summary:
+The brief warned that Sui's RPC infrastructure had changed and told me to pick a
+*currently supported* interface rather than assume an old one still works. That
+warning was load-bearing. The Sui documentation states it plainly:
 
-- Base URL: `https://sui-mainnet.gateway.tatum.io`
-- Auth: `x-api-key` request header
-- `sui_getChainIdentifier` for a health check
-- `sui_getTransactionBlock` for authoritative execution effects
-- `suix_queryTransactionBlocks` for discovering recent digests
+> JSON-RPC is disabled on Sui Foundation Mainnet full nodes. The shutoff took
+> effect the week of July 27, 2026. Sui Foundation plans full decommission,
+> including code removal, for mid-October 2026. If your application still calls
+> JSON-RPC, migrate to gRPC or GraphQL RPC now.
 
-Two design decisions came directly from the brief and from testing:
+So my first implementation — Tatum's Sui Mainnet JSON-RPC gateway — was a real
+defect, not a stylistic choice. I migrated to gRPC as the primary interface and
+kept JSON-RPC only as an explicit fallback.
+
+Tatum's own Sui page documents both interfaces side by side, which is where I
+took the endpoints and the method names from rather than relying on the brief's
+summary:
+
+| Interface | Base URL | Used for |
+| --- | --- | --- |
+| gRPC (primary) | `https://sui-mainnet-grpc.gateway.tatum.io` | health, verification, discovery |
+| JSON-RPC (fallback) | `https://sui-mainnet.gateway.tatum.io` | health, verification, discovery |
+
+The API key travels as `x-api-key` — gRPC metadata on the gRPC path, a request
+header on the JSON-RPC path. The gRPC client is the official `@mysten/sui/grpc`
+client (`SuiGrpcClient` over gRPC-web), so no proto files are vendored or
+generated. The methods I use are the ones Tatum documents for that gateway:
+
+- `sui.rpc.v2.LedgerService/GetServiceInfo` for a health check
+- `sui.rpc.v2.LedgerService/GetTransaction` for authoritative execution status
+- `sui.rpc.v2.LedgerService/ListTransactions` for discovering recent digests
+
+I verified the wiring before writing any of the adapter logic, because "the
+endpoint exists in a table" is not the same as "the transport reaches it". An
+unauthenticated `GetServiceInfo` against the Tatum gRPC gateway returns
+`UNAUTHENTICATED` — proof the transport works and the gateway is refusing an
+unauthenticated call, not proof of anything about a transaction. The same probe
+against the public Sui full node returned the real Mainnet chain identifier,
+which let me confirm the request shape before adding credentials.
 
 **No hardcoded digests.** The brief forbids fabricating transaction hashes, and
 it is right to. So the finance demonstration *discovers* digests from the live
-ledger via `suix_queryTransactionBlocks`, then re-verifies each one through
-`sui_getTransactionBlock`, and classifies it by its own authoritative effects.
-The successful and unsuccessful cases are found, not assumed.
+ledger through the gateway, then re-verifies each one through an authoritative
+transaction lookup, and classifies it by its own execution status. The
+successful and unsuccessful cases are found, not assumed.
 
-**Transport errors are not outcomes.** The adapter classifies errors as
-`timeout`, `network`, `http`, `auth`, or `malformed`, and every one of them maps
-to `UNKNOWN`. A `429` rate limit is not a failed transaction. A `401` is a
-credential problem, not an on-chain result. This separation is what the whole
-product rests on.
+**Transport errors are not outcomes.** The adapter classifies failures as
+`timeout`, `network`, `http`, `auth`, `malformed`, or `not_found`. The first
+five are failures to complete the lookup and map to `UNKNOWN`. The last is an
+authoritative absence — the node answered, and the answer is "no such
+transaction" — which is still `UNKNOWN`, never `VERIFIED_FAILURE`. A `429` rate
+limit is not a failed transaction. A `401` is a credential problem, not an
+on-chain result. A digest the node has never seen is not a failed transaction
+either. This separation is what the whole product rests on.
+
+The gRPC transport makes that separation clean: a genuine answer arrives as a
+`Transaction` or a `FailedTransaction` with a `status.success` flag, while a
+failure to answer arrives as a thrown gRPC status code. The adapter maps the
+former to `VERIFIED_SUCCESS`/`VERIFIED_FAILURE` and the latter to `UNKNOWN`.
+
+The composite verifier prefers gRPC and falls back to JSON-RPC **only** when the
+gRPC request could not complete at all. A definitive answer — success, failure,
+or "no such transaction" — is returned immediately, so a digest is never queried
+twice when the first interface already answered. Each assessment records which
+interface produced it (`tatum_sui_grpc` or `tatum_sui_json_rpc`), so the UI and
+the audit trail never claim gRPC evidence that actually came from JSON-RPC.
 
 This integration is read-only. No transaction is broadcast, and no wallet key or
-seed phrase is ever requested.
+seed phrase is ever requested. The gRPC gateway exposes a
+`TransactionExecutionService/ExecuteTransaction` method; the adapter deliberately
+never calls it.
 
 ## What I measured
 

@@ -29,7 +29,7 @@ interface SuiTransactionBlock {
 export class TatumSuiTransportError extends Error {
   constructor(
     message: string,
-    readonly kind: "timeout" | "network" | "http" | "auth" | "malformed",
+    readonly kind: FailureKind,
     readonly httpStatus?: number,
   ) {
     super(message);
@@ -37,10 +37,29 @@ export class TatumSuiTransportError extends Error {
   }
 }
 
+/**
+ * Why a lookup did not produce an authoritative outcome. Shared by the
+ * JSON-RPC and gRPC verifiers so callers can reason about them uniformly.
+ */
+export type FailureKind =
+  | "timeout"
+  | "network"
+  | "http"
+  | "auth"
+  | "malformed"
+  | "not_found";
+
 export interface SuiTransactionLookupResult {
   assessment: EvidenceAssessment;
   /** True when the RPC round-trip itself succeeded and returned a transaction. */
   transportOk: boolean;
+  /**
+   * Set when the lookup did not yield an authoritative transaction. Distinguishes
+   * a digest the node does not hold (`not_found`) from a digest it rejected
+   * (`malformed`) and from a request that never completed (`timeout`, `network`,
+   * `auth`, `http`). Absent on a genuine outcome.
+   */
+  failureKind?: FailureKind;
 }
 
 /**
@@ -57,6 +76,8 @@ export interface SuiTransactionLookupResult {
  *   - No transaction is ever broadcast from here.
  */
 export class TatumSuiAdapter {
+  readonly sourceName = "Tatum Sui Mainnet JSON-RPC";
+
   constructor(
     private readonly config: TatumSuiConfig,
     private readonly fetchImpl: typeof fetch = fetch,
@@ -64,6 +85,35 @@ export class TatumSuiAdapter {
 
   get configured(): boolean {
     return Boolean(this.config.apiKey);
+  }
+
+  /**
+   * Discover recent transaction digests from the live ledger via
+   * `suix_queryTransactionBlocks` (a documented Tatum Sui method). Returns an
+   * empty list when the gateway is unreachable; callers must report
+   * unavailability rather than invent a digest.
+   */
+  async discoverRecentDigests(limit = 20): Promise<string[]> {
+    if (!this.config.apiKey) return [];
+    try {
+      const result = await this.rpc<{ data?: Array<{ digest?: string }> }>(
+        "suix_queryTransactionBlocks",
+        [
+          {
+            filter: { Checkpoint: null },
+            options: { showInput: false, showEffects: true },
+          },
+          null,
+          Math.min(limit, 50),
+          true,
+        ],
+      );
+      return (result?.data ?? [])
+        .map((d) => d.digest)
+        .filter((d): d is string => typeof d === "string" && d.length > 0);
+    } catch {
+      return [];
+    }
   }
 
   /** Health check: a cheap read that proves the gateway and key work. */
@@ -104,6 +154,7 @@ export class TatumSuiAdapter {
       const e = err as TatumSuiTransportError;
       return {
         transportOk: false,
+        failureKind: e.kind,
         assessment: EvidenceAssessmentSchema.parse({
           status: "UNKNOWN",
           verified: false,
@@ -127,6 +178,7 @@ export class TatumSuiAdapter {
     if (tx === null || tx === undefined) {
       return {
         transportOk: true,
+        failureKind: "not_found",
         assessment: EvidenceAssessmentSchema.parse({
           status: "UNKNOWN",
           verified: false,
@@ -197,6 +249,7 @@ export class TatumSuiAdapter {
 
     return {
       transportOk: true,
+      failureKind: "malformed",
       assessment: EvidenceAssessmentSchema.parse({
         status: "UNKNOWN",
         verified: false,

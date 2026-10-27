@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { MemWal } from "@mysten-incubation/memwal";
 import { MemWalMemoryAdapter } from "@/lib/adapters/memwal-memory";
 import { TatumSuiAdapter } from "@/lib/adapters/tatum-sui";
+import { TatumSuiGrpcAdapter } from "@/lib/adapters/tatum-sui-grpc";
 import { loadConfig } from "@/lib/config";
 
 /**
@@ -106,6 +107,31 @@ maybe("live smoke: Tatum Sui gateway", () => {
     const result = await adapter.verifyTransaction("0x".padEnd(66, "0"));
     // The lookup could not be completed, so the outcome is UNKNOWN. The point
     // of the assertion is that it is not VERIFIED_FAILURE.
+    expect(result.assessment.status).toBe("UNKNOWN");
+    expect(result.assessment.status).not.toBe("VERIFIED_FAILURE");
+    expect(result.transportOk).toBe(false);
+  }, 30_000);
+});
+
+maybe("live smoke: Tatum Sui gRPC gateway (primary interface)", () => {
+  it("refuses an unauthenticated gRPC call instead of guessing", async () => {
+    const adapter = new TatumSuiGrpcAdapter({
+      grpcUrl: "https://sui-mainnet-grpc.gateway.tatum.io",
+      apiKey: null,
+      timeoutMs: 15_000,
+    });
+    await expect(adapter.verifyTransaction("DIGEST")).rejects.toThrow(/TATUM_API_KEY/);
+  }, 30_000);
+
+  it("maps a rejected API key to UNKNOWN, never to a failed transaction", async () => {
+    const adapter = new TatumSuiGrpcAdapter({
+      grpcUrl: "https://sui-mainnet-grpc.gateway.tatum.io",
+      apiKey: "definitely-not-a-valid-key",
+      timeoutMs: 15_000,
+    });
+    const result = await adapter.verifyTransaction(
+      "91LGR7dJZnfx8PHnAK7qrSQDH8fpcmamGJfomfC8vVuM",
+    );
     expect(result.assessment.status).toBe("UNKNOWN");
     expect(result.assessment.status).not.toBe("VERIFIED_FAILURE");
     expect(result.transportOk).toBe(false);

@@ -134,7 +134,7 @@ export default async function OverviewPage() {
       <section>
         <SectionTitle
           title="Tatum verification health"
-          hint="Read-only Sui Mainnet JSON-RPC. No transaction is ever broadcast."
+          hint="Read-only Sui Mainnet verification. No transaction is ever broadcast."
         />
         <div className="panel rounded p-3.5">
           <div className="flex flex-wrap items-center gap-2">
@@ -147,7 +147,7 @@ export default async function OverviewPage() {
               </span>
             ) : null}
             <span className="mono text-[0.6875rem] text-paper-500">
-              {configuration.tatum.rpcUrl}
+              {configuration.tatum.interface}
             </span>
           </div>
           <div className="mt-2 text-[0.75rem] leading-relaxed text-paper-300">

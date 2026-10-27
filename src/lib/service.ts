@@ -17,7 +17,9 @@ export interface ConfigurationStatus {
     privateKey: string;
   };
   tatum: {
+    grpcUrl: string;
     rpcUrl: string;
+    interface: string;
     apiKey: string;
     configured: boolean;
   };
@@ -38,7 +40,9 @@ export function configurationStatus(): ConfigurationStatus {
       privateKey: maskSecret(config.memory.privateKey),
     },
     tatum: {
+      grpcUrl: config.tatum.grpcUrl,
       rpcUrl: config.tatum.rpcUrl,
+      interface: rt.suiVerifier.sourceName,
       apiKey: maskSecret(config.tatum.apiKey),
       configured: Boolean(config.tatum.apiKey),
     },
@@ -59,7 +63,7 @@ export interface StoreCounts {
 export interface OverviewPayload {
   counts: StoreCounts;
   configuration: ConfigurationStatus;
-  tatumHealth: Awaited<ReturnType<ReturnType<typeof runtime>["tatum"]["health"]>>;
+  tatumHealth: Awaited<ReturnType<ReturnType<typeof runtime>["suiVerifier"]["health"]>>;
   memoryHealth: Awaited<ReturnType<ReturnType<typeof runtime>["memory"]["adapter"]["validateMemoryAvailability"]>>;
   mainnetRequirement: {
     required: number;
@@ -76,7 +80,7 @@ export async function getOverview(): Promise<OverviewPayload> {
   const rt = runtime();
   const counts = rt.store.counts();
   const [tatumHealth, memoryHealth] = await Promise.all([
-    rt.tatum.health(),
+    rt.suiVerifier.health(),
     rt.memory.adapter.validateMemoryAvailability(),
   ]);
 

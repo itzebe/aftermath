@@ -43,7 +43,7 @@ For each attempted action, the engine runs a fixed pipeline:
 
 | Domain | Failure prevented | Authoritative evidence |
 | --- | --- | --- |
-| **Finance** | Reporting a Sui transaction as successful without checking the chain | Tatum Sui Mainnet JSON-RPC (`sui_getTransactionBlock` effects) |
+| **Finance** | Reporting a Sui transaction as successful without checking the chain | Tatum Sui Mainnet gRPC (primary), JSON-RPC fallback (transaction execution status) |
 | **Coding** | Reporting a bug fixed without running the tests | The real `node --test` process: exit code and pass/fail counts |
 | **Workflow** | Repeating an operation whose prerequisite was never met | Persisted application state and prerequisite checks |
 
@@ -126,8 +126,9 @@ cannot create the account for you.
 
 | Variable | Meaning |
 | --- | --- |
-| `TATUM_API_KEY` | Tatum API key, sent as the `x-api-key` header. Server-side only. |
-| `TATUM_SUI_RPC_URL` | Defaults to `https://sui-mainnet.gateway.tatum.io`. |
+| `TATUM_API_KEY` | Tatum API key, sent as `x-api-key` (gRPC metadata) and `X-API-Key` (JSON-RPC). Server-side only. |
+| `TATUM_SUI_GRPC_URL` | Primary interface. Defaults to `https://sui-mainnet-grpc.gateway.tatum.io`. |
+| `TATUM_SUI_RPC_URL` | Fallback interface. Defaults to `https://sui-mainnet.gateway.tatum.io`. |
 | `TATUM_TIMEOUT_MS` | Per-request timeout. Defaults to `12000`. |
 
 ### Application
@@ -141,15 +142,38 @@ cannot create the account for you.
 
 ## Verifying the integrations
 
-### Tatum Sui JSON-RPC
+### Tatum Sui verification (gRPC primary, JSON-RPC fallback)
 
-The adapter uses the documented Tatum Sui Mainnet gateway. The interface was
-confirmed against <https://docs.tatum.io/reference/rpc-sui>:
+Sui Foundation has disabled JSON-RPC on Mainnet full nodes and documents gRPC as
+the supported replacement. Tatum's own Sui documentation carries a
+JSON-RPC-to-gRPC migration guide with the same message. The finance adapter
+therefore uses gRPC as the primary interface and keeps JSON-RPC only as a
+fallback for when gRPC cannot complete a lookup.
+
+Primary interface (gRPC), confirmed against <https://docs.tatum.io/reference/rpc-sui>:
+
+- Base URL: `https://sui-mainnet-grpc.gateway.tatum.io`
+- Auth: the API key as gRPC metadata (`x-api-key`)
+- Transport: the official `@mysten/sui/grpc` client (`SuiGrpcClient` over
+  gRPC-web). No proto files are vendored or generated.
+- Methods used: `ledgerService.getServiceInfo` (health),
+  `ledgerService.getTransaction` (verification), `listTransactions` (digest
+  discovery)
+
+Fallback interface (JSON-RPC), same documentation:
 
 - Base URL: `https://sui-mainnet.gateway.tatum.io`
 - Auth header: `x-api-key`
 - Methods used: `sui_getChainIdentifier` (health), `sui_getTransactionBlock`
   (verification), `suix_queryTransactionBlocks` (digest discovery)
+
+The composite verifier prefers gRPC and falls back **only** when the gRPC
+request could not complete at all (timeout, network, auth, or server error). A
+definitive answer — success, failure, or "the node holds no such transaction" —
+is returned immediately, so a digest is never queried twice when the first
+interface already answered. The interface that produced each assessment is
+recorded in `evidenceType` (`tatum_sui_grpc` or `tatum_sui_json_rpc`), so the UI
+and audit trail never claim gRPC evidence that actually came from JSON-RPC.
 
 The adapter's contract:
 
@@ -197,7 +221,8 @@ npm run test:live   # opt-in smoke tests against the real relayer and gateway
 npm run test:e2e    # playwright: browser tests (needs a running server)
 ```
 
-The suite covers the Tatum adapter's transport-versus-outcome separation, the
+The suite covers the Tatum adapters' transport-versus-outcome separation, the
+composite verifier's gRPC-first/fallback-only-when-incomplete behaviour, the
 live memory adapter's write lifecycle (accepted vs. completed vs. failed), the
 rule engine's validation gating, the decision engine's evidence-governs-memory
 property, the coding harness wiring, and the full eight-scenario pipeline end to
@@ -206,8 +231,8 @@ end.
 `npm run test:live` is skipped by default because it contacts real services. It
 proves the production code path reaches the Mainnet relayer (unauthenticated
 `health`) and that unregistered credentials are refused rather than silently
-treated as a successful write. It also confirms that a rejected Tatum key maps
-to `UNKNOWN`, never to a failed transaction.
+treated as a successful write. It also confirms that a rejected Tatum key — over
+both gRPC and JSON-RPC — maps to `UNKNOWN`, never to a failed transaction.
 
 ---
 
@@ -224,7 +249,9 @@ src/
     runtime.ts            Server-side singletons (all secrets live here)
     adapters/
       evidence.ts         Evidence adapter interface
-      tatum-sui.ts        Tatum Sui JSON-RPC (read-only)
+      tatum-sui.ts        Tatum Sui JSON-RPC (fallback, read-only)
+      tatum-sui-grpc.ts   Tatum Sui gRPC (primary, read-only)
+      sui-verifier.ts     Composite verifier: gRPC first, JSON-RPC fallback
       finance-evidence.ts Finance domain adapter
       coding-harness.ts   Real `node --test` harness
       coding-evidence.ts  Coding domain adapter
