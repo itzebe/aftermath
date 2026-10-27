@@ -1,0 +1,13 @@
+{
+  "name": "aftermath-blog",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Static build of the AFTERMATH technical blog for GitHub Pages. Isolated from the application so it never affects the Next.js build.",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "marked": "18.1.2"
+  }
+}

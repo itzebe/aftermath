@@ -13,6 +13,8 @@ time this pattern appears?
 
 - Hackathon: **Total Recall** (Tatum × Walrus)
 - Deadline: 10 November 2026, 17:00 UTC
+- Technical blog (GitHub Pages): <https://itzebe.github.io/aftermath/>
+- Blog source: [`docs/BLOG.md`](docs/BLOG.md)
 
 ---
 
@@ -312,6 +314,30 @@ As of the last run, against the real services:
   from genuine Mainnet transactions (both successful and unsuccessful). No
   transaction is ever broadcast. When evidence is unavailable the case resolves
   to `UNKNOWN` rather than guessing.
+
+## Publishing the blog
+
+The technical blog lives in [`docs/BLOG.md`](docs/BLOG.md) and is published to
+GitHub Pages as a standalone static page. It is built by
+[`.github/workflows/pages.yml`](.github/workflows/pages.yml) from the isolated
+package in [`blog/`](blog), which has its own `package.json` and never touches
+the application's dependencies or build.
+
+One-time setup: in **Settings → Pages → Build and deployment**, set **Source**
+to **GitHub Actions**. The workflow's own token can deploy but cannot enable
+Pages, so this single setting is done by hand. After that, any push to `master`
+that changes `docs/BLOG.md`, `blog/**`, or the workflow itself rebuilds and
+redeploys the page. To build and preview locally:
+
+```bash
+cd blog
+npm ci
+npm run build      # writes blog/_site/index.html
+```
+
+The build fails rather than shipping a truncated page: it re-parses the
+Markdown source and the rendered HTML and asserts that headings, tables, code
+blocks, list items, and links all survive the conversion.
 
 ## Known limitations
 

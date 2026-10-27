@@ -1,0 +1,69 @@
+# Publish the AFTERMATH technical blog to GitHub Pages.
+#
+# Scope: this workflow only builds the static blog from docs/BLOG.md. It does
+# not build or deploy the Next.js application, and it does not touch the app's
+# own configuration. The blog lives in ./blog as an isolated package so the
+# application's dependency graph is unaffected.
+#
+# This follows GitHub's official Pages starter workflow. It requires the
+# repository's Pages source to be set to "GitHub Actions" once, in
+# Settings -> Pages. The workflow's own GITHUB_TOKEN can deploy but cannot
+# enable Pages, so that one setting is a manual step (documented in README).
+name: Deploy blog to GitHub Pages
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "docs/BLOG.md"
+      - "blog/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+# Least privilege: only what a Pages deployment needs, plus id-token for OIDC.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment; never cancel a production run in progress.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build the static blog
+        working-directory: blog
+        run: |
+          npm ci
+          npm run build
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload the blog artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: blog/_site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

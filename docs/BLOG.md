@@ -169,9 +169,10 @@ where I took the endpoints from rather than relying on the brief's summary:
 
 The API key travels as `x-api-key` on both paths — gRPC metadata on the gRPC
 path, a request header on the GraphQL path. The gRPC client is the official
-`@mysten/sui/grpc` client over a **native** gRPC channel (`@protobuf-ts/grpc-transport`
-+ `@grpc/grpc-js`), so no proto files are vendored or generated. Native, not
-gRPC-web: Tatum's gateway answers with `content-type: application/grpc`, and the
+`@mysten/sui/grpc` client over a **native** gRPC channel
+(`@protobuf-ts/grpc-transport` + `@grpc/grpc-js`), so no proto files are vendored
+or generated. Native, not gRPC-web: Tatum's gateway answers with
+`content-type: application/grpc`, and the
 gRPC-web transport refuses that content type. The methods I use are the ones
 Tatum documents for that gateway:
 
