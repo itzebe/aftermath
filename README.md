@@ -477,3 +477,12 @@ blocks, list items, and links all survive the conversion.
   describe those scenarios; they are not claims about production reliability.
 - The workflow state store is in-process. It is a reproducible harness, not a
   durable queue.
+- A full demonstration run makes 16–18 sequential Walrus Mainnet writes (each
+  incident and lesson waits for the relayer job, then a recall confirmation),
+  which takes roughly ten minutes. Vercel caps a function at 300 seconds, so on
+  a serverless deployment the run is cut off part-way through: the writes it
+  completed are durable and counted, but the scenarios after the cut-off
+  (including the finance ones) do not run in that invocation. Running the
+  demonstration again continues from the accumulated ledger. This is a property
+  of the serverless execution limit, not of the memory integration; a
+  long-running host completes the whole run in one pass.
