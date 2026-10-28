@@ -40,6 +40,11 @@ export class SqliteAuditStore implements AuditStore {
         : "SQLite in a non-shared location (in-memory or OS temp directory)");
   }
 
+  /** The underlying handle, so the durable job/workflow stores can share it. */
+  getHandle(): DatabaseSync {
+    return this.db;
+  }
+
   private migrate(): void {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS incidents (
@@ -241,6 +246,15 @@ export class SqliteAuditStore implements AuditStore {
       .prepare(`SELECT payload FROM decisions ORDER BY decided_at DESC LIMIT ?`)
       .all(limit) as Array<{ payload: string }>;
     return rows.map((r) => JSON.parse(r.payload) as SafeguardDecision);
+  }
+
+  async listMemoryWritesForIncident(incidentId: string): Promise<MemoryWriteReceipt[]> {
+    const rows = this.db
+      .prepare(
+        `SELECT payload FROM memory_writes WHERE incident_id = ? ORDER BY requested_at ASC`,
+      )
+      .all(incidentId) as Array<{ payload: string }>;
+    return rows.map((r) => JSON.parse(r.payload) as MemoryWriteReceipt);
   }
 
   async counts(): Promise<AuditCounts> {

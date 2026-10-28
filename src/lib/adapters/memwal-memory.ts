@@ -12,6 +12,7 @@ import {
   type MemoryWriteReceipt,
   type RecallOptions,
   type RecalledLesson,
+  type WriteOptions,
 } from "@/lib/adapters/memory";
 import { relayerNetwork, type AftermathConfig } from "@/lib/config";
 import { redact } from "@/lib/util/redact";
@@ -285,9 +286,17 @@ export class MemWalMemoryAdapter implements MemoryAdapter {
     kind: "incident" | "lesson",
     text: string,
     idempotencyKey?: string,
+    options?: WriteOptions,
   ): Promise<MemoryWriteReceipt> {
+    // The local write id is derived from the idempotency key, not from the
+    // clock. The durable caller persists the receipt under this id, so a retry
+    // (or a second batch on another instance) upserts the same ledger row
+    // instead of appending a duplicate that would inflate the count.
+    const writeId = idempotencyKey
+      ? `${kind}-${createHash("sha256").update(idempotencyKey).digest("hex").slice(0, 24)}`
+      : `${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const base: MemoryWriteReceipt = {
-      writeId: `${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      writeId,
       kind,
       jobId: null,
       state: "requested",
@@ -328,6 +337,12 @@ export class MemWalMemoryAdapter implements MemoryAdapter {
         : await this.client.remember(text);
       jobId = accepted.job_id;
       const requested: MemoryWriteReceipt = { ...base, jobId };
+
+      // Persist the accepted write's job id *before* awaiting completion, so a
+      // crash mid-wait leaves a durable record a later request can reconcile.
+      if (options?.onAccepted) {
+        await options.onAccepted({ ...requested, state: "processing" });
+      }
 
       // One-shot status read so the ledger can show a genuine `processing`
       // state rather than assuming progress after acceptance.
@@ -378,15 +393,22 @@ export class MemWalMemoryAdapter implements MemoryAdapter {
     }
   }
 
-  rememberIncident(incident: Incident): Promise<MemoryWriteReceipt> {
+  rememberIncident(
+    incident: Incident,
+    options?: WriteOptions,
+  ): Promise<MemoryWriteReceipt> {
     return this.writeText(
       "incident",
       incidentToMemoryText(incident),
       `incident:${incident.incidentId}`,
+      options,
     );
   }
 
-  rememberLesson(lesson: CorrectiveLessonRecord): Promise<MemoryWriteReceipt> {
+  rememberLesson(
+    lesson: CorrectiveLessonRecord,
+    options?: WriteOptions,
+  ): Promise<MemoryWriteReceipt> {
     const text = lessonToMemoryText(lesson);
     // The idempotency key must identify the *content*, not the lesson class.
     // Two distinct incidents can yield lessons with the same
@@ -396,7 +418,52 @@ export class MemWalMemoryAdapter implements MemoryAdapter {
     // content`. Hashing the exact text keeps true retries idempotent while
     // letting genuinely different lessons through.
     const contentHash = createHash("sha256").update(text).digest("hex").slice(0, 32);
-    return this.writeText("lesson", text, `lesson:${contentHash}`);
+    return this.writeText("lesson", text, `lesson:${contentHash}`, options);
+  }
+
+  /**
+   * Resolve a write that was accepted but never observed to complete.
+   *
+   * `waitForRememberJob` is safe to re-poll with the same job id: the SDK's own
+   * error documentation says a timeout means "keep polling the same job id
+   * rather than retrying the write". So this never re-issues the write — it
+   * resolves the existing job, which is what makes a crash between acceptance
+   * and persistence recoverable without a duplicate Mainnet memory.
+   */
+  async reconcileWrite(
+    jobId: string,
+    prior: MemoryWriteReceipt,
+  ): Promise<MemoryWriteReceipt> {
+    if (!this.client) {
+      return {
+        ...prior,
+        jobId,
+        state: "failed",
+        error: "cannot reconcile: memory client not initialized",
+      };
+    }
+    try {
+      const result = await this.client.waitForRememberJob(jobId);
+      const done: MemoryWriteReceipt = {
+        ...prior,
+        jobId,
+        state: "completed",
+        blobId: result.blob_id,
+        owner: result.owner,
+        namespace: result.namespace,
+        completedAt: new Date().toISOString(),
+        error: undefined,
+      };
+      return await this.verifyRecall(done);
+    } catch (err) {
+      return {
+        ...prior,
+        jobId,
+        state: "failed",
+        error: `reconcile failed: ${redact((err as Error).message)}`,
+        completedAt: new Date().toISOString(),
+      };
+    }
   }
 
   async waitForWriteCompletion(jobId: string): Promise<MemoryWriteReceipt> {

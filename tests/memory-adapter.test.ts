@@ -31,7 +31,20 @@ describe("memory text format", () => {
     const l = lesson();
     const text = lessonToMemoryText(l);
     const parsed = parseLessonFromMemoryText(text);
-    expect(parsed).toEqual(l);
+    // The content fields must survive intact. `created_at` is deliberately not
+    // serialized (see lessonToMemoryText), so compare everything else.
+    const { created_at: _a, ...expected } = l;
+    const { created_at: _b, ...actual } = parsed!;
+    expect(actual).toEqual(expected);
+  });
+
+  it("is byte-identical for the same lesson regardless of created_at", () => {
+    // This is the property the write's idempotency key depends on: a retry of
+    // the same lesson after a crash must produce the same text, or the relayer
+    // rejects the reused key as "different content".
+    const a = lesson({ created_at: "2026-01-01T00:00:00.000Z" });
+    const b = lesson({ created_at: "2026-10-27T12:34:56.789Z" });
+    expect(lessonToMemoryText(a)).toBe(lessonToMemoryText(b));
   });
 
   it("returns undefined for non-lesson text", () => {

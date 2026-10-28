@@ -4,9 +4,9 @@ import { buildSuiVerifier } from "@/lib/demos/finance";
 import type { SuiVerifier } from "@/lib/adapters/sui-verifier";
 import { FinanceEvidenceAdapter } from "@/lib/adapters/finance-evidence";
 import type { AuditStore } from "@/lib/db/audit-store";
-import { resolveAuditStore } from "@/lib/db/store-factory";
+import { resolveDurableStores, type DurableStores } from "@/lib/db/durable-stores";
 import { IncidentPipeline } from "@/lib/engines/pipeline";
-import { InMemoryWorkflowStateStore } from "@/lib/adapters/workflow-state";
+import type { WorkflowStateStore } from "@/lib/adapters/workflow-state";
 import { WorkflowEvidenceAdapter } from "@/lib/adapters/workflow-evidence";
 import { DEPLOY_WORKFLOW } from "@/lib/demos/workflow";
 
@@ -17,10 +17,16 @@ import { DEPLOY_WORKFLOW } from "@/lib/demos/workflow";
 export interface Runtime {
   config: AftermathConfig;
   store: AuditStore;
+  /**
+   * The durable demonstration stores (job tracker + workflow state), sharing
+   * one connection with the audit store. Exposed so the resumable runner can
+   * persist progress across requests.
+   */
+  durable: DurableStores;
   memory: MemoryAdapterResolution;
   suiVerifier: SuiVerifier;
   financePipeline: IncidentPipeline;
-  workflowStore: InMemoryWorkflowStateStore;
+  workflowStore: WorkflowStateStore;
   workflowPipeline: IncidentPipeline;
 }
 
@@ -30,12 +36,13 @@ declare global {
 
 function build(): Runtime {
   const config = loadConfig();
-  const store = resolveAuditStore(config);
+  const durable = resolveDurableStores(config);
+  const store = durable.audit;
   const memory = resolveMemoryAdapter(config);
   const suiVerifier = buildSuiVerifier(config.tatum);
   const financeEvidence = new FinanceEvidenceAdapter(suiVerifier);
 
-  const workflowStore = new InMemoryWorkflowStateStore();
+  const workflowStore = durable.workflow;
   const workflowEvidence = new WorkflowEvidenceAdapter({
     definition: DEPLOY_WORKFLOW,
     store: workflowStore,
@@ -44,6 +51,7 @@ function build(): Runtime {
   return {
     config,
     store,
+    durable,
     memory,
     suiVerifier,
     financePipeline: new IncidentPipeline({

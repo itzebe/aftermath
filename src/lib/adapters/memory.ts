@@ -107,6 +107,18 @@ export interface MemoryStatus {
   detail: string;
 }
 
+export interface WriteOptions {
+  /**
+   * Called as soon as the relayer accepts a write (a job id exists), before the
+   * job is awaited to completion.
+   *
+   * This exists so a durable caller can persist the job id early. If the
+   * process then dies before the write settles, a later request can reconcile
+   * the *existing* job by its id instead of re-issuing the write.
+   */
+  onAccepted?: (receipt: MemoryWriteReceipt) => void | Promise<void>;
+}
+
 export interface RecallOptions {
   limit?: number;
   namespace?: string;
@@ -141,11 +153,27 @@ export interface MemoryAdapter {
    */
   status(): Promise<MemoryStatus>;
 
-  rememberIncident(incident: Incident): Promise<MemoryWriteReceipt>;
-  rememberLesson(lesson: CorrectiveLessonRecord): Promise<MemoryWriteReceipt>;
+  rememberIncident(incident: Incident, options?: WriteOptions): Promise<MemoryWriteReceipt>;
+  rememberLesson(lesson: CorrectiveLessonRecord, options?: WriteOptions): Promise<MemoryWriteReceipt>;
 
   /** Poll a previously accepted write until it completes or fails. */
   waitForWriteCompletion(jobId: string): Promise<MemoryWriteReceipt>;
+
+  /**
+   * Reconcile a write that was accepted but never observed to complete — for
+   * example when the process died between the relayer accepting the job and the
+   * receipt being persisted.
+   *
+   * The caller supplies the durable identifiers it stored (job id and the
+   * original receipt). The adapter resolves the *existing* job rather than
+   * issuing a new write, so a crash can never produce a duplicate Mainnet
+   * memory. When the job cannot be resolved it returns a failed receipt whose
+   * `error` explains why — it never fabricates success.
+   */
+  reconcileWrite?(
+    jobId: string,
+    prior: MemoryWriteReceipt,
+  ): Promise<MemoryWriteReceipt>;
 
   recallRelevantLessons(
     query: string,
@@ -172,10 +200,16 @@ export interface MemoryAdapter {
  * record is embedded as JSON so it round-trips through recall unchanged.
  */
 export function lessonToMemoryText(lesson: CorrectiveLessonRecord): string {
+  // `created_at` is excluded from the serialized body on purpose. The text is
+  // the content hashed for the write's idempotency key, so a retry of the same
+  // lesson after a crash must be byte-identical. A wall-clock timestamp would
+  // make the retry "different content" for the same key, which the relayer
+  // rejects with 409 instead of deduplicating.
+  const { created_at: _ignored, ...stable } = lesson;
   return [
     `corrective_lesson:${lesson.domain}:${lesson.failure_pattern}`,
     lesson.corrective_rule,
-    JSON.stringify(lesson),
+    JSON.stringify(stable),
   ].join("\n");
 }
 
