@@ -76,6 +76,14 @@ export interface AuditStore {
   /** Active rules, most recent version per rule id. */
   listActiveRules(): Promise<SafeguardRule[]>;
   listMemoryWrites(limit?: number): Promise<MemoryWriteReceipt[]>;
+  /**
+   * All memory-write receipts recorded for one incident.
+   *
+   * Used by the resumable runner to (a) collect the durable write ids a
+   * scenario produced and (b) find writes that were accepted but never observed
+   * to complete, so they can be reconciled rather than re-issued.
+   */
+  listMemoryWritesForIncident(incidentId: string): Promise<MemoryWriteReceipt[]>;
   listDecisions(limit?: number): Promise<SafeguardDecision[]>;
   counts(): Promise<AuditCounts>;
 

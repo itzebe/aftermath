@@ -25,9 +25,11 @@ test("overview renders and labels the memory backend honestly", async ({ page })
 
 test("running the demonstrations populates the scenario table", async ({ page }) => {
   await page.goto("/");
-  const runButton = page.getByRole("button", { name: /Run demonstrations/i });
+  const runButton = page.getByRole("button", { name: /Run from scratch/i });
   await runButton.click();
-  await expect(runButton).toBeEnabled({ timeout: 60_000 });
+  // The run advances in bounded batches against real Mainnet writes, so it can
+  // take several minutes; wait for the button to become idle again.
+  await expect(runButton).toBeEnabled({ timeout: 600_000 });
 
   const table = page.locator("table.data").last();
   await expect(table).toBeVisible();

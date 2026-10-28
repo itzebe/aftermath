@@ -1,4 +1,5 @@
 import { MemWalMock } from "@mysten-incubation/memwal";
+import { createHash } from "node:crypto";
 import type { CorrectiveLessonRecord, Incident } from "@/lib/schemas";
 import {
   incidentToMemoryText,
@@ -11,6 +12,7 @@ import {
   type MemoryWriteReceipt,
   type RecallOptions,
   type RecalledLesson,
+  type WriteOptions,
 } from "@/lib/adapters/memory";
 
 /**
@@ -28,7 +30,6 @@ export class SimulatedMemoryAdapter implements MemoryAdapter {
   readonly isLive = false;
 
   private client: MemWalMock;
-  private sequence = 0;
 
   constructor(private readonly namespace = "aftermath") {
     this.client = MemWalMock.create({ namespace, owner: "simulated-owner" });
@@ -62,11 +63,14 @@ export class SimulatedMemoryAdapter implements MemoryAdapter {
   private async writeText(
     kind: "incident" | "lesson",
     text: string,
+    key: string,
+    options?: WriteOptions,
   ): Promise<MemoryWriteReceipt> {
-    this.sequence += 1;
-    const writeId = `sim-${kind}-${this.sequence}`;
+    // A deterministic write id keyed on the idempotency key, matching the live
+    // adapter, so the durable ledger upserts rather than appends on a retry.
+    const writeId = `${kind}-${createHash("sha256").update(key).digest("hex").slice(0, 24)}`;
     try {
-      const result = await this.client.rememberAndWait(text);
+      const result = await this.client.rememberAndWait(text, undefined, { idempotencyKey: key });
       const receipt: MemoryWriteReceipt = {
         writeId,
         kind,
@@ -82,6 +86,7 @@ export class SimulatedMemoryAdapter implements MemoryAdapter {
         completedAt: new Date().toISOString(),
         text,
       };
+      await options?.onAccepted?.(receipt);
       return this.verifyRecall(receipt);
     } catch (err) {
       return {
@@ -99,12 +104,52 @@ export class SimulatedMemoryAdapter implements MemoryAdapter {
     }
   }
 
-  rememberIncident(incident: Incident): Promise<MemoryWriteReceipt> {
-    return this.writeText("incident", incidentToMemoryText(incident));
+  rememberIncident(
+    incident: Incident,
+    options?: WriteOptions,
+  ): Promise<MemoryWriteReceipt> {
+    return this.writeText(
+      "incident",
+      incidentToMemoryText(incident),
+      `incident:${incident.incidentId}`,
+      options,
+    );
   }
 
-  rememberLesson(lesson: CorrectiveLessonRecord): Promise<MemoryWriteReceipt> {
-    return this.writeText("lesson", lessonToMemoryText(lesson));
+  rememberLesson(
+    lesson: CorrectiveLessonRecord,
+    options?: WriteOptions,
+  ): Promise<MemoryWriteReceipt> {
+    const text = lessonToMemoryText(lesson);
+    const contentHash = createHash("sha256").update(text).digest("hex").slice(0, 32);
+    return this.writeText("lesson", text, `lesson:${contentHash}`, options);
+  }
+
+  async reconcileWrite(
+    jobId: string,
+    prior: MemoryWriteReceipt,
+  ): Promise<MemoryWriteReceipt> {
+    try {
+      const result = await this.client.waitForRememberJob(jobId);
+      const done: MemoryWriteReceipt = {
+        ...prior,
+        jobId,
+        state: "completed",
+        blobId: result.blob_id,
+        owner: result.owner,
+        namespace: result.namespace,
+        completedAt: new Date().toISOString(),
+        error: undefined,
+      };
+      return this.verifyRecall(done);
+    } catch (err) {
+      return {
+        ...prior,
+        jobId,
+        state: "failed",
+        error: `reconcile failed: ${(err as Error).message}`,
+      };
+    }
   }
 
   async waitForWriteCompletion(jobId: string): Promise<MemoryWriteReceipt> {
@@ -164,6 +209,5 @@ export class SimulatedMemoryAdapter implements MemoryAdapter {
    */
   async reset(): Promise<void> {
     this.client.clear();
-    this.sequence = 0;
   }
 }

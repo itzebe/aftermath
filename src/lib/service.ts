@@ -2,6 +2,7 @@ import { runtime } from "@/lib/runtime";
 import { loadConfig, relayerNetwork } from "@/lib/config";
 import { maskSecret } from "@/lib/util/redact";
 import { runAllScenarios, type DemoRunResult } from "@/lib/demos/runner";
+import { runDemoBatch, type BatchResult } from "@/lib/demos/resumable-runner";
 import { evaluate, type EvaluationMetrics, type ScenarioOutcome } from "@/lib/engines/evaluation";
 import type { IncidentInputDraft } from "@/lib/schemas";
 
@@ -143,6 +144,96 @@ export async function runScenarios(): Promise<DemoRunResult> {
   });
   await rt.store.saveScenarioRun(`run-${Date.now()}`, result.ranAt, result);
   return result;
+}
+
+/**
+ * Run one bounded batch of the resumable demonstration.
+ *
+ * This is the production entry point. A single serverless invocation cannot
+ * complete every scenario inside the host's time limit, so the plan is advanced
+ * in bounded slices and progress is persisted after each scenario. The caller
+ * repeats until `continuationRequired` is false.
+ */
+export async function runScenarioBatch(options: {
+  restart?: boolean;
+  budgetMs?: number;
+} = {}): Promise<BatchResult> {
+  const rt = runtime();
+  const result = await runDemoBatch({
+    stores: rt.durable,
+    config: loadConfig(),
+    memory: rt.memory.adapter,
+    restart: options.restart,
+    budgetMs: options.budgetMs,
+  });
+  // Persist a run snapshot only when the job has actually reached a terminal
+  // state, so the evaluation panel never shows a partial run as if it were
+  // the finished demonstration. The snapshot is the *whole* job's reports,
+  // loaded from the durable store, not just this request's slice.
+  if (result.done || (!result.continuationRequired && result.progress.failed > 0)) {
+    const rows = await rt.durable.jobs.listScenarios(result.jobId);
+    const scenarios = rows
+      .filter((r) => !r.internal && r.report)
+      .map((r) => r.report!) as DemoRunResult["scenarios"];
+    const ranAt = new Date().toISOString();
+    await rt.store.saveScenarioRun(`run-${Date.now()}`, ranAt, {
+      ranAt,
+      scenarios,
+      memoryBackend: rt.memory.adapter.backend,
+      memoryDegraded: !rt.memory.adapter.isLive,
+      memoryReason: rt.memory.adapter.isLive
+        ? "Live Walrus Memory backend."
+        : "Simulated memory backend (credentials not configured).",
+    });
+  }
+  return result;
+}
+
+/** Progress of the current (or latest) resumable demonstration, for the UI. */
+export async function getDemoProgress(): Promise<{
+  jobId: string;
+  status: string;
+  total: number;
+  completed: number;
+  failed: number;
+  remaining: number;
+  scenarios: Array<{
+    stepId: string;
+    title: string;
+    domain: string;
+    simulated: boolean;
+    state: string;
+    attempts: number;
+    decision?: string;
+    evidenceStatus?: string;
+    error?: string | null;
+  }>;
+} | null> {
+  const rt = runtime();
+  await rt.durable.migrate();
+  const job = await rt.durable.jobs.latestJob();
+  if (!job) return null;
+  const rows = await rt.durable.jobs.listScenarios(job.jobId);
+  const visible = rows.filter((r) => !r.internal);
+  return {
+    jobId: job.jobId,
+    status: job.status,
+    total: visible.length,
+    completed: visible.filter((r) => r.state === "completed").length,
+    failed: visible.filter((r) => r.state === "failed").length,
+    remaining: visible.filter((r) => r.state === "pending" || r.state === "executing").length,
+    scenarios: visible.map((r) => ({
+      stepId: r.stepId,
+      title: r.title,
+      domain: r.domain,
+      simulated: r.simulated,
+      state: r.state,
+      attempts: r.attempts,
+      decision: r.report?.decision,
+      evidenceStatus: r.report?.evidenceStatus,
+      error: r.lastError,
+    })),
+  };
 }
 
 export async function getIncidents(limit = 200) {

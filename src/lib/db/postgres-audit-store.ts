@@ -1,4 +1,5 @@
 import { Pool, type PoolConfig } from "pg";
+import { MIGRATION_LOCK_KEY } from "@/lib/db/sql";
 import type {
   AuditCounts,
   AuditStore,
@@ -25,22 +26,34 @@ export class PostgresAuditStore implements AuditStore {
   readonly durable = true;
   readonly detail: string;
   private readonly pool: Pool;
+  private readonly ownsPool: boolean;
   private ready: Promise<void> | null = null;
 
-  constructor(connectionString: string, options: { ssl?: PoolConfig["ssl"] } = {}) {
+  constructor(
+    connectionString: string,
+    options: { ssl?: PoolConfig["ssl"]; pool?: Pool } = {},
+  ) {
     // Strip credentials from the host we report, so the detail string is safe
     // to surface in an API response.
     this.detail = `PostgreSQL at ${safeHost(connectionString)}`;
-    this.pool = new Pool({
-      connectionString,
-      ssl: options.ssl,
-      max: 3,
-      idleTimeoutMillis: 10_000,
-      connectionTimeoutMillis: 10_000,
-    });
+    this.ownsPool = !options.pool;
+    this.pool =
+      options.pool ??
+      new Pool({
+        connectionString,
+        ssl: options.ssl,
+        max: 3,
+        idleTimeoutMillis: 10_000,
+        connectionTimeoutMillis: 10_000,
+      });
     // A pool-level error (e.g. the backend dropping an idle connection) must
     // not crash the process as an unhandled 'error' event.
     this.pool.on("error", () => {});
+  }
+
+  /** The shared connection pool, so other durable stores can reuse it. */
+  getPool(): Pool {
+    return this.pool;
   }
 
   /** Run the idempotent migration once per process. */
@@ -57,7 +70,14 @@ export class PostgresAuditStore implements AuditStore {
   }
 
   private async migrate(): Promise<void> {
-    await this.pool.query(`
+    // Hold a cross-instance advisory lock while creating the tables. Without
+    // it, two instances starting together both pass the `IF NOT EXISTS` check
+    // and collide on the catalog's unique index. A dedicated client is checked
+    // out so the lock and the DDL share one session.
+    const client = await this.pool.connect();
+    try {
+      await client.query(`SELECT pg_advisory_lock($1)`, [MIGRATION_LOCK_KEY]);
+      await client.query(`
       CREATE TABLE IF NOT EXISTS incidents (
         incident_id TEXT PRIMARY KEY,
         domain TEXT NOT NULL,
@@ -108,6 +128,10 @@ export class PostgresAuditStore implements AuditStore {
       CREATE INDEX IF NOT EXISTS idx_incidents_domain ON incidents(domain);
       CREATE INDEX IF NOT EXISTS idx_writes_backend ON memory_writes(backend, state);
     `);
+    } finally {
+      await client.query(`SELECT pg_advisory_unlock($1)`, [MIGRATION_LOCK_KEY]);
+      client.release();
+    }
   }
 
   async health(): Promise<{ ok: boolean; detail: string }> {
@@ -286,6 +310,15 @@ export class PostgresAuditStore implements AuditStore {
     return rows.map((r) => r.payload as SafeguardDecision);
   }
 
+  async listMemoryWritesForIncident(incidentId: string): Promise<MemoryWriteReceipt[]> {
+    await this.ensureReady();
+    const { rows } = await this.pool.query(
+      `SELECT payload FROM memory_writes WHERE incident_id = $1 ORDER BY requested_at ASC`,
+      [incidentId],
+    );
+    return rows.map((r) => r.payload as MemoryWriteReceipt);
+  }
+
   async counts(): Promise<AuditCounts> {
     const incidents = await this.listIncidents(100_000);
     const writes = await this.listMemoryWrites(100_000);
@@ -309,7 +342,7 @@ export class PostgresAuditStore implements AuditStore {
   }
 
   async close(): Promise<void> {
-    await this.pool.end();
+    if (this.ownsPool) await this.pool.end();
   }
 }
 

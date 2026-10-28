@@ -64,12 +64,21 @@ export class IncidentPipeline {
        * on every run.
        */
       persistLessonMemory?: boolean;
+      /**
+       * Override the generated incident id.
+       *
+       * The resumable demonstration derives a *deterministic* id from
+       * (jobId, stepId) so a retried step reuses the same id. That makes the
+       * incident's Walrus idempotency key stable, so a retry after a crash
+       * dedupes at the relayer instead of writing a duplicate memory.
+       */
+      incidentId?: string;
     } = {},
   ): Promise<ProcessResult> {
     const validated = IncidentInputSchema.parse(input);
     const incident = IncidentSchema.parse({
       ...validated,
-      incidentId: randomUUID(),
+      incidentId: options.incidentId ?? randomUUID(),
       createdAt: new Date().toISOString(),
       currentStatus: "open",
     });
@@ -134,15 +143,29 @@ export class IncidentPipeline {
       decision,
     });
 
-    // 6. Persist to the memory backend.
-    let incidentWrite: MemoryWriteReceipt | null = null;
-    let lessonWrite: MemoryWriteReceipt | null = null;
+    // 6. Persist to the memory backend. The two writes are independent and are
+    //    issued concurrently (see below); these hold their eventual results.
+    let incidentWritePromise: Promise<MemoryWriteReceipt> | null = null;
+    let lessonWritePromise: Promise<MemoryWriteReceipt> | null = null;
 
     if (options.persistIncidentMemory !== false) {
-      incidentWrite = await this.deps.memory.rememberIncident(storedIncident);
-      await this.deps.store.saveMemoryWrite(incidentWrite, {
-        incidentId: storedIncident.incidentId,
-      });
+      incidentWritePromise = this.deps.memory
+        .rememberIncident(storedIncident, {
+          onAccepted: async (receipt) => {
+            // Persist the accepted job id before awaiting completion. If the
+            // process dies while the write settles, a later request can
+            // reconcile this exact job instead of re-issuing the write.
+            await this.deps.store.saveMemoryWrite(receipt, {
+              incidentId: storedIncident.incidentId,
+            });
+          },
+        })
+        .then(async (receipt) => {
+          await this.deps.store.saveMemoryWrite(receipt, {
+            incidentId: storedIncident.incidentId,
+          });
+          return receipt;
+        });
     }
 
     if (diagnosis.actionable && options.persistLessonMemory !== false) {
@@ -168,12 +191,31 @@ export class IncidentPipeline {
         created_at: new Date().toISOString(),
         provenance: incident.provenance,
       });
-      lessonWrite = await this.deps.memory.rememberLesson(lesson);
-      await this.deps.store.saveMemoryWrite(lessonWrite, {
-        incidentId: storedIncident.incidentId,
-        ruleId: activatedRule?.ruleId ?? proposedRule?.ruleId,
-      });
+      // Issued concurrently with the incident write: the two memories are
+      // independent, and awaiting them in sequence would double the scenario's
+      // Mainnet latency for no benefit.
+      lessonWritePromise = this.deps.memory
+        .rememberLesson(lesson, {
+          onAccepted: async (receipt) => {
+            await this.deps.store.saveMemoryWrite(receipt, {
+              incidentId: storedIncident.incidentId,
+              ruleId: activatedRule?.ruleId ?? proposedRule?.ruleId,
+            });
+          },
+        })
+        .then(async (receipt) => {
+          await this.deps.store.saveMemoryWrite(receipt, {
+            incidentId: storedIncident.incidentId,
+            ruleId: activatedRule?.ruleId ?? proposedRule?.ruleId,
+          });
+          return receipt;
+        });
     }
+
+    const [incidentWrite, lessonWrite] = await Promise.all([
+      incidentWritePromise,
+      lessonWritePromise,
+    ]);
 
     return {
       incident: storedIncident,
@@ -197,11 +239,13 @@ export class IncidentPipeline {
   async preflight(
     input: IncidentInputDraft,
     preconditions: Precondition[],
+    incidentId?: string,
   ): Promise<ProcessResult> {
     return this.process(input, {
       preconditions,
       mode: "preflight",
       persistIncidentMemory: true,
+      ...(incidentId ? { incidentId } : {}),
     });
   }
 }

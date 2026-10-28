@@ -108,3 +108,29 @@ export async function runHarnessOnce(
     timeoutMs: 30_000,
   });
 }
+
+/**
+ * Run the suite without preparing the harness first.
+ *
+ * Used by the resumable demonstration's `prepare` phase: the coding scenarios
+ * need the test process's *observed* pass/fail status to decide whether the
+ * fixture is in the state the scenario expects. That read must not itself
+ * change the fixture.
+ */
+export async function runHarnessStatus(
+  targetDir: string,
+): Promise<{ passed: boolean; testsRun: number; exitCode: number | null }> {
+  const resolvedTarget = path.resolve(targetDir);
+  const run = await runTestHarness({
+    cwd: resolvedTarget,
+    command: process.execPath,
+    args: ["--test", path.join(resolvedTarget, "calc.test.js")],
+    artifactPath: path.join(resolvedTarget, "status-probe.json"),
+    timeoutMs: 30_000,
+  });
+  return {
+    passed: run.exitCode === 0 && run.testsFailed === 0 && run.testsRun > 0,
+    testsRun: run.testsRun,
+    exitCode: run.exitCode,
+  };
+}
