@@ -412,9 +412,11 @@ cp .env.example .env.local   # add credentials
 npm run dev                  # http://localhost:12000
 ```
 
-Open the Overview, press **Run demonstrations**, and read the Incident Explorer.
+Open the Overview, press **Run from scratch**, and read the Incident Explorer.
 Every incident shows the claim, the evidence, the diagnosis, and the decision —
 in that order, because that is the order in which the truth becomes available.
+The run advances in bounded batches, since every scenario waits on real Walrus
+Mainnet writes; the page shows progress and the job resumes if interrupted.
 
 ---
 

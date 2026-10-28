@@ -111,9 +111,12 @@ cp .env.example .env.local   # fill in credentials (see below)
 npm run dev                  # http://localhost:12000
 ```
 
-Then open the Overview page and press **Run demonstrations**. That executes the
-controlled scenarios and populates the incident timeline, safeguards, memory
-ledger, and evaluation metrics.
+Then open the Overview page and press **Run from scratch** (or **Resume /
+continue** to pick up an unfinished run). That executes the controlled scenarios
+and populates the incident timeline, safeguards, memory ledger, and evaluation
+metrics. Because each scenario performs real Walrus Mainnet writes, the run
+advances in bounded batches across several requests; the page reports progress
+until the job completes.
 
 ### Durable audit index (required on Vercel)
 
@@ -475,14 +478,16 @@ blocks, list items, and links all survive the conversion.
   Tatum API key. It reports `UNKNOWN` rather than guessing.
 - The evaluation metrics are measured over the eight controlled scenarios. They
   describe those scenarios; they are not claims about production reliability.
-- The workflow state store is in-process. It is a reproducible harness, not a
-  durable queue.
-- A full demonstration run makes 16–18 sequential Walrus Mainnet writes (each
-  incident and lesson waits for the relayer job, then a recall confirmation),
-  which takes roughly ten minutes. Vercel caps a function at 300 seconds, so on
-  a serverless deployment the run is cut off part-way through: the writes it
-  completed are durable and counted, but the scenarios after the cut-off
-  (including the finance ones) do not run in that invocation. Running the
-  demonstration again continues from the accumulated ledger. This is a property
-  of the serverless execution limit, not of the memory integration; a
-  long-running host completes the whole run in one pass.
+- The workflow state store is durable: it lives in the same database as the
+  audit index (PostgreSQL when `DATABASE_URL` is set, otherwise SQLite). It is a
+  reproducible harness, not a general-purpose durable queue.
+- A full demonstration run makes 16–18 Walrus Mainnet writes, each of which
+  waits for the relayer job and then a recall confirmation (~20–30s per write),
+  so the whole run takes several minutes. The run is therefore executed as a
+  resumable job: one request advances a bounded batch, persists progress after
+  every scenario, and the client repeats until the job reaches a terminal
+  state. Each request stays well inside the serverless function limit, and a
+  run interrupted mid-way (a closed tab, a redeploy) resumes from the durable
+  job rather than restarting. The job store is the same durable backend as the
+  audit index, so progress is shared across serverless instances. A single
+  long-running host still completes the run in one or two passes.
