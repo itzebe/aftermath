@@ -4,7 +4,8 @@
  */
 
 import path from "node:path";
-import { existsSync, readFileSync } from "node:fs";
+import os from "node:os";
+import { accessSync, constants, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { loadEnvConfig, processEnv } from "@next/env";
 
 /**
@@ -58,7 +59,44 @@ function optional(name: string): string | null {
   return value.trim();
 }
 
+/** True when `dir` exists (or can be created) and accepts writes. */
+function ensureWritableDir(dir: string): boolean {
+  try {
+    mkdirSync(dir, { recursive: true });
+    accessSync(dir, constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Pick a base directory for the SQLite index and harness scratch space.
+ *
+ * Serverless hosts (Vercel included) mount the deployment bundle read-only and
+ * expose only the OS temp directory for writes, so a project-relative `./data`
+ * fails there with `EACCES` on the very first request. The store is an audit
+ * *index*, never the authority — authoritative evidence lives at Tatum and the
+ * persistent lesson store lives in Walrus Memory Mainnet — so a temp-backed
+ * database is the correct behaviour on such a host rather than an error. Local
+ * development keeps its durable `./data` file because that directory is
+ * writable.
+ *
+ * Exported with injectable roots so the read-only-host behaviour is testable.
+ */
+export function resolveDataBaseDir(
+  projectDir: string = process.cwd(),
+  tmpDir: string = os.tmpdir(),
+): string {
+  const projectData = path.resolve(projectDir, "data");
+  if (ensureWritableDir(projectData)) return projectData;
+  const tempDir = path.join(tmpDir, "aftermath");
+  ensureWritableDir(tempDir);
+  return tempDir;
+}
+
 export function loadConfig(): AftermathConfig {
+  const dataBaseDir = resolveDataBaseDir();
   return {
     memory: {
       serverUrl:
@@ -84,10 +122,12 @@ export function loadConfig(): AftermathConfig {
       timeoutMs: Number(optional("TATUM_TIMEOUT_MS") ?? "12000"),
     },
     dbPath: path.resolve(
-      optional("AFTERMATH_DB_PATH") ?? "./data/aftermath.db",
+      optional("AFTERMATH_DB_PATH") ??
+        path.join(dataBaseDir, "aftermath.db"),
     ),
     harnessDir: path.resolve(
-      optional("AFTERMATH_HARNESS_DIR") ?? "./data/harness",
+      optional("AFTERMATH_HARNESS_DIR") ??
+        path.join(dataBaseDir, "harness"),
     ),
   };
 }

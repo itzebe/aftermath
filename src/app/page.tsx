@@ -7,7 +7,12 @@ export const dynamic = "force-dynamic";
 export default async function OverviewPage() {
   const [overview, lastRun] = await Promise.all([
     getOverview().catch((err) => ({ error: (err as Error).message })),
-    Promise.resolve(getLastRun()),
+    // The last-run table is a convenience view over the audit index. If the
+    // store cannot be read, the page must still render the overview and the
+    // reason, not throw a server exception.
+    Promise.resolve()
+      .then(() => getLastRun())
+      .catch(() => null),
   ]);
 
   if ("error" in overview) {
