@@ -131,6 +131,28 @@ an explicit `503` rather than reporting success against a fallback.
 DATABASE_URL="postgresql://user:password@ep-xxx.region.aws.neon.tech/aftermath?sslmode=require"
 ```
 
+### Deploying to Vercel
+
+The production deployment needs four environment variables set in
+**Vercel → Project → Settings → Environment Variables** (all environments), then
+a redeploy. All four are server-only; none is prefixed with `NEXT_PUBLIC_`, so
+none reaches the browser.
+
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | Durable audit index. Without it the deployment reports `per-instance · not shared`. |
+| `MEMWAL_ACCOUNT_ID` | Walrus Memory `MemWalAccount` object id (Mainnet). |
+| `MEMWAL_PRIVATE_KEY` | Delegate private key for that account. Revocable on-chain. |
+| `TATUM_API_KEY` | Tatum Sui gateway key for on-chain evidence. |
+
+`MEMWAL_SERVER_URL` and `MEMWAL_NAMESPACE` are optional; they default to the
+Mainnet relayer and the `aftermath` namespace. After the redeploy, run
+`npm run verify:prod -- --url <deployment>` to confirm the live state.
+
+The GitHub Pages site hosts only the static blog. The application itself runs on
+Vercel, because it has API routes and server-side secrets that a static export
+cannot support.
+
 ### Verify the ten-Mainnet-memory requirement
 
 ```bash
@@ -202,6 +224,28 @@ cannot create the account for you.
 ---
 
 ## Verifying the integrations
+
+### Verify a deployed instance
+
+`npm run verify:prod` checks a live deployment end to end and reports honestly.
+It is read-only by default — it makes no Walrus write and touches no credential —
+and it exits non-zero when any property fails, so it can gate a release.
+
+```bash
+npm run verify:prod                                  # verify the default URL
+npm run verify:prod -- --url https://your-app.vercel.app
+npm run verify:prod -- --run                         # also trigger the scenario
+                                                     # run (real Mainnet writes)
+```
+
+It asserts that every page and API route responds, that the audit index is
+durable, that Walrus Memory is live **and** on Mainnet with accepted
+credentials, that the Tatum Sui adapter is configured and healthy, that at least
+ten completed and recall-verified Mainnet writes exist, and that a recall query
+actually returns stored memories. Each check reads the deployment's own reported
+state; nothing is assumed. The decision logic is a pure function
+(`assessOverview`) covered by `tests/production-verifier.test.ts`, so the rules
+that make a check fail cannot silently weaken.
 
 ### Tatum Sui verification (gRPC primary, GraphQL fallback)
 
