@@ -232,7 +232,6 @@ export function incidentToMemoryText(incident: Incident): string {
       claimed_outcome: incident.claimedOutcome?.claim ?? null,
       evidence_references: incident.evidenceReferences,
       status: incident.currentStatus,
-      created_at: incident.createdAt,
       provenance: incident.provenance,
     }),
   ].join("\n");

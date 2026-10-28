@@ -491,3 +491,13 @@ blocks, list items, and links all survive the conversion.
   job rather than restarting. The job store is the same durable backend as the
   audit index, so progress is shared across serverless instances. A single
   long-running host still completes the run in one or two passes.
+- A transient dependency condition is never recorded as a scenario failure. The
+  Walrus Memory relayer enforces a shared hourly rate limit, and a `429` means
+  the evidence was *unavailable*, not that the scenario failed. When a scenario
+  hits a rate limit, a timeout, or a `5xx`, the runner defers it — returns it to
+  `pending` with a `not_before` gate taken from the relayer's own
+  `retry_after_seconds` — and ends the batch, so the next request waits rather
+  than hammering a dependency that just asked for a pause. Deferred scenarios
+  appear in the run detail as *deferred, no verdict reached*, distinct from a
+  failure. This is the product's own principle applied to its own
+  infrastructure: a transport problem is missing evidence, not a failed action.

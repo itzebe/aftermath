@@ -45,6 +45,20 @@ async function newInstance(base: string) {
   return { config, stores, memory };
 }
 
+/**
+ * Wrap a memory adapter so every recall throws `message`. Used to prove a
+ * transient dependency condition is deferred rather than failed.
+ */
+function rateLimitedAdapter(base: SimulatedMemoryAdapter, message: string) {
+  const wrapped = Object.create(base) as SimulatedMemoryAdapter;
+  Object.defineProperty(wrapped, "recallRelevantLessons", {
+    value: async () => {
+      throw new Error(message);
+    },
+  });
+  return wrapped;
+}
+
 describe("resumable demonstration runner", () => {
   it("advances the plan in bounded batches and completes it", async () => {
     const base = await tempDir();
@@ -136,6 +150,61 @@ describe("resumable demonstration runner", () => {
       budgetMs: 1,
     });
     expect(r.memorySimulated).toBe(true);
+    await inst.stores.close();
+  });
+
+  it("defers rather than fails a scenario when the dependency is rate-limited", async () => {
+    const base = await tempDir();
+    const inst = await newInstance(base);
+    // A dependency that answers every recall with a rate limit. The runner must
+    // not record that as a scenario failure — no verdict was reached.
+    const rateLimited = rateLimitedAdapter(
+      inst.memory,
+      'Walrus Memory server error (429): {"error":"Rate limit exceeded","retry_after_seconds":120}',
+    );
+
+    const r = await runDemoBatch({
+      stores: inst.stores,
+      config: inst.config,
+      memory: rateLimited,
+      budgetMs: 60_000,
+    });
+
+    expect(r.failedThisRequest).toBe(0);
+    expect(r.deferred.length).toBeGreaterThan(0);
+    expect(r.retryAfterMs).toBe(120_000);
+    // The job is not reported as failed; the scenario is still unresolved.
+    const rows = await inst.stores.jobs.listScenarios(r.jobId);
+    const visible = rows.filter((row) => !row.internal);
+    expect(visible.some((row) => row.state === "failed")).toBe(false);
+    expect(visible.some((row) => row.state === "pending" && row.notBefore)).toBe(true);
+    await inst.stores.close();
+  });
+
+  it("honours a deferral gate: an immediate retry does no work and reports the wait", async () => {
+    const base = await tempDir();
+    const inst = await newInstance(base);
+    const rateLimited = rateLimitedAdapter(inst.memory, "429 Too Many Requests");
+
+    const first = await runDemoBatch({
+      stores: inst.stores,
+      config: inst.config,
+      memory: rateLimited,
+      budgetMs: 60_000,
+    });
+    expect(first.deferred.length).toBeGreaterThan(0);
+
+    // Retry immediately. The gate is still closed, so nothing may be claimed
+    // and the response must still report a wait rather than a pass.
+    const second = await runDemoBatch({
+      stores: inst.stores,
+      config: inst.config,
+      memory: rateLimited,
+      budgetMs: 60_000,
+    });
+    expect(second.completedThisRequest).toBe(0);
+    expect(second.failedThisRequest).toBe(0);
+    expect(second.retryAfterMs).toBeGreaterThan(0);
     await inst.stores.close();
   });
 });

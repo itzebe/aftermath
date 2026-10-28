@@ -50,6 +50,11 @@ export interface DemoScenarioRow {
   /** Durable write ids produced by this scenario, for reconciliation. */
   writeIds: string[];
   lastError: string | null;
+  /**
+   * Earliest time this scenario may be claimed again. Set when a transient
+   * condition (a rate limit, a timeout) prevented a verdict; null otherwise.
+   */
+  notBefore: string | null;
   updatedAt: string;
 }
 
@@ -110,6 +115,23 @@ export interface DemoJobStore {
     writeIds: string[],
   ): Promise<void>;
   failScenario(jobId: string, stepId: string, error: string): Promise<void>;
+
+  /**
+   * Return a claimed scenario to `pending` without recording a failure, and do
+   * not let it be claimed again until `notBeforeIso`.
+   *
+   * Used when the scenario could not reach a verdict for a transient reason
+   * (a rate limit, a timeout). Recording that as `failed` would convert missing
+   * evidence into a verdict, which is the exact mistake the product exists to
+   * prevent; recording it as `completed` would be worse. Deferring keeps the
+   * scenario honestly unresolved until the dependency is available again.
+   */
+  deferScenario(
+    jobId: string,
+    stepId: string,
+    reason: string,
+    notBeforeIso: string,
+  ): Promise<void>;
   addScenarioWriteId(jobId: string, stepId: string, writeId: string): Promise<void>;
 
   finishJob(jobId: string, status: DemoJobStatus, lastError?: string | null): Promise<void>;
@@ -158,6 +180,7 @@ function parseScenario(row: Record<string, unknown>): DemoScenarioRow {
           : (report as ScenarioRunReport),
     writeIds: writeIds == null ? [] : typeof writeIds === "string" ? JSON.parse(writeIds) : (writeIds as string[]),
     lastError: (row.last_error as string) ?? null,
+    notBefore: (row.not_before as string) ?? null,
     updatedAt: row.updated_at as string,
   };
 }
@@ -207,6 +230,7 @@ export class SqlDemoJobStore implements DemoJobStore {
         report TEXT,
         write_ids TEXT NOT NULL DEFAULT '[]',
         last_error TEXT,
+        not_before TEXT,
         updated_at TEXT NOT NULL,
         PRIMARY KEY (job_id, step_id)
       )`);
@@ -222,6 +246,11 @@ export class SqlDemoJobStore implements DemoJobStore {
         await this.db.query(
           `ALTER TABLE demo_job_scenarios ADD COLUMN internal BOOLEAN NOT NULL DEFAULT FALSE`,
         );
+      } catch {
+        // column already present
+      }
+      try {
+        await this.db.query(`ALTER TABLE demo_job_scenarios ADD COLUMN not_before TEXT`);
       } catch {
         // column already present
       }
@@ -369,6 +398,8 @@ export class SqlDemoJobStore implements DemoJobStore {
     // 2. Atomically claim the lowest-ordinal pending scenario. The sub-select is
     //    evaluated inside the same statement, and the outer UPDATE only flips a
     //    row that is still `pending`, so a concurrent claimer matches zero rows.
+    //    A scenario deferred for a transient reason is skipped until its
+    //    `not_before` passes, so a rate-limited dependency is not hammered.
     const { rows } = await this.db.query(
       `UPDATE demo_job_scenarios
          SET state = 'executing', lease_owner = $1, lease_expires_at = $2,
@@ -377,6 +408,7 @@ export class SqlDemoJobStore implements DemoJobStore {
          AND step_id = (
            SELECT step_id FROM demo_job_scenarios
            WHERE job_id = $4 AND state = 'pending'
+             AND (not_before IS NULL OR not_before <= $3)
            ORDER BY ordinal ASC LIMIT 1
          )
          AND state = 'pending'
@@ -398,7 +430,8 @@ export class SqlDemoJobStore implements DemoJobStore {
     await this.db.query(
       `UPDATE demo_job_scenarios
          SET state = 'completed', report = $1, write_ids = $2,
-             lease_owner = NULL, lease_expires_at = NULL, last_error = NULL, updated_at = $3
+             lease_owner = NULL, lease_expires_at = NULL, last_error = NULL,
+             not_before = NULL, updated_at = $3
        WHERE job_id = $4 AND step_id = $5`,
       [JSON.stringify(report), JSON.stringify(writeIds), new Date().toISOString(), jobId, stepId],
     );
@@ -411,6 +444,24 @@ export class SqlDemoJobStore implements DemoJobStore {
              lease_owner = NULL, lease_expires_at = NULL, updated_at = $2
        WHERE job_id = $3 AND step_id = $4`,
       [error, new Date().toISOString(), jobId, stepId],
+    );
+  }
+
+  async deferScenario(
+    jobId: string,
+    stepId: string,
+    reason: string,
+    notBeforeIso: string,
+  ): Promise<void> {
+    // Return the row to `pending` (not `failed`) with a `not_before` gate. The
+    // reason is kept in `last_error` for visibility, but the state makes clear
+    // no verdict was reached.
+    await this.db.query(
+      `UPDATE demo_job_scenarios
+         SET state = 'pending', last_error = $1, not_before = $2,
+             lease_owner = NULL, lease_expires_at = NULL, updated_at = $3
+       WHERE job_id = $4 AND step_id = $5`,
+      [reason, notBeforeIso, new Date().toISOString(), jobId, stepId],
     );
   }
 

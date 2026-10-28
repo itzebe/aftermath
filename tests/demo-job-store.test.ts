@@ -212,6 +212,59 @@ describe("demo job store", () => {
     const job = await store2.getJob("job-1");
     expect(job?.scratch).toEqual({ financeCases: [{ scenarioId: "x" }] });
   });
+
+  it("defers a scenario for a transient condition instead of failing it", async () => {
+    const store = await makeStore(await tempDbPath());
+    await store.createJob("job-1", PLAN);
+    await store.claimNextScenario("job-1", "w1", 60_000);
+    const future = new Date(Date.now() + 60_000).toISOString();
+    await store.deferScenario("job-1", "s1", "rate limited", future);
+    const rows = await store.listScenarios("job-1");
+    const s1 = rows.find((r) => r.stepId === "s1")!;
+    // No verdict: the scenario is pending again, not failed.
+    expect(s1.state).toBe("pending");
+    expect(s1.lastError).toContain("rate limited");
+    expect(s1.notBefore).toBe(future);
+  });
+
+  it("skips a deferred scenario until its not_before passes", async () => {
+    const store = await makeStore(await tempDbPath());
+    await store.createJob("job-1", PLAN);
+    await store.claimNextScenario("job-1", "w1", 60_000);
+    // Defer s1 well into the future; the next claim must skip it and take s2.
+    await store.deferScenario(
+      "job-1",
+      "s1",
+      "rate limited",
+      new Date(Date.now() + 3_600_000).toISOString(),
+    );
+    const next = await store.claimNextScenario("job-1", "w1", 60_000);
+    expect(next?.scenario.stepId).toBe("s2");
+  });
+
+  it("claims a deferred scenario again once not_before has passed", async () => {
+    const store = await makeStore(await tempDbPath());
+    await store.createJob("job-1", PLAN);
+    await store.claimNextScenario("job-1", "w1", 60_000);
+    // A gate in the past is already open.
+    await store.deferScenario("job-1", "s1", "rate limited", new Date(Date.now() - 1000).toISOString());
+    const next = await store.claimNextScenario("job-1", "w1", 60_000);
+    expect(next?.scenario.stepId).toBe("s1");
+  });
+
+  it("clears a deferral gate when the scenario completes", async () => {
+    const store = await makeStore(await tempDbPath());
+    await store.createJob("job-1", PLAN);
+    const claimed = await store.claimNextScenario("job-1", "w1", 60_000);
+    await store.deferScenario("job-1", "s1", "rate limited", new Date(Date.now() - 1000).toISOString());
+    await store.claimNextScenario("job-1", "w1", 60_000);
+    await store.completeScenario("job-1", claimed!.scenario.stepId, report("s1"), []);
+    const rows = await store.listScenarios("job-1");
+    const s1 = rows.find((r) => r.stepId === "s1")!;
+    expect(s1.state).toBe("completed");
+    expect(s1.notBefore).toBeNull();
+    expect(s1.lastError).toBeNull();
+  });
 });
 
 describe("durable workflow state store", () => {

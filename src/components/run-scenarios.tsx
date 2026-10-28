@@ -20,10 +20,18 @@ interface BatchResult {
     remaining: number;
     executing: number;
   };
+  deferred?: Array<{ stepId: string; title: string; reason: string; retryAfterMs: number }>;
+  retryAfterMs?: number | null;
   detail: string;
 }
 
 const MAX_CONSECUTIVE_ERRORS = 3;
+/**
+ * How many consecutive batches may make zero progress while deferred before the
+ * client stops. A transient dependency condition is worth waiting out, but an
+ * indefinite wait should end with an honest message, not an endless spinner.
+ */
+const MAX_CONSECUTIVE_STALLS = 12;
 
 export function RunScenariosButton() {
   const router = useRouter();
@@ -59,6 +67,8 @@ export function RunScenariosButton() {
     setNote(null);
     cancelled.current = false;
     let consecutiveErrors = 0;
+    let consecutiveStalls = 0;
+    let lastDone = -1;
     try {
       // Only the first call may request a restart; every later call continues
       // the same durable job. Passing restart=false lets a button press pick up
@@ -95,6 +105,22 @@ export function RunScenariosButton() {
         }
 
         const { completed, failed, total } = body.progress;
+        // A stall is a batch that advanced no scenario. A few in a row is a
+        // transient dependency condition being waited out; too many means the
+        // dependency is not recovering, and the run should stop honestly.
+        const progressed = completed + failed;
+        if (progressed > lastDone) {
+          consecutiveStalls = 0;
+          lastDone = progressed;
+        } else {
+          consecutiveStalls += 1;
+        }
+        if (consecutiveStalls >= MAX_CONSECUTIVE_STALLS) {
+          setError(
+            `${body.remaining} scenario(s) could not be completed: a dependency stayed unavailable. ${body.detail}`,
+          );
+          return;
+        }
         setNote(`Progress: ${completed + failed}/${total} scenarios · ${body.remaining} remaining`);
         refresh();
         if (body.done) {
@@ -106,6 +132,20 @@ export function RunScenariosButton() {
           // honestly rather than as a completed demonstration.
           if (failed > 0) setError(body.detail);
           return;
+        }
+        // A transient dependency condition (rate limit, timeout) is not a
+        // failure — wait the interval it asked for before continuing, so the
+        // next request does not hammer a dependency that just pushed back.
+        const waitMs = body.retryAfterMs ?? 0;
+        if (waitMs > 0) {
+          const n = body.deferred?.length ?? body.remaining;
+          setNote(
+            `${n} scenario(s) deferred — a dependency was transiently unavailable; no verdict recorded. Waiting ${Math.ceil(waitMs / 1000)}s…`,
+          );
+          const deadline = Date.now() + waitMs;
+          while (Date.now() < deadline && !cancelled.current) {
+            await new Promise((r) => setTimeout(r, Math.min(1000, deadline - Date.now())));
+          }
         }
       }
       setError("The demonstration did not finish within the iteration limit.");

@@ -14,6 +14,7 @@ import {
 import type { RunContext, ScenarioRunReport, StepDefinition } from "@/lib/demos/types";
 import type { FinanceEvidenceCase } from "@/lib/demos/finance";
 import { redact } from "@/lib/util/redact";
+import { classifyTransient } from "@/lib/util/transient";
 
 /**
  * Resumable demonstration runner.
@@ -73,6 +74,19 @@ export interface BatchResult {
   reports: ScenarioRunReport[];
   /** Failures observed in this request, with their reason. */
   failures: Array<{ stepId: string; title: string; error: string }>;
+  /**
+   * Scenarios this request could not reach a verdict on because a dependency
+   * was transiently unavailable (a rate limit, a timeout). They are neither
+   * passed nor failed; the caller should continue after the wait.
+   */
+  deferred: Array<{ stepId: string; title: string; reason: string; retryAfterMs: number }>;
+  /**
+   * When the batch stopped early because of a transient condition, the minimum
+   * time the caller should wait before the next request. Null when no deferral
+   * happened. The UI uses this to space out requests instead of hammering a
+   * rate-limited dependency.
+   */
+  retryAfterMs: number | null;
   /** True when the memory backend is the simulated one, not Mainnet. */
   memorySimulated: boolean;
   detail: string;
@@ -218,6 +232,8 @@ export async function runDemoBatch(opts: BatchOptions): Promise<BatchResult> {
       progress,
       reports: [],
       failures: [],
+      deferred: [],
+      retryAfterMs: null,
       memorySimulated: !memory.isLive,
       detail:
         "Another request is currently advancing this job; no work was started " +
@@ -227,6 +243,7 @@ export async function runDemoBatch(opts: BatchOptions): Promise<BatchResult> {
 
   const reports: ScenarioRunReport[] = [];
   const failures: Array<{ stepId: string; title: string; error: string }> = [];
+  const deferred: Array<{ stepId: string; title: string; reason: string; retryAfterMs: number }> = [];
 
   try {
     // Refresh the job so scratch reflects the latest durable state.
@@ -287,6 +304,26 @@ export async function runDemoBatch(opts: BatchOptions): Promise<BatchResult> {
         reports.push(report);
       } catch (err) {
         const msg = redact((err as Error).message ?? String(err));
+        const transient = classifyTransient(err);
+        if (transient.transient) {
+          // The dependency refused to answer (rate limit, timeout, 5xx). That is
+          // missing evidence, not a failed scenario: defer the row and stop the
+          // batch so we do not hammer a dependency that just asked us to wait.
+          const waitMs = transient.retryAfterMs ?? 30_000;
+          await stores.jobs.deferScenario(
+            job.jobId,
+            scenario.stepId,
+            `${transient.reason}: ${msg}`,
+            new Date(now() + waitMs).toISOString(),
+          );
+          deferred.push({
+            stepId: scenario.stepId,
+            title: scenario.title,
+            reason: `${transient.reason}: ${msg}`,
+            retryAfterMs: waitMs,
+          });
+          break;
+        }
         await stores.jobs.failScenario(job.jobId, scenario.stepId, msg);
         failures.push({ stepId: scenario.stepId, title: scenario.title, error: msg });
       }
@@ -316,6 +353,20 @@ export async function runDemoBatch(opts: BatchOptions): Promise<BatchResult> {
   const progress = await progressOf();
   const done = allTerminal && !anyFailed;
   const memorySimulated = !memory.isLive;
+  // If the batch stopped early for a transient reason, the next request must
+  // wait at least as long as the dependency asked. A retry that arrives before
+  // the gate opens claims nothing, so derive the wait from the deferred rows'
+  // `not_before` as well as from this request's own deferrals.
+  const nowMs = now();
+  const gatedWaits = scenarioRows
+    .filter((r) => r.state === "pending" && r.notBefore)
+    .map((r) => Math.max(0, Date.parse(r.notBefore as string) - nowMs))
+    .filter((ms) => Number.isFinite(ms));
+  const retryAfterMs = deferred.length
+    ? Math.max(...deferred.map((d) => d.retryAfterMs))
+    : gatedWaits.length
+      ? Math.max(...gatedWaits)
+      : null;
 
   return {
     jobId: job.jobId,
@@ -328,12 +379,18 @@ export async function runDemoBatch(opts: BatchOptions): Promise<BatchResult> {
     progress,
     reports,
     failures,
+    deferred,
+    retryAfterMs,
     memorySimulated,
     detail: done
       ? "All scenarios reached their terminal state."
       : anyFailed
         ? `Job finished with failures: ${failures.map((f) => f.stepId).join(", ") || "see per-scenario errors"}.`
-        : `Bounded batch complete (${reports.length} scenario(s) this request). ${remaining} remaining; call again to continue.`,
+        : deferred.length
+          ? `A dependency was transiently unavailable, so ${deferred.length} scenario(s) were deferred without a verdict. ${remaining} remaining; retry in ${Math.round((retryAfterMs ?? 0) / 1000)}s.`
+          : retryAfterMs !== null
+            ? `${remaining} scenario(s) are waiting out a transient dependency condition; retry in ${Math.round(retryAfterMs / 1000)}s.`
+            : `Bounded batch complete (${reports.length} scenario(s) this request). ${remaining} remaining; call again to continue.`,
   };
 }
 
