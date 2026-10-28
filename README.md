@@ -443,10 +443,14 @@ The technical blog lives in [`docs/BLOG.md`](docs/BLOG.md). The same article is
 published externally on
 [Medium](https://medium.com/@jonathanebi05/aftermath-every-failure-should-leave-a-safeguard-25446fdbcd71),
 and this repository renders it to a static page on GitHub Pages:
-<https://itzebe.github.io/aftermath/>. The Pages page is built by
+<https://itzebe.github.io/aftermath/>. The Pages page is rendered by
 [`.github/workflows/pages.yml`](.github/workflows/pages.yml) from the isolated
 package in [`blog/`](blog), which has its own `package.json` and never touches
-the application's dependencies or build.
+the application's dependencies or build. It emits a single self-contained HTML file — no JavaScript, no web
+fonts, no external images — so it renders identically offline and cannot drift
+back into a generic template. Its visual system reuses the application's own
+dark console tokens, and its one diagram is the real pipeline, authored as
+inline markup rather than a decorative asset.
 
 The Pages site is deployed through the **GitHub Actions** source. The
 workflow's own token can deploy but cannot enable Pages, so that setting was
@@ -461,9 +465,10 @@ npm ci
 npm run build      # writes blog/_site/index.html
 ```
 
-The build fails rather than shipping a truncated page: it re-parses the
-Markdown source and the rendered HTML and asserts that headings, tables, code
-blocks, list items, and links all survive the conversion.
+The build fails rather than shipping a broken page: it re-parses the Markdown
+source and the rendered HTML and asserts that headings, tables, code blocks,
+list items, and links all survive the conversion, that the article's final line
+is present, and that no wrapped prose line is mistaken for a list item.
 
 ## Known limitations
 

@@ -233,14 +233,158 @@ seed phrase is ever requested. The gRPC gateway exposes a
 `TransactionExecutionService/ExecuteTransaction` method; the adapter deliberately
 never calls it.
 
+## A rate limit is not a verdict
+
+There is a second place where the same principle had to be enforced, and it is
+the one that took longest to get right: the demonstration's *own* infrastructure.
+
+The full demonstration makes 16–18 real Walrus Memory Mainnet writes, and each
+one waits for the relayer job and then a recall confirmation. That is minutes of
+wall-clock time, which is longer than a serverless function may run. So the run
+is a **resumable job**: one request advances a bounded batch of scenarios,
+persists progress after every scenario, and the client repeats until the job
+reaches a terminal state. The job state lives in the same durable database as
+the audit index, so progress survives a closed tab, a redeploy, or a request
+that lands on a different instance.
+
+The bug was subtler than the timeout. The relayer enforces a **shared hourly
+rate limit** — roughly 1000 weighted requests per hour, per account, across
+every call the integration makes. A demonstration that writes, waits, recalls,
+and then writes again is exactly the burst that trips it. When it did, the
+relayer answered with a `429` and a `retry_after_seconds` hint, and the runner
+recorded that as a **permanent scenario failure**.
+
+That is the product's own founding error, committed by the product's own
+plumbing. A `429` is not evidence that the scenario failed; it is evidence that
+the dependency never answered. Converting it into a verdict is precisely the
+"missing evidence became a conclusion" mistake AFTERMATH exists to prevent. So
+the fix applies the same discipline to infrastructure that the engine already
+applies to claims.
+
+### What is transient, and what is not
+
+A single classifier decides whether an error is a *transport* condition or a
+*genuine* failure. The distinction is conservative: only these are transient.
+
+- A **rate limit** — HTTP `429`, "too many requests", a quota or throttle
+  response.
+- A **server error** — `5xx`, a bad gateway, an unavailable upstream.
+- A **timeout or network fault** — a request that never completed, a reset
+  connection, a socket that hung up.
+
+Everything else is treated as a real failure and is not retried. In particular,
+an **authentication error** (`401`, `403`) is a credential problem, not a
+transient one: retrying it would loop forever against a key that will never be
+accepted. A **domain error** — a malformed response, a rejected payload — is a
+genuine outcome too. The rule is that a transient condition is one where the
+request produced *no verdict at all*, because the dependency refused to speak.
+
+### Defer, wait, resume
+
+When a scenario hits a transient condition, the runner does not fail it. It
+**defers** it:
+
+1. The scenario row returns to `pending`, not `failed`. No verdict is recorded.
+2. A `not_before` gate is written on the row, taken from the dependency's own
+   `retry_after_seconds` (clamped to the implementation's configured maximum).
+3. The current batch **stops** at that point, rather than continuing to hammer a
+   dependency that just asked for a pause. One deferral ends the batch.
+4. The next request **skips** any scenario whose gate is still closed — the
+   claim query ignores rows whose `not_before` is in the future — and resumes
+   the deferred work once the gate opens.
+
+The result carries the deferrals separately from the failures, with their own
+reasons and the wait the dependency asked for, so the client can honour it. The
+UI labels a deferred batch *"deferred — no verdict recorded"*, and it gives up
+honestly after too many zero-progress batches rather than spinning forever.
+
+There is one more subtlety, and it is the same class of bug the lesson path
+already had. A deferred scenario **re-runs**, and a re-run re-issues the same
+memory write under the same idempotency key. If the memory text embedded a
+wall-clock field like `created_at`, the re-run would send the *same key* with
+*different content*, and the relayer would reject it with a `409`. So any
+memory text that feeds an idempotency key must be stable across retries: the
+incident text now excludes `created_at`, exactly as the lesson text already did.
+Idempotency only works if the payload is a function of the incident, not of the
+clock.
+
+The principle is the same one from the top of this post, applied one level down:
+**an infrastructure failure is evidence about the conditions of execution, not
+evidence that the scenario failed.** A `429` means "ask again later", and the
+only honest response is to ask again later.
+
+## What the production run actually showed
+
+This is not a diagram. It is the transcript of the run that closed the fix, on
+the deployed application, reported for commit `10e3b88`.
+
+A single `POST` to the demonstration endpoint advances one bounded batch. The
+client repeats until the job is terminal:
+
+```text
+[batch 1] status=running   completed=3/8  failed=0  deferred=0
+          Bounded batch complete. 5 remaining; call again to continue.
+
+[batch 2] status=running   completed=5/8  failed=0  deferred=1  retryAfterMs=300000
+          deferred: workflow-repeat-refused — the dependency rate-limited the request:
+                    Walrus Memory server error (429) … "retry_after_seconds":300
+          A dependency was transiently unavailable, so 1 scenario was deferred
+          without a verdict. 3 remaining; retry in 300s.
+          waiting 300s…
+
+[batch 3] status=completed completed=9/9  failed=0  deferred=0
+          All scenarios reached their terminal state.
+```
+
+The `429` was real: the shared rate limit was genuinely exhausted, mid-run, on
+the live relayer. Under the old code that scenario would have been recorded as a
+failure and the job would have ended `failed`. Under the fix it was deferred
+with no verdict, the batch stopped instead of hammering the limiter, the client
+waited the 300 seconds the relayer asked for, and the next batch resumed it.
+**The run finished 9 of 9 scenarios with zero failures.**
+
+### What the ledger says, honestly
+
+The run above is the latest job. The accumulated ledger behind it is
+append-only, and it keeps counting everything that happened before the fix. I am
+not rewriting it, and I am not hiding it. Three distinctions matter:
+
+- **Completed writes and recall-verified writes are different numbers.** The
+  live instance reports **42 completed** Mainnet writes and **41
+  recall-verified**. The gap is one write that reached a blob id and was
+  recorded as completed, but whose *follow-up recall query* was itself
+  rate-limited — so it is completed-but-not-recall-verified. It is counted once,
+  in the correct column. The two figures must never be presented as equivalent.
+- **The ledger holds historical failed writes.** It records **31 failed live
+  writes**: **17** are `remember job timed out after 60000ms`, and **14** are
+  `429` rate limits. These are write-level failures from earlier invocations.
+  The timeout class is reconciled by the adapter — a `remember` timeout is
+  resolved by re-polling the *same* job id rather than re-issuing the write, so
+  it is not a duplicate memory — but these specific historical entries were not
+  individually re-verified against the relayer for this report, and I do not
+  claim they were.
+- **The most recent pre-fix job recorded one failed scenario.** An earlier run
+  (`demo-1793217685742-977914ab`) ended with 8 of its 9 scenarios completed and
+  **1** failed — the finance scenario, on a `429`. A log line for it reads
+  `failed 8 / 9`, which means *status failed, 8 of 9 completed*, not eight
+  failures. I want to be exact about that: the pre-fix defect produced a
+  single failed scenario in that job, and the fix removed that class of failure.
+  I could not query the production job table directly from the development
+  environment, so I state the scenario-level figure only where the run itself
+  observed it.
+
+None of this changes the headline the brief cares about: the requirement is ten
+genuine, completed Mainnet memories, and the instance has 42 completed and 41
+recall-verified, all written through the real SDK against Mainnet.
+
 ## What I measured
 
 Running the controlled scenarios produces:
 
 | Metric | Value |
 | --- | --- |
-| Scenarios | 8 controlled (9 with a live Tatum key, which adds a real-ledger case) |
-| Baseline (first-occurrence) scenarios | 6 |
+| Scenarios | 9 controlled (the live Tatum key adds a real-ledger case) |
+| Baseline (first-occurrence) scenarios | 7 |
 | Repeat scenarios | 2 |
 | Unsupported claims caught | 4 / 4 |
 | Unsupported claims unresolved (`UNKNOWN`) | 0 |
@@ -249,7 +393,7 @@ Running the controlled scenarios produces:
 | Repeat prevention rate | 100% |
 | Repeat failures that slipped through | 0 |
 | False-block rate | 0% |
-| Evidence-unavailable rate | 25% |
+| Evidence-unavailable rate | 22% |
 | Memory retrieval relevance | 100% |
 
 The suites behind those figures, as last run:
@@ -258,7 +402,7 @@ The suites behind those figures, as last run:
 | --- | --- | --- |
 | Type check | `npm run typecheck` | clean |
 | Lint | `npm run lint` | clean |
-| Unit + integration (hermetic) | `npm test` | 184 passed, 11 skipped |
+| Unit + integration (hermetic) | `npm test` | 237 passed, 11 skipped |
 | Live smoke (real relayer + gateway) | `npm run test:live` | 11 passed |
 | Browser (simulated backend) | `npm run test:e2e` | 7 passed |
 
@@ -308,7 +452,7 @@ must keep counting it.
 
 This is where most hackathon write-ups get vague, so I want to be precise.
 
-**The incidents are simulated. The memory writes are real.** The eight scenarios
+**The incidents are simulated. The memory writes are real.** The nine scenarios
 are controlled harnesses, and the UI labels them as simulations throughout. But
 when credentials are configured, the lessons produced by those scenarios are
 written to Walrus Mainnet through the real SDK, and the returned blob ids are
@@ -333,15 +477,19 @@ conflating them would be dishonest in one direction or the other:
 A single counter cannot be honest about both "what did this process do" and
 "what is actually on chain". So there are two.
 
-As of this submission, the operator's own instance reports **51 completed Mainnet
-writes, all 51 recall-verified**, with zero simulated writes in that total — read
-straight from `GET /api/overview` on the running application, not asserted from
-memory. That is five times the required ten. The number is reproducible by
-anyone who configures their own credentials and runs the scenarios; it is not a
-claim about a hosted service, because there is no hosted service.
+As of this submission, the operator's own instance reports **42 completed
+Mainnet writes and 41 recall-verified writes**, with zero simulated writes in
+that total — read straight from `GET /api/overview` on the running application,
+not asserted from memory. The two numbers are deliberately different and are
+never presented as equivalent: one write reached a blob id and was recorded as
+completed, but its follow-up recall query was itself rate-limited by the
+relayer, so it is completed-but-not-recall-verified. That is four times the
+required ten completed writes. The number is reproducible by anyone who
+configures their own credentials and runs the scenarios; it is not a claim about
+a hosted service, because there is no hosted service.
 
 **The evaluation metrics describe the scenarios, not production.** They are
-computed over eight reproducible scenarios. I have not measured production
+computed over nine reproducible scenarios. I have not measured production
 reliability, and I do not claim to have improved it.
 
 **No figure is fabricated.** No transaction hash, no successful blockchain read,
