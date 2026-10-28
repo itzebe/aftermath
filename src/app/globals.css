@@ -49,6 +49,10 @@ body {
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-variant-ligatures: none;
+  /* Hashes, blob ids and digests are long and unbreakable. Allow them to wrap
+     rather than widen the page on a narrow viewport; the tables that must stay
+     on one line opt out with `whitespace-nowrap` inside a `scroll-x` wrapper. */
+  overflow-wrap: anywhere;
 }
 
 .tabular {

@@ -109,21 +109,21 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </aside>
 
         <main className="min-w-0 flex-1">
-          <header className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b hairline bg-[#080a0e]/90 px-5 py-3 backdrop-blur md:px-8">
-            <div className="flex items-center gap-3">
+          <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b hairline bg-[#080a0e]/90 px-5 py-3 backdrop-blur md:px-8">
+            <div className="flex min-w-0 items-center gap-3">
               <div className="md:hidden">
                 <Mark />
               </div>
-              <div className="mono text-[0.6875rem] uppercase tracking-[0.12em] text-paper-500">
+              <div className="mono min-w-0 truncate text-[0.6875rem] uppercase tracking-[0.12em] text-paper-500">
                 Every failure should leave a safeguard
               </div>
             </div>
-            <nav className="flex gap-3 md:hidden">
+            <nav className="flex min-w-0 flex-wrap gap-x-3 gap-y-1 md:hidden">
               {NAV.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className="mono text-[0.6875rem] text-paper-300"
+                  className="mono whitespace-nowrap text-[0.6875rem] text-paper-300"
                 >
                   {item.label.split(" ")[0]}
                 </Link>

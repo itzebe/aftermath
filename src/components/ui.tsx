@@ -113,8 +113,8 @@ export function SectionTitle({
   right?: React.ReactNode;
 }) {
   return (
-    <div className="mb-3 flex items-end justify-between gap-4">
-      <div>
+    <div className="mb-3 flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+      <div className="min-w-0">
         <h2 className="text-[0.9375rem] font-semibold tracking-tight">{title}</h2>
         {hint ? (
           <p className="mt-0.5 max-w-2xl text-[0.75rem] leading-relaxed text-paper-500">
@@ -172,9 +172,9 @@ export function Panel({
   return (
     <section className={`panel rounded ${className}`}>
       {title ? (
-        <header className="flex items-end justify-between gap-4 border-b hairline px-3.5 py-2.5">
-          <div>
-            <h3 className="text-[0.8125rem] font-semibold tracking-tight">
+        <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 border-b hairline px-3.5 py-2.5">
+          <div className="min-w-0">
+            <h3 className="text-[0.8125rem] font-semibold tracking-tight break-words">
               {title}
             </h3>
             {hint ? (
@@ -202,11 +202,11 @@ export function Field({
   mono?: boolean;
 }) {
   return (
-    <div className="grid grid-cols-[9.5rem_1fr] gap-3 border-b hairline py-1.5 last:border-b-0">
+    <div className="grid grid-cols-1 gap-1 border-b hairline py-1.5 last:border-b-0 sm:grid-cols-[9.5rem_minmax(0,1fr)] sm:gap-3">
       <div className="mono pt-0.5 text-[0.625rem] uppercase tracking-[0.1em] text-paper-500">
         {label}
       </div>
-      <div className={`text-[0.8125rem] leading-relaxed ${mono ? "mono text-[0.75rem]" : ""}`}>
+      <div className={`min-w-0 text-[0.8125rem] leading-relaxed ${mono ? "mono text-[0.75rem]" : ""}`}>
         {children}
       </div>
     </div>

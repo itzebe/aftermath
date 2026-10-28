@@ -254,7 +254,11 @@ const html = `<!doctype html>
   /* ---- layout: rail + article ---- */
   .layout {
     max-width: 76rem; margin: 0 auto; padding: 0 1.25rem 4rem;
-    display: grid; grid-template-columns: 1fr; gap: 2rem;
+    /* minmax(0, 1fr), not 1fr: a bare 1fr track has an automatic min-content
+       floor, so a wide child (the pre-wrapped terminal transcript) would widen
+       the whole grid past the viewport on a phone. minmax(0, 1fr) lets the
+       track shrink and the transcript scroll inside its own box instead. */
+    display: grid; grid-template-columns: minmax(0, 1fr); gap: 2rem;
   }
   @media (min-width: 62rem) {
     .layout { grid-template-columns: var(--rail) minmax(0, 1fr); gap: 3.5rem; padding-top: 2.2rem; }
@@ -318,7 +322,7 @@ const html = `<!doctype html>
   .toc-num { color: var(--muted); font-size: .6875rem; flex: none; padding-top: .1rem; }
 
   /* ---- article ---- */
-  article { min-width: 0; max-width: var(--max); }
+  article { min-width: 0; max-width: var(--max); overflow-wrap: break-word; }
   article > h1 { display: none; } /* shown in the hero */
   article h2 {
     font-size: clamp(1.3rem, 3vw, 1.6rem); line-height: 1.22; letter-spacing: -.015em;
