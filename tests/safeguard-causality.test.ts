@@ -2,7 +2,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { AftermathStore } from "@/lib/db/store";
+import { makeInMemoryStore } from "@/lib/db/store-factory";
 import { SimulatedMemoryAdapter } from "@/lib/adapters/simulated-memory";
 import { IncidentPipeline } from "@/lib/engines/pipeline";
 import { makeCodingAdapter, setupCodingHarness } from "@/lib/demos/coding";
@@ -30,9 +30,9 @@ afterEach(() => {
 
 function makeStores() {
   const dir = mkdtempSync(path.join(tmpdir(), "aftermath-cf-"));
-  const store = new AftermathStore(":memory:");
+  const store = makeInMemoryStore();
   const memory = new SimulatedMemoryAdapter("counterfactual");
-  cleanups.push(() => store.close());
+  cleanups.push(() => void store.close());
   return { dir, store, memory };
 }
 

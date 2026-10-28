@@ -86,9 +86,12 @@ and never pads the number.
 With credentials present, the writes are real. The Overview and Memory pages
 report two numbers separately, because they mean different things:
 
-- **Completed Mainnet writes** — writes *this instance* submitted, awaited to a
-  blob id, and confirmed retrievable by recall. This reads the local SQLite
-  ledger, so a fresh deployment starts at zero.
+- **Completed Mainnet writes** — writes submitted through this deployment's
+  audit index, awaited to a blob id, and confirmed retrievable by recall. The
+  ledger is durable when `DATABASE_URL` is set (shared across instances and
+  surviving redeploys); without it the ledger is a per-instance SQLite file and
+  a fresh deployment starts at zero. The Overview page states which of the two
+  is in effect.
 - **Memories in namespace** — the authoritative count the relayer reports for
   the configured namespace. This comes from the same signed `listNamespaces`
   call that proves authentication, so it is independent of the local ledger and
@@ -111,6 +114,22 @@ npm run dev                  # http://localhost:12000
 Then open the Overview page and press **Run demonstrations**. That executes the
 controlled scenarios and populates the incident timeline, safeguards, memory
 ledger, and evaluation metrics.
+
+### Durable audit index (required on Vercel)
+
+On a serverless host the deployment bundle is read-only and each request may run
+in a different instance, so a file-backed index cannot be shared. Set
+`DATABASE_URL` to a PostgreSQL connection string (Neon, Supabase, RDS, or any
+Postgres) to store the incident index in a shared database. Without it the app
+still runs, but it uses a per-instance SQLite file and the Overview page reports
+the index as **per-instance · not shared**. The store never silently substitutes
+one for the other: if `DATABASE_URL` is set but unreachable, requests fail with
+an explicit `503` rather than reporting success against a fallback.
+
+```bash
+# Example (Neon). Any Postgres connection string works.
+DATABASE_URL="postgresql://user:password@ep-xxx.region.aws.neon.tech/aftermath?sslmode=require"
+```
 
 ### Verify the ten-Mainnet-memory requirement
 
@@ -176,7 +195,8 @@ cannot create the account for you.
 
 | Variable | Meaning |
 | --- | --- |
-| `AFTERMATH_DB_PATH` | SQLite file for the incident index and audit history. |
+| `DATABASE_URL` | PostgreSQL connection string for the durable audit index. When set, incidents, rules, and memory-write records are stored in a shared database and survive across serverless instances. `POSTGRES_URL` and `AFTERMATH_DATABASE_URL` are accepted as aliases. |
+| `AFTERMATH_DB_PATH` | SQLite file for the incident index. Used only when `DATABASE_URL` is unset. On a read-only host this falls back to the OS temp directory, which is **not** shared between instances. |
 | `AFTERMATH_HARNESS_DIR` | Scratch space for the coding demonstration harness. |
 
 ---
@@ -272,6 +292,33 @@ rule engine's validation gating, the decision engine's evidence-governs-memory
 property, the coding harness wiring, and the full eight-scenario pipeline end to
 end.
 
+### Durable-store tests
+
+Three suites cover the persistence fix. They need a real PostgreSQL database,
+because the property under test — a record committed by one process is visible
+to another — cannot be shown with a mock. Provide a connection string in
+`AFTERMATH_TEST_DATABASE_URL`; the suites are skipped without it.
+
+```bash
+# Start a throwaway Postgres, or use any existing one.
+docker run -d --name aft-pg -e POSTGRES_USER=aftermath \
+  -e POSTGRES_PASSWORD=aftermath -e POSTGRES_DB=aftermath \
+  -p 55432:5432 postgres:16-alpine
+
+export AFTERMATH_TEST_DATABASE_URL="postgres://aftermath:aftermath@localhost:55432/aftermath"
+npx vitest run tests/durable-store.test.ts tests/cross-process-durability.test.ts tests/store-failure.test.ts
+```
+
+- `durable-store.test.ts` — two stores sharing one database; a write by one is
+  read by the other, and the aggregate counts agree.
+- `cross-process-durability.test.ts` — spawns the store twice in **separate Node
+  processes** with different working directories, different `AFTERMATH_DB_PATH`,
+  and different `TMPDIR`, and shows the record still crosses. A negative control
+  runs the same pair with the database switched off and asserts the record does
+  **not** cross, proving the positive result comes from the database.
+- `store-failure.test.ts` — an unreachable database throws instead of reporting
+  success, and a configured database is never silently replaced by SQLite.
+
 `npm run test:live` is skipped by default because it contacts real services. It
 proves the production code path reaches the Mainnet relayer (unauthenticated
 `health`) and that unregistered credentials are refused rather than silently
@@ -315,7 +362,12 @@ src/
       rule-engine.ts      Corrective rule lifecycle
       decision-engine.ts  Safeguard decision engine
       evaluation.ts       Honest metric computation
-    db/store.ts           SQLite incident index and audit history
+    db/
+      audit-store.ts        Audit index interface + shared count computation
+      sqlite-audit-store.ts SQLite implementation (local development, tests)
+      postgres-audit-store.ts PostgreSQL implementation (durable, cross-instance)
+      store-factory.ts      Selects the engine from DATABASE_URL; no silent fallback
+    api/errors.ts           Store-failure handling (never reports success)
     demos/                The eight controlled scenarios
 ```
 
@@ -368,6 +420,10 @@ blocks, list items, and links all survive the conversion.
 
 ## Known limitations
 
+- The audit index is durable only when `DATABASE_URL` is set. Without it the
+  index is a per-instance SQLite file (temp-backed on a read-only host) and is
+  not shared between serverless instances. The Overview page reports which
+  mode is active; it is never implied to be durable when it is not.
 - The coding and workflow demonstrations are controlled harnesses, not a
   general-purpose coding or automation platform. They are labelled as such in
   the UI.

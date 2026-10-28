@@ -215,6 +215,37 @@ export default async function OverviewPage() {
 
       <section>
         <SectionTitle
+          title="Audit index persistence"
+          hint="Where the incident index is stored. The index is an audit record, not an authority; Tatum and Walrus Memory remain the sources of truth."
+        />
+        <div className="panel rounded p-3.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <Pill tone={configuration.persistence.durable ? "ok" : "warn"}>
+              {configuration.persistence.backend}
+            </Pill>
+            <span className="mono text-[0.6875rem] text-paper-500">
+              {configuration.persistence.durable
+                ? "durable · shared across instances"
+                : "per-instance · not shared"}
+            </span>
+          </div>
+          <div className="mt-2 text-[0.75rem] leading-relaxed text-paper-300">
+            {configuration.persistence.detail}
+          </div>
+          {!configuration.persistence.durable ? (
+            <div className="mt-3">
+              <Notice tone="warn" title="Audit index is not durable on this host">
+                Records written by one request are not guaranteed to be visible
+                to another. Set DATABASE_URL to a PostgreSQL connection string
+                (for example a Neon database) to make the audit index durable.
+              </Notice>
+            </div>
+          ) : null}
+        </div>
+      </section>
+
+      <section>
+        <SectionTitle
           title="Evaluation"
           hint="Measured over the controlled scenarios in the last run. These are scenario measurements, not claims about production reliability."
         />

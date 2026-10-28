@@ -19,12 +19,12 @@ import {
   validateRule,
 } from "@/lib/engines/rule-engine";
 import { decide, policyVersionFor, type Precondition } from "@/lib/engines/decision-engine";
-import type { AftermathStore } from "@/lib/db/store";
+import type { AuditStore } from "@/lib/db/audit-store";
 
 export interface PipelineDeps {
   evidence: EvidenceAdapter;
   memory: MemoryAdapter;
-  store: AftermathStore;
+  store: AuditStore;
 }
 
 export interface ProcessResult {
@@ -89,7 +89,7 @@ export class IncidentPipeline {
     // 3b. Snapshot the rule set as it stands *before* this incident can
     //     activate a new rule. A lesson learned from an incident governs
     //     subsequent actions, never retroactively the incident that produced it.
-    const priorActiveRules = this.deps.store.listActiveRules();
+    const priorActiveRules = await this.deps.store.listActiveRules();
 
     // 4. Rule proposal + validation against the current evidence.
     const proposedRule = proposeRule(incident, diagnosis, assessment);
@@ -103,8 +103,8 @@ export class IncidentPipeline {
       });
       validationReasons = outcome.reasons;
       activatedRule = outcome.rule ?? null;
-      if (activatedRule) this.deps.store.saveRule(activatedRule);
-      else this.deps.store.saveRule(proposedRule);
+      if (activatedRule) await this.deps.store.saveRule(activatedRule);
+      else await this.deps.store.saveRule(proposedRule);
     }
 
     // 5. Decision from current evidence + the pre-existing active rule set.
@@ -127,7 +127,7 @@ export class IncidentPipeline {
     const finalStatus = statusFromDecision(decision, diagnosis);
     const storedIncident: Incident = { ...incident, currentStatus: finalStatus };
 
-    this.deps.store.saveIncident({
+    await this.deps.store.saveIncident({
       incident: storedIncident,
       assessment,
       diagnosis,
@@ -140,7 +140,7 @@ export class IncidentPipeline {
 
     if (options.persistIncidentMemory !== false) {
       incidentWrite = await this.deps.memory.rememberIncident(storedIncident);
-      this.deps.store.saveMemoryWrite(incidentWrite, {
+      await this.deps.store.saveMemoryWrite(incidentWrite, {
         incidentId: storedIncident.incidentId,
       });
     }
@@ -169,7 +169,7 @@ export class IncidentPipeline {
         provenance: incident.provenance,
       });
       lessonWrite = await this.deps.memory.rememberLesson(lesson);
-      this.deps.store.saveMemoryWrite(lessonWrite, {
+      await this.deps.store.saveMemoryWrite(lessonWrite, {
         incidentId: storedIncident.incidentId,
         ruleId: activatedRule?.ruleId ?? proposedRule?.ruleId,
       });

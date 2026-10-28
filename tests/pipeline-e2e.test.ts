@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadConfig } from "@/lib/config";
-import { AftermathStore } from "@/lib/db/store";
+import { makeInMemoryStore } from "@/lib/db/store-factory";
 import { SimulatedMemoryAdapter } from "@/lib/adapters/simulated-memory";
 import { InMemoryWorkflowStateStore } from "@/lib/adapters/workflow-state";
 import { runAllScenarios } from "@/lib/demos/runner";
@@ -29,7 +29,7 @@ afterAll(async () => {
 async function runOnce() {
   const base = await tempDir();
   const config = { ...loadConfig(), harnessDir: path.join(base, "harness") };
-  const store = new AftermathStore(":memory:");
+  const store = makeInMemoryStore();
   const memory = new SimulatedMemoryAdapter(config.memory.namespace);
   const result = await runAllScenarios({
     config,
@@ -38,7 +38,7 @@ async function runOnce() {
     workflowStore: new InMemoryWorkflowStateStore(),
   });
   const metrics = evaluate(result.scenarios.map((s) => s.outcome));
-  store.close();
+  await store.close();
   return { result, metrics };
 }
 

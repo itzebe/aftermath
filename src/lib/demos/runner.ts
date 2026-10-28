@@ -5,7 +5,7 @@ import type { ScenarioOutcome } from "@/lib/engines/evaluation";
 import { FinanceEvidenceAdapter } from "@/lib/adapters/finance-evidence";
 import { WorkflowEvidenceAdapter } from "@/lib/adapters/workflow-evidence";
 import type { InMemoryWorkflowStateStore } from "@/lib/adapters/workflow-state";
-import type { AftermathStore } from "@/lib/db/store";
+import type { AuditStore } from "@/lib/db/audit-store";
 import type { MemoryAdapter } from "@/lib/adapters/memory";
 import type { AftermathConfig } from "@/lib/config";
 import {
@@ -71,7 +71,7 @@ function toOutcome(
  */
 export async function runAllScenarios(deps: {
   config: AftermathConfig;
-  store: AftermathStore;
+  store: AuditStore;
   memory: MemoryAdapter;
   workflowStore: InMemoryWorkflowStateStore;
 }): Promise<DemoRunResult> {
@@ -198,8 +198,8 @@ export async function runAllScenarios(deps: {
   // C4: a regression is reintroduced and a *new* claim of success is made.
   //     The active safeguard from C2 must catch it.
   await applyRegression(buggy);
-  const activeCodingRules = store
-    .listActiveRules()
+  const activeCodingRules = (await store
+    .listActiveRules())
     .filter((r) => r.domain === "coding" && r.validationStatus === "active");
   const c4 = await codingPipeline.process({
     domain: "coding",
@@ -308,8 +308,8 @@ export async function runAllScenarios(deps: {
 
   // W2: second attempt, still missing the prerequisite. The safeguard from W1
   //     is now active and must block the repeat.
-  const activeWorkflowRules = store
-    .listActiveRules()
+  const activeWorkflowRules = (await store
+    .listActiveRules())
     .filter((r) => r.domain === "workflow" && r.validationStatus === "active");
   const w2 = await workflowPipeline.preflight(
     {

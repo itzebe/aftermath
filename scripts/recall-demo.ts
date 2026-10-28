@@ -20,7 +20,7 @@
 
 import { loadConfig } from "../src/lib/config";
 import { resolveMemoryAdapter } from "../src/lib/adapters/memory-factory";
-import { AftermathStore } from "../src/lib/db/store";
+import { makeInMemoryStore } from "../src/lib/db/store-factory";
 import { IncidentPipeline } from "../src/lib/engines/pipeline";
 import { FinanceEvidenceAdapter } from "../src/lib/adapters/finance-evidence";
 import { buildSuiVerifier } from "../src/lib/demos/finance";
@@ -48,7 +48,7 @@ function financeIncident(): IncidentInputDraft {
 
 async function main(): Promise<number> {
   const config = loadConfig();
-  const store = new AftermathStore(":memory:");
+  const store = makeInMemoryStore();
   const memory = resolveMemoryAdapter(config);
   const tatum = buildSuiVerifier(config.tatum);
 
@@ -65,7 +65,7 @@ async function main(): Promise<number> {
       "STOP: this demonstration requires a live, authenticated Mainnet backend.\n" +
         `Current state: ${status.state}. Fix credentials and retry.\n`,
     );
-    store.close();
+    await store.close();
     return 1;
   }
 
@@ -81,7 +81,7 @@ async function main(): Promise<number> {
   });
 
   // ---- ARM B: the control — an empty store, i.e. before any lesson existed --
-  const controlStore = new AftermathStore(":memory:");
+  const controlStore = makeInMemoryStore();
   const controlPipeline = new IncidentPipeline({
     evidence: new FinanceEvidenceAdapter(tatum),
     memory: new SimulatedMemoryAdapter("recall-demo-control"),
@@ -125,8 +125,8 @@ async function main(): Promise<number> {
   console.log(`decision changed by recalled Mainnet lesson : ${changed}`);
   console.log(`the change is attributable to recall        : ${causedByRecall}`);
 
-  store.close();
-  controlStore.close();
+  await store.close();
+  await controlStore.close();
   return causedByRecall ? 0 : 1;
 }
 

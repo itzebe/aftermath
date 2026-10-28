@@ -51,6 +51,13 @@ export interface AftermathConfig {
   };
   dbPath: string;
   harnessDir: string;
+  /**
+   * Connection string for the durable audit index (PostgreSQL). When set, the
+   * audit index is stored in a shared database instead of a per-instance
+   * SQLite file, so records survive across serverless invocations and are
+   * visible to every instance. Never exposed to the browser.
+   */
+  databaseUrl: string | null;
 }
 
 function optional(name: string): string | null {
@@ -129,6 +136,12 @@ export function loadConfig(): AftermathConfig {
       optional("AFTERMATH_HARNESS_DIR") ??
         path.join(dataBaseDir, "harness"),
     ),
+    // Accept the common Neon/Vercel aliases so the deployment does not
+    // require a bespoke variable name. Any of these selects Postgres.
+    databaseUrl:
+      optional("DATABASE_URL") ??
+      optional("POSTGRES_URL") ??
+      optional("AFTERMATH_DATABASE_URL"),
   };
 }
 

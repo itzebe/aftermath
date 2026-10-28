@@ -23,6 +23,12 @@ export interface ConfigurationStatus {
     apiKey: string;
     configured: boolean;
   };
+  persistence: {
+    backend: "sqlite" | "postgres";
+    /** True only when records are shared across instances. */
+    durable: boolean;
+    detail: string;
+  };
 }
 
 export function configurationStatus(): ConfigurationStatus {
@@ -45,6 +51,11 @@ export function configurationStatus(): ConfigurationStatus {
       interface: rt.suiVerifier.sourceName,
       apiKey: maskSecret(config.tatum.apiKey),
       configured: Boolean(config.tatum.apiKey),
+    },
+    persistence: {
+      backend: rt.store.backend,
+      durable: rt.store.durable,
+      detail: rt.store.detail,
     },
   };
 }
@@ -79,16 +90,14 @@ export interface OverviewPayload {
 
 export async function getOverview(): Promise<OverviewPayload> {
   const rt = runtime();
-  const counts = rt.store.counts();
+  const counts = await rt.store.counts();
   const [tatumHealth, memoryHealth, memoryStatus] = await Promise.all([
     rt.suiVerifier.health(),
     rt.memory.adapter.validateMemoryAvailability(),
     rt.memory.adapter.status(),
   ]);
 
-  const lastRun = rt.store.listScenarioRuns(1)[0] as
-    | { ranAt: string; payload: unknown }
-    | undefined;
+  const lastRun = (await rt.store.listScenarioRuns(1))[0];
 
   let evaluation: EvaluationMetrics | null = null;
   if (lastRun) {
@@ -124,7 +133,7 @@ export async function runScenarios(): Promise<DemoRunResult> {
   // across runs and the same button produces different numbers each time.
   // Live Mainnet write records are preserved: they are irreversible on-chain
   // artefacts and the ledger must keep counting them.
-  rt.store.resetSimulated();
+  await rt.store.resetSimulated();
   await rt.memory.adapter.reset?.();
   const result = await runAllScenarios({
     config: loadConfig(),
@@ -132,51 +141,45 @@ export async function runScenarios(): Promise<DemoRunResult> {
     memory: rt.memory.adapter,
     workflowStore: rt.workflowStore,
   });
-  rt.store.saveScenarioRun(`run-${Date.now()}`, result.ranAt, result);
+  await rt.store.saveScenarioRun(`run-${Date.now()}`, result.ranAt, result);
   return result;
 }
 
-export function getIncidents(limit = 200) {
+export async function getIncidents(limit = 200) {
   return runtime().store.listIncidents(limit);
 }
 
-export function getRules() {
+export async function getRules() {
   return runtime().store.listRules();
 }
 
-export function getMemoryWrites(limit = 500) {
+export async function getMemoryWrites(limit = 500) {
   return runtime().store.listMemoryWrites(limit);
 }
 
-export function getEvaluation(): EvaluationMetrics | null {
+export async function getEvaluation(): Promise<EvaluationMetrics | null> {
   const rt = runtime();
-  const lastRun = rt.store.listScenarioRuns(1)[0] as
-    | { ranAt: string; payload: unknown }
-    | undefined;
+  const lastRun = (await rt.store.listScenarioRuns(1))[0];
   if (!lastRun) return null;
   const payload = lastRun.payload as DemoRunResult;
   return evaluate(payload.scenarios.map((s) => s.outcome));
 }
 
-export function getScenarioOutcomes(): ScenarioOutcome[] {
+export async function getScenarioOutcomes(): Promise<ScenarioOutcome[]> {
   const rt = runtime();
-  const lastRun = rt.store.listScenarioRuns(1)[0] as
-    | { ranAt: string; payload: unknown }
-    | undefined;
+  const lastRun = (await rt.store.listScenarioRuns(1))[0];
   if (!lastRun) return [];
   const payload = lastRun.payload as DemoRunResult;
   return payload.scenarios.map((s) => s.outcome);
 }
 
-export function getLastRun(): DemoRunResult | null {
-  const lastRun = runtime().store.listScenarioRuns(1)[0] as
-    | { ranAt: string; payload: unknown }
-    | undefined;
+export async function getLastRun(): Promise<DemoRunResult | null> {
+  const lastRun = (await runtime().store.listScenarioRuns(1))[0];
   return lastRun ? (lastRun.payload as DemoRunResult) : null;
 }
 
-export function resetAll(): void {
-  runtime().store.reset();
+export async function resetAll(): Promise<void> {
+  await runtime().store.reset();
 }
 
 export type { IncidentInputDraft };

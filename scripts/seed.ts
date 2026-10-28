@@ -14,7 +14,7 @@
 
 import { loadConfig, relayerNetwork } from "../src/lib/config";
 import { resolveMemoryAdapter } from "../src/lib/adapters/memory-factory";
-import { AftermathStore } from "../src/lib/db/store";
+import { resolveAuditStore } from "../src/lib/db/store-factory";
 import { InMemoryWorkflowStateStore } from "../src/lib/adapters/workflow-state";
 import { runAllScenarios } from "../src/lib/demos/runner";
 
@@ -24,7 +24,7 @@ async function main(): Promise<number> {
   const args = process.argv.slice(2);
   const checkOnly = args.includes("--check");
   const config = loadConfig();
-  const store = new AftermathStore(config.dbPath);
+  const store = resolveAuditStore(config);
   const memory = resolveMemoryAdapter(config);
 
   const network = relayerNetwork(config.memory.serverUrl);
@@ -55,7 +55,7 @@ async function main(): Promise<number> {
         "  - the relayer must be the Mainnet relayer for a Mainnet account\n" +
         `Detail: ${status.detail}\n`,
     );
-    store.close();
+    await store.close();
     return 1;
   }
 
@@ -75,12 +75,12 @@ async function main(): Promise<number> {
       memory: memory.adapter,
       workflowStore: new InMemoryWorkflowStateStore(),
     });
-    store.saveScenarioRun(`seed-${Date.now()}`, result.ranAt, result);
+    await store.saveScenarioRun(`seed-${Date.now()}`, result.ranAt, result);
     console.log(`Ran ${result.scenarios.length} scenario(s).`);
     console.log("");
   }
 
-  const writes = store.listMemoryWrites(2000);
+  const writes = await store.listMemoryWrites(2000);
   const live = writes.filter((w) => w.backend !== "simulated");
   const completed = live.filter((w) => w.state === "completed");
   const verified = live.filter((w) => w.recallVerified);
@@ -113,7 +113,7 @@ async function main(): Promise<number> {
     console.log("Requirement satisfied: ten completed, recall-verified Mainnet writes.");
   }
 
-  store.close();
+  await store.close();
   return completed.length >= REQUIRED_MAINNET_WRITES ? 0 : 1;
 }
 

@@ -26,6 +26,7 @@ function config(overrides: Partial<AftermathConfig["memory"]> = {}): AftermathCo
     tatum: { rpcUrl: "https://sui-mainnet.gateway.tatum.io", grpcUrl: "https://sui-mainnet-grpc.gateway.tatum.io", graphqlUrl: "https://sui-mainnet.gateway.tatum.io/graphql", apiKey: null, timeoutMs: 12000 },
     dbPath: ":memory:",
     harnessDir: "/tmp/aftermath-harness",
+    databaseUrl: null,
   };
 }
 

@@ -2,39 +2,42 @@ import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import type {
-  EvidenceAssessment,
-  Incident,
-  SafeguardDecision,
-  SafeguardRule,
-} from "@/lib/schemas";
+  AuditCounts,
+  AuditStore,
+  IncidentRecord,
+  ScenarioRunRow,
+} from "@/lib/db/audit-store";
+import { computeCounts } from "@/lib/db/audit-store";
 import type { MemoryWriteReceipt } from "@/lib/adapters/memory";
-import type { Diagnosis } from "@/lib/schemas";
-
-export interface IncidentRecord {
-  incident: Incident;
-  assessment: EvidenceAssessment;
-  diagnosis: Diagnosis;
-  decision: SafeguardDecision;
-}
+import type { SafeguardDecision, SafeguardRule } from "@/lib/schemas";
 
 /**
- * Append-only audit index for incidents, rules, decisions, and memory writes.
+ * SQLite-backed audit index.
  *
- * This database is an *index*, not an authority: the authoritative evidence
- * lives at the source (Tatum, the test process, the workflow state store) and
- * the persistent lesson store lives in Walrus Memory. Nothing here is used to
- * override current evidence.
+ * This is the local-development and test engine. It is a genuine persistent
+ * store when given a writable file path, but on a serverless host the only
+ * writable location is the OS temp directory, which is *not shared* between
+ * instances — so `durable` is reported as false there and the UI says so.
  */
-export class AftermathStore {
+export class SqliteAuditStore implements AuditStore {
+  readonly backend = "sqlite" as const;
   private readonly db: DatabaseSync;
+  readonly durable: boolean;
+  readonly detail: string;
 
-  constructor(dbPath: string) {
+  constructor(dbPath: string, options: { durable?: boolean; detail?: string } = {}) {
     if (dbPath !== ":memory:") {
       mkdirSync(path.dirname(path.resolve(dbPath)), { recursive: true });
     }
     this.db = new DatabaseSync(dbPath);
     this.db.exec("PRAGMA journal_mode = WAL;");
     this.migrate();
+    this.durable = options.durable ?? dbPath !== ":memory:";
+    this.detail =
+      options.detail ??
+      (this.durable
+        ? `SQLite file at ${dbPath}`
+        : "SQLite in a non-shared location (in-memory or OS temp directory)");
   }
 
   private migrate(): void {
@@ -91,7 +94,7 @@ export class AftermathStore {
     `);
   }
 
-  saveScenarioRun(runId: string, ranAt: string, payload: unknown): void {
+  async saveScenarioRun(runId: string, ranAt: string, payload: unknown): Promise<void> {
     this.db
       .prepare(
         `INSERT INTO scenario_runs (run_id, ran_at, payload) VALUES (?, ?, ?)
@@ -100,9 +103,7 @@ export class AftermathStore {
       .run(runId, ranAt, JSON.stringify(payload));
   }
 
-  listScenarioRuns(
-    limit = 20,
-  ): Array<{ runId: string; ranAt: string; payload: unknown }> {
+  async listScenarioRuns(limit = 20): Promise<ScenarioRunRow[]> {
     const rows = this.db
       .prepare(`SELECT run_id, ran_at, payload FROM scenario_runs ORDER BY ran_at DESC LIMIT ?`)
       .all(limit) as Array<{ run_id: string; ran_at: string; payload: string }>;
@@ -113,8 +114,8 @@ export class AftermathStore {
     }));
   }
 
-  saveIncident(record: IncidentRecord): void {
-    const { incident, assessment, diagnosis, decision } = record;
+  async saveIncident(record: IncidentRecord): Promise<void> {
+    const { incident, decision } = record;
     this.db
       .prepare(
         `INSERT INTO incidents
@@ -132,8 +133,6 @@ export class AftermathStore {
         incident.createdAt,
         JSON.stringify(record),
       );
-    void assessment;
-    void diagnosis;
 
     this.db
       .prepare(
@@ -149,13 +148,13 @@ export class AftermathStore {
       );
   }
 
-  updateIncidentStatus(incidentId: string, status: string): void {
+  async updateIncidentStatus(incidentId: string, status: string): Promise<void> {
     this.db
       .prepare(`UPDATE incidents SET status = ? WHERE incident_id = ?`)
       .run(status, incidentId);
   }
 
-  saveRule(rule: SafeguardRule): void {
+  async saveRule(rule: SafeguardRule): Promise<void> {
     this.db
       .prepare(
         `INSERT INTO rules
@@ -175,10 +174,10 @@ export class AftermathStore {
       );
   }
 
-  saveMemoryWrite(
+  async saveMemoryWrite(
     receipt: MemoryWriteReceipt,
     refs: { incidentId?: string; ruleId?: string } = {},
-  ): void {
+  ): Promise<void> {
     this.db
       .prepare(
         `INSERT INTO memory_writes
@@ -205,87 +204,53 @@ export class AftermathStore {
       );
   }
 
-  listIncidents(limit = 100): IncidentRecord[] {
+  async listIncidents(limit = 100): Promise<IncidentRecord[]> {
     const rows = this.db
-      .prepare(
-        `SELECT payload FROM incidents ORDER BY created_at DESC LIMIT ?`,
-      )
+      .prepare(`SELECT payload FROM incidents ORDER BY created_at DESC LIMIT ?`)
       .all(limit) as Array<{ payload: string }>;
     return rows.map((r) => JSON.parse(r.payload) as IncidentRecord);
   }
 
-  getIncident(incidentId: string): IncidentRecord | null {
+  async getIncident(incidentId: string): Promise<IncidentRecord | null> {
     const row = this.db
       .prepare(`SELECT payload FROM incidents WHERE incident_id = ?`)
       .get(incidentId) as { payload: string } | undefined;
     return row ? (JSON.parse(row.payload) as IncidentRecord) : null;
   }
 
-  listRules(): SafeguardRule[] {
+  async listRules(): Promise<SafeguardRule[]> {
     const rows = this.db
       .prepare(`SELECT payload FROM rules ORDER BY updated_at DESC`)
       .all() as Array<{ payload: string }>;
     return rows.map((r) => JSON.parse(r.payload) as SafeguardRule);
   }
 
-  /** Active rules, most recent version per rule id. */
-  listActiveRules(): SafeguardRule[] {
-    return this.listRules().filter((r) => r.validationStatus === "active");
+  async listActiveRules(): Promise<SafeguardRule[]> {
+    return (await this.listRules()).filter((r) => r.validationStatus === "active");
   }
 
-  listMemoryWrites(limit = 500): MemoryWriteReceipt[] {
+  async listMemoryWrites(limit = 500): Promise<MemoryWriteReceipt[]> {
     const rows = this.db
-      .prepare(
-        `SELECT payload FROM memory_writes ORDER BY requested_at DESC LIMIT ?`,
-      )
+      .prepare(`SELECT payload FROM memory_writes ORDER BY requested_at DESC LIMIT ?`)
       .all(limit) as Array<{ payload: string }>;
     return rows.map((r) => JSON.parse(r.payload) as MemoryWriteReceipt);
   }
 
-  listDecisions(limit = 200): SafeguardDecision[] {
+  async listDecisions(limit = 200): Promise<SafeguardDecision[]> {
     const rows = this.db
-      .prepare(
-        `SELECT payload FROM decisions ORDER BY decided_at DESC LIMIT ?`,
-      )
+      .prepare(`SELECT payload FROM decisions ORDER BY decided_at DESC LIMIT ?`)
       .all(limit) as Array<{ payload: string }>;
     return rows.map((r) => JSON.parse(r.payload) as SafeguardDecision);
   }
 
-  counts(): {
-    incidents: number;
-    verifiedFailures: number;
-    activeRules: number;
-    unresolved: number;
-    completedLiveWrites: number;
-    recallVerifiedWrites: number;
-    simulatedWrites: number;
-    totalWrites: number;
-  } {
-    const incidents = this.listIncidents(100_000);
-    const writes = this.listMemoryWrites(100_000);
-    return {
-      incidents: incidents.length,
-      verifiedFailures: incidents.filter(
-        (i) => i.assessment.status === "VERIFIED_FAILURE",
-      ).length,
-      activeRules: this.listActiveRules().length,
-      unresolved: incidents.filter(
-        (i) =>
-          i.decision.decision === "UNKNOWN" ||
-          i.decision.decision === "REQUIRE_VERIFICATION",
-      ).length,
-      completedLiveWrites: writes.filter(
-        (w) => w.state === "completed" && w.backend !== "simulated",
-      ).length,
-      recallVerifiedWrites: writes.filter(
-        (w) => w.recallVerified && w.backend !== "simulated",
-      ).length,
-      simulatedWrites: writes.filter((w) => w.backend === "simulated").length,
-      totalWrites: writes.length,
-    };
+  async counts(): Promise<AuditCounts> {
+    const incidents = await this.listIncidents(100_000);
+    const writes = await this.listMemoryWrites(100_000);
+    const activeRules = await this.listActiveRules();
+    return computeCounts({ incidents, writes, activeRules });
   }
 
-  reset(): void {
+  async reset(): Promise<void> {
     this.db.exec(
       `DELETE FROM incidents; DELETE FROM rules; DELETE FROM decisions; DELETE FROM memory_writes; DELETE FROM scenario_runs;`,
     );
@@ -300,14 +265,14 @@ export class AftermathStore {
    * submission is judged on. So simulated writes are cleared (a re-run must be
    * reproducible) and live writes are kept (the ledger must stay truthful).
    */
-  resetSimulated(): void {
+  async resetSimulated(): Promise<void> {
     this.db.exec(
       `DELETE FROM incidents; DELETE FROM rules; DELETE FROM decisions; DELETE FROM scenario_runs;
        DELETE FROM memory_writes WHERE provenance != 'live';`,
     );
   }
 
-  close(): void {
+  async close(): Promise<void> {
     this.db.close();
   }
 }

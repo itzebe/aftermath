@@ -6,6 +6,9 @@ const SECRET_PATTERNS: Array<[RegExp, string]> = [
   // Tatum keys look like long alphanumeric strings with dashes
   [/\b[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\b/gi, "[redacted-uuid]"],
   [/\b(?:t-[0-9a-f]{8,}|tatum[-_]?[a-z0-9]{16,})\b/gi, "[redacted-tatum-key]"],
+  // Connection strings (postgres://user:password@host/db) — a pg driver error
+  // can embed the DSN, so strip the whole credential-bearing URL.
+  [/\b[a-z][a-z0-9+.-]*:\/\/[^\s"'@/]+:[^\s"'@/]+@[^\s"']+/gi, "[redacted-url]"],
 ];
 
 /**

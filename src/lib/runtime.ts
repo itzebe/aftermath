@@ -3,7 +3,8 @@ import { resolveMemoryAdapter, type MemoryAdapterResolution } from "@/lib/adapte
 import { buildSuiVerifier } from "@/lib/demos/finance";
 import type { SuiVerifier } from "@/lib/adapters/sui-verifier";
 import { FinanceEvidenceAdapter } from "@/lib/adapters/finance-evidence";
-import { AftermathStore } from "@/lib/db/store";
+import type { AuditStore } from "@/lib/db/audit-store";
+import { resolveAuditStore } from "@/lib/db/store-factory";
 import { IncidentPipeline } from "@/lib/engines/pipeline";
 import { InMemoryWorkflowStateStore } from "@/lib/adapters/workflow-state";
 import { WorkflowEvidenceAdapter } from "@/lib/adapters/workflow-evidence";
@@ -15,7 +16,7 @@ import { DEPLOY_WORKFLOW } from "@/lib/demos/workflow";
  */
 export interface Runtime {
   config: AftermathConfig;
-  store: AftermathStore;
+  store: AuditStore;
   memory: MemoryAdapterResolution;
   suiVerifier: SuiVerifier;
   financePipeline: IncidentPipeline;
@@ -29,7 +30,7 @@ declare global {
 
 function build(): Runtime {
   const config = loadConfig();
-  const store = new AftermathStore(config.dbPath);
+  const store = resolveAuditStore(config);
   const memory = resolveMemoryAdapter(config);
   const suiVerifier = buildSuiVerifier(config.tatum);
   const financeEvidence = new FinanceEvidenceAdapter(suiVerifier);
@@ -66,7 +67,7 @@ export function runtime(): Runtime {
   return globalThis.__aftermathRuntime;
 }
 
-export function resetRuntime(): void {
-  globalThis.__aftermathRuntime?.store.close();
+export async function resetRuntime(): Promise<void> {
+  await globalThis.__aftermathRuntime?.store.close();
   globalThis.__aftermathRuntime = undefined;
 }
