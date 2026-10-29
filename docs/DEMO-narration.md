@@ -1,7 +1,7 @@
 # AFTERMATH — demo video narration script
 
-Recorded video: `/mnt/data/aftermath-hackathon-demo.mp4` (2:12, 1920×1080,
-H.264 + AAC, burned-in captions). Sidecar captions:
+Recorded video: <https://github.com/itzebe/aftermath/releases/tag/demo-v1> (2:12,
+1920×1080, H.264 + AAC, burned-in captions). Sidecar captions:
 [`DEMO.srt`](DEMO.srt). Captured from the live production deployment with
 Playwright and narrated with a local TTS voice.
 

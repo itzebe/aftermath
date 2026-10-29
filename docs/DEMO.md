@@ -1,9 +1,8 @@
 # AFTERMATH — demo storyboard (2–3 minutes)
 
-Recording status: **recorded.** The playable video is
-`/mnt/data/aftermath-hackathon-demo.mp4` (2:12, 1920×1080, H.264 + AAC, with
-burned-in captions; sidecar SRT at [`DEMO.srt`](DEMO.srt); in-repo copy at
-`.agent_tmp/video/demo_subbed.mp4`). It was captured from the **live
+Recording status: **recorded.** The playable video is published as a release
+asset: <https://github.com/itzebe/aftermath/releases/tag/demo-v1> (2:12,
+1920×1080, H.264 + AAC, burned-in captions). It was captured from the **live
 production deployment** with Playwright, narrated with a local TTS voice, and cut
 with ffmpeg. This storyboard remains the source of truth for what each scene shows
 and the claim it supports; the verbatim narration is in

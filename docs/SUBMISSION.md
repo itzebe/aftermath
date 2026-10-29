@@ -130,8 +130,8 @@ a dependency being briefly unavailable is never mistaken for a verified failure.
 **Demo URL:** <https://aftermath-7tij.vercel.app/>
 **Repository:** <https://github.com/itzebe/aftermath>
 **Blog:** <https://itzebe.github.io/aftermath/>
-**Demo video:** not recorded — storyboard and recording instructions in
-[`DEMO.md`](DEMO.md).
+**Demo video:** <https://github.com/itzebe/aftermath/releases/tag/demo-v1>
+(2:12, 1920×1080, captioned). Storyboard and script in [`DEMO.md`](DEMO.md).
 
 **Honest limitations.** The finance case needs a `TATUM_API_KEY`; without it,
 `UNKNOWN`. The AI reading needs `GROQ_API_KEY`; without it, the deterministic
@@ -152,7 +152,7 @@ the account owner and must not be guessed.
 | Demo URL | <https://aftermath-7tij.vercel.app/> |
 | Repository URL | <https://github.com/itzebe/aftermath> |
 | Blog URL | <https://itzebe.github.io/aftermath/> (also on Medium) |
-| Demo video URL | `/mnt/data/aftermath-hackathon-demo.mp4` (2:12) — also in-repo at `.agent_tmp/video/demo_subbed.mp4`; upload and paste the hosted URL here |
+| Demo video URL | <https://github.com/itzebe/aftermath/releases/tag/demo-v1> (2:12) — direct file: <https://github.com/itzebe/aftermath/releases/download/demo-v1/aftermath-hackathon-demo.mp4> |
 | Tatum dashboard account ID | *owner* |
 | `MEMWAL_AGENT_ID` (Walrus Memory delegate public key) | *owner* |
 
@@ -212,9 +212,10 @@ The standalone check `npm run verify:prod` includes the memory checks and passes
 
 ## Demo video
 
-- Video: `/mnt/data/aftermath-hackathon-demo.mp4` (in-repo copy:
-  `.agent_tmp/video/demo_subbed.mp4`), 2:12, 1920×1080, H.264 + AAC, subtitled.
-- Captions (SRT): `/mnt/data/aftermath-hackathon-demo.srt`.
+- Video: <https://github.com/itzebe/aftermath/releases/tag/demo-v1> — 2:12,
+  1920×1080, H.264 + AAC, burned-in captions. Direct file:
+  <https://github.com/itzebe/aftermath/releases/download/demo-v1/aftermath-hackathon-demo.mp4>.
+- Captions (SRT): [`DEMO.srt`](DEMO.srt) (also attached to the release).
 - Storyboard and script: [`DEMO.md`](DEMO.md).
 
 ## Demo plan (2–3 minutes)

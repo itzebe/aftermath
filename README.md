@@ -41,6 +41,20 @@ the static page is built and deployed.
 
 ---
 
+## Demo video
+
+A 2:12 walkthrough recorded from the live production deployment (captioned,
+1920×1080): the incident-first workflow, a real Safeguard Record with its
+evidence and additive AI reading, the Walrus Memory ledger, and the evaluation
+lab's learning loop.
+
+**[Watch the demo](https://github.com/itzebe/aftermath/releases/tag/demo-v1)** —
+direct file: <https://github.com/itzebe/aftermath/releases/download/demo-v1/aftermath-hackathon-demo.mp4>.
+Storyboard, narration, and captions: [`docs/DEMO.md`](docs/DEMO.md),
+[`docs/DEMO-narration.md`](docs/DEMO-narration.md), [`docs/DEMO.srt`](docs/DEMO.srt).
+
+---
+
 ## What it actually does
 
 The front door is an incident submission. Paste real failure material — an
