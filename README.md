@@ -286,10 +286,42 @@ cannot create the account for you.
 | --- | --- |
 | `GROQ_API_KEY` | Groq API key (free tier). Server-side only. When unset, the record runs deterministic-only and says so. |
 | `AFTERMATH_AI_TIMEOUT_MS` | Per-request ceiling for an AI reading. Defaults to `20000`. |
+| `AFTERMATH_AI_VERIFY_TOKEN` | Bearer token for the read-only `POST /api/ai/verify` endpoint. When unset the endpoint is disabled (fails closed) and returns `503`. |
+| `AFTERMATH_AI_VERIFY_MAX` | Requests allowed per caller per window on the verify endpoint. Defaults to `5`. |
+| `AFTERMATH_AI_VERIFY_WINDOW_MS` | Length of the verify endpoint's rate-limit window. Defaults to `60000`. |
 
 Only the Groq free tier is recognised, on the fixed model
 `openai/gpt-oss-120b`. A key for any other provider is ignored rather than used,
 so the deployment cannot fall onto a paid model by surprise.
+
+#### Verifying a live deployment actually runs the model
+
+`POST /api/ai/verify` is a narrowly scoped, read-only endpoint that proves a
+deployment's configured provider really runs, and returns the *grounded*
+result — without submitting an incident, creating a Walrus Memory, or touching
+the audit index. It holds no store, memory adapter, or runtime, so it has
+nothing it could persist with; its only effect is one model call.
+
+It reuses the production inference path and validation (the same client,
+grounding gate, timeout, redaction, and `IncidentSubmissionSchema`), and reports
+the authoritative signal `inference.ran` alongside the validated `AiAnalysis`.
+
+It is disabled unless `AFTERMATH_AI_VERIFY_TOKEN` is set, and it fails closed:
+with no token it returns `503` rather than becoming a public inference endpoint.
+Requests must send `Authorization: Bearer <token>`; a wrong or missing token is
+`401`, and a caller past `AFTERMATH_AI_VERIFY_MAX` requests per window is `429`.
+
+```bash
+curl -sS -X POST "$AFTERMATH_PROD_URL/api/ai/verify" \
+  -H "Authorization: Bearer $AFTERMATH_AI_VERIFY_TOKEN" \
+  -H "content-type: application/json" \
+  -d '{"text":"2026-03-01T10:00:00Z payment-api POST /v1/charge\nHTTP 500\nERROR: Connection pool exhausted\nActive connections: 50"}'
+```
+
+`inference.ran: true` means a model ran and at least one claim survived
+grounding. Any other value (`not_configured`, `unavailable`, `rate_limited`,
+`timeout`, `invalid_response`, `grounding_failed`) means it did not, and the
+response says which.
 
 ### Application
 

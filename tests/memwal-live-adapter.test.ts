@@ -25,6 +25,7 @@ function config(overrides: Partial<AftermathConfig["memory"]> = {}): AftermathCo
     },
     tatum: { rpcUrl: "https://sui-mainnet.gateway.tatum.io", grpcUrl: "https://sui-mainnet-grpc.gateway.tatum.io", graphqlUrl: "https://sui-mainnet.gateway.tatum.io/graphql", apiKey: null, timeoutMs: 12000 },
     ai: { provider: "none", model: "openai/gpt-oss-120b", apiKey: null, timeoutMs: 20000 },
+    aiVerify: { token: null, maxRequests: 5, windowMs: 60000 },
     dbPath: ":memory:",
     harnessDir: "/tmp/aftermath-harness",
     databaseUrl: null,

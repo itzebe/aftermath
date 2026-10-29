@@ -34,6 +34,7 @@ function baseConfig(overrides: Partial<AftermathConfig["ai"]> = {}): AftermathCo
       timeoutMs: 20000,
       ...overrides,
     },
+    aiVerify: { token: null, maxRequests: 5, windowMs: 60000 },
     dbPath: ":memory:",
     harnessDir: "/tmp/h",
     databaseUrl: null,

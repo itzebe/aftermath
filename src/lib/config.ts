@@ -63,6 +63,20 @@ export interface AftermathConfig {
     apiKey: string | null;
     timeoutMs: number;
   };
+  /**
+   * Read-only AI verification endpoint.
+   *
+   * It exists to prove — against a live deployment — that the configured
+   * provider actually runs and returns a grounded result, without submitting
+   * an incident or writing anything anywhere. It is off unless a token is
+   * configured, and it fails closed: with no token set the route refuses to
+   * serve rather than becoming a public inference endpoint.
+   */
+  aiVerify: {
+    token: string | null;
+    maxRequests: number;
+    windowMs: number;
+  };
   dbPath: string;
   harnessDir: string;
   /**
@@ -165,6 +179,11 @@ export function loadConfig(): AftermathConfig {
         timeoutMs: positiveInt("AFTERMATH_AI_TIMEOUT_MS", 20_000),
       };
     })(),
+    aiVerify: {
+      token: optional("AFTERMATH_AI_VERIFY_TOKEN"),
+      maxRequests: positiveInt("AFTERMATH_AI_VERIFY_MAX", 5),
+      windowMs: positiveInt("AFTERMATH_AI_VERIFY_WINDOW_MS", 60_000),
+    },
     dbPath: path.resolve(
       optional("AFTERMATH_DB_PATH") ??
         path.join(dataBaseDir, "aftermath.db"),
