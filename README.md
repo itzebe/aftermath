@@ -357,6 +357,22 @@ state; nothing is assumed. The decision logic is a pure function
 (`assessOverview`) covered by `tests/production-verifier.test.ts`, so the rules
 that make a check fail cannot silently weaken.
 
+### Verify the AI layer runs live
+
+`npm run verify:ai` calls the read-only `POST /api/ai/verify` on a deployment
+and reports whether a model actually ran. It submits no incident, creates no
+Walrus Memory, and touches no record — it only exercises inference.
+
+```bash
+AFTERMATH_AI_VERIFY_TOKEN=<token> npm run verify:ai
+npm run verify:ai -- --url https://your-app.vercel.app --token <token>
+```
+
+It exits non-zero unless `inference.ran` is true. A deployment with no provider
+key, or a wrong token, fails this check on purpose — it never reports a pass for
+a run that did not happen. The verdict logic is a pure function
+(`assessAiVerify`) covered by `tests/verify-ai-script.test.ts`.
+
 ### Tatum Sui verification (gRPC primary, GraphQL fallback)
 
 Sui Foundation has disabled JSON-RPC on Mainnet full nodes and documents gRPC as

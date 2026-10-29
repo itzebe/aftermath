@@ -20,7 +20,8 @@
     "keygen": "tsx scripts/generate-delegate-key.ts",
     "test:live": "AFTERMATH_LIVE_SMOKE=1 vitest run tests/live-smoke.test.ts",
     "recall:demo": "tsx scripts/recall-demo.ts",
-    "verify:prod": "tsx scripts/verify-production.ts"
+    "verify:prod": "tsx scripts/verify-production.ts",
+    "verify:ai": "tsx scripts/verify-ai-live.ts"
   },
   "dependencies": {
     "@grpc/grpc-js": "^1.14.6",
