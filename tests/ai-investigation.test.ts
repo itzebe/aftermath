@@ -186,6 +186,16 @@ describe("runAiInvestigation — honesty on failure", () => {
     expect(analysis.ran).toBe(false);
     expect(analysis.error).toMatch(/socket hang up/);
   });
+
+  it("passes the configured timeout to the client, defaulting when omitted", async () => {
+    const configured = fakeClient(groundedResponse());
+    await runAiInvestigation({ client: configured, text: MATERIAL, timeoutMs: 1234 });
+    expect(configured.calls[0].timeoutMs).toBe(1234);
+
+    const defaulted = fakeClient(groundedResponse());
+    await runAiInvestigation({ client: defaulted, text: MATERIAL });
+    expect(defaulted.calls[0].timeoutMs).toBe(20_000);
+  });
 });
 
 describe("runAiInvestigation — prompt-injection resistance", () => {

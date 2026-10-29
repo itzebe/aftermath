@@ -638,9 +638,9 @@ The suites behind those figures, as last run:
 | --- | --- | --- |
 | Type check | `npm run typecheck` | clean |
 | Lint | `npm run lint` | clean |
-| Unit + integration (hermetic) | `npm test` | 314 passed, 21 skipped |
+| Unit + integration (hermetic) | `npm test` | 315 passed, 21 skipped |
 | Live smoke (real relayer + gateway) | `npm run test:live` | 11 passed |
-| Browser (simulated backend) | `npm run test:e2e` | 7 passed |
+| Browser (simulated backend) | `npm run test:e2e` | 13 passed |
 
 The unit suite is hermetic — it makes no network calls — which is why it is
 distinct from the live smoke suite. The browser suite runs against a simulated

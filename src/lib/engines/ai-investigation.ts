@@ -180,8 +180,11 @@ export async function runAiInvestigation(input: {
   service?: string;
   expectedBehavior?: string;
   actualBehavior?: string;
+  /** Per-request ceiling. Defaults to `AI_TIMEOUT_MS` when omitted. */
+  timeoutMs?: number;
 }): Promise<AiAnalysis> {
   const { client } = input;
+  const timeoutMs = input.timeoutMs ?? AI_TIMEOUT_MS;
   // Redact before the material leaves the process. A pasted log often contains
   // a token by accident; the model never needs it.
   const material = redact(input.text);
@@ -203,7 +206,7 @@ export async function runAiInvestigation(input: {
       jsonSchema: { name: "incident_analysis", schema: RESPONSE_SCHEMA },
       maxOutputTokens: AI_MAX_OUTPUT_TOKENS,
       temperature: 0.1,
-      timeoutMs: AI_TIMEOUT_MS,
+      timeoutMs,
     });
   } catch (err) {
     // A client that throws (rather than returning a classified failure) must

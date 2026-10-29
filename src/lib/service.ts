@@ -346,6 +346,7 @@ export async function submitIncident(
       const analysis = await runAiInvestigation({
         client: resolveModelClient(config),
         text: s.text,
+        timeoutMs: config.ai.timeoutMs,
         ...(s.service ? { service: s.service } : {}),
         ...(s.expectedBehavior ? { expectedBehavior: s.expectedBehavior } : {}),
         ...(s.actualBehavior ? { actualBehavior: s.actualBehavior } : {}),

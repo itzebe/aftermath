@@ -83,6 +83,14 @@ function optional(name: string): string | null {
   return value.trim();
 }
 
+/** Parse a positive-integer env value, falling back when absent or invalid. */
+function positiveInt(name: string, fallback: number): number {
+  const raw = optional(name);
+  if (raw === null) return fallback;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
+}
+
 /** True when `dir` exists (or can be created) and accepts writes. */
 function ensureWritableDir(dir: string): boolean {
   try {
@@ -154,7 +162,7 @@ export function loadConfig(): AftermathConfig {
         provider,
         model: GROQ_MODEL,
         apiKey: groqKey,
-        timeoutMs: Number(optional("AFTERMATH_AI_TIMEOUT_MS") ?? "20000"),
+        timeoutMs: positiveInt("AFTERMATH_AI_TIMEOUT_MS", 20_000),
       };
     })(),
     dbPath: path.resolve(
