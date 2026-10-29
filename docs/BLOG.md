@@ -510,13 +510,13 @@ append-only, and it keeps counting everything that happened before the fix. I am
 not rewriting it, and I am not hiding it. Three distinctions matter:
 
 - **Completed writes and recall-verified writes are different numbers.** The
-  live instance reports **42 completed** Mainnet writes and **41
+  live instance reports **83 completed** Mainnet writes and **82
   recall-verified**. The gap is one write that reached a blob id and was
   recorded as completed, but whose *follow-up recall query* was itself
   rate-limited — so it is completed-but-not-recall-verified. It is counted once,
   in the correct column. The two figures must never be presented as equivalent.
-- **The ledger holds historical failed writes.** It records **31 failed live
-  writes**: **17** are `remember job timed out after 60000ms`, and **14** are
+- **The ledger holds historical failed writes.** It records **33 failed live
+  writes**: **22** are `remember job timed out after 60000ms`, and **11** are
   `429` rate limits. These are write-level failures from earlier invocations.
   The timeout class is reconciled by the adapter — a `remember` timeout is
   resolved by re-polling the *same* job id rather than re-issuing the write, so
@@ -534,7 +534,7 @@ not rewriting it, and I am not hiding it. Three distinctions matter:
   observed it.
 
 None of this changes the headline the brief cares about: the requirement is ten
-genuine, completed Mainnet memories, and the instance has 42 completed and 41
+genuine, completed Mainnet memories, and the instance has 83 completed and 82
 recall-verified, all written through the real SDK against Mainnet.
 
 ## What I measured
@@ -637,16 +637,16 @@ conflating them would be dishonest in one direction or the other:
 A single counter cannot be honest about both "what did this process do" and
 "what is actually on chain". So there are two.
 
-As of this submission, the operator's own instance reports **42 completed
-Mainnet writes and 41 recall-verified writes**, with zero simulated writes in
+As of this submission, the operator's own instance reports **83 completed
+Mainnet writes and 82 recall-verified writes**, with zero simulated writes in
 that total — read straight from `GET /api/overview` on the running application,
 not asserted from memory. The two numbers are deliberately different and are
 never presented as equivalent: one write reached a blob id and was recorded as
 completed, but its follow-up recall query was itself rate-limited by the
-relayer, so it is completed-but-not-recall-verified. That is four times the
-required ten completed writes. The number is reproducible by anyone who
-configures their own credentials and runs the scenarios; it is not a claim about
-a hosted service, because there is no hosted service.
+relayer, so it is completed-but-not-recall-verified. That is more than eight
+times the required ten completed writes. The number is reproducible by anyone
+who configures their own credentials and runs the scenarios; it is not a claim
+about a hosted service, because there is no hosted service.
 
 **The evaluation metrics describe the scenarios, not production.** They are
 computed over nine reproducible scenarios. I have not measured production
