@@ -6,11 +6,11 @@ import {
   EmptyState,
   Field,
   Loading,
+  PageHeader,
   Panel,
   Pill,
   ProvenancePill,
   RuleStatusPill,
-  SectionTitle,
 } from "@/components/ui";
 
 interface RulesResponse {
@@ -51,9 +51,12 @@ export default function SafeguardsPage() {
 
   if (error) {
     return (
-      <Panel title="Safeguards">
-        <p className="text-[0.8125rem] text-signal-bad">{error}</p>
-      </Panel>
+      <div>
+        <PageHeader eyebrow="System" title="Safeguards" />
+        <Panel>
+          <p className="text-[0.875rem] text-signal-bad">{error}</p>
+        </Panel>
+      </div>
     );
   }
   if (!rules) return <Loading label="Loading safeguards…" />;
@@ -62,11 +65,11 @@ export default function SafeguardsPage() {
   const proposed = rules.filter((r) => r.validationStatus === "proposed");
 
   return (
-    <div className="space-y-5">
-      <SectionTitle
+    <div>
+      <PageHeader
+        eyebrow="System"
         title="Safeguards"
-        as="h1"
-        hint="Corrective rules derived from verified incidents. A rule is proposed first and only enforced once validation passes; proposed rules never block anything."
+        lead="Corrective rules derived from verified incidents. A rule is proposed first and only enforced once validation passes; proposed rules never block anything."
         right={
           <div className="flex gap-2">
             <Pill tone="ok">{active.length} active</Pill>
@@ -82,7 +85,7 @@ export default function SafeguardsPage() {
           supports it.
         </EmptyState>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-6 lg:grid-cols-2">
           {[...active, ...proposed].map((rule) => (
             <RuleCard key={`${rule.ruleId}-${rule.version}`} rule={rule} />
           ))}
@@ -105,9 +108,9 @@ function RuleCard({ rule }: { rule: SafeguardRule }) {
       }
       className={isActive ? "border-signal-ok/25" : ""}
     >
-      <p className="text-[0.8125rem] leading-relaxed">{rule.statement}</p>
+      <p className="text-[0.875rem] leading-relaxed">{rule.statement}</p>
 
-      <div className="mt-3">
+      <div className="mt-4">
         <Field label="Action">
           <Pill tone={ACTION_TONE[rule.action] ?? "neutral"}>{rule.action}</Pill>
         </Field>
@@ -159,7 +162,7 @@ function RuleCard({ rule }: { rule: SafeguardRule }) {
       </div>
 
       {!isActive ? (
-        <p className="mt-3 rounded border border-signal-info/30 bg-signal-info/[0.05] px-2.5 py-2 text-[0.75rem] leading-relaxed text-paper-300">
+        <p className="mt-4 rounded-md border border-signal-info/30 bg-signal-info/[0.05] px-3 py-2.5 text-[0.8125rem] leading-relaxed text-paper-300">
           This rule is proposed, not enforced. It did not influence any decision
           until validation promoted it to active.
         </p>

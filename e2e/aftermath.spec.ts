@@ -52,7 +52,7 @@ test("submitting an incident produces a connected Safeguard Record", async ({ pa
 
   // The record is a chain, so every link must be present, and the verification
   // state must be the honest one: executed, but not a claimed repeat prevention.
-  const chain = page.locator("ol.chain");
+  const chain = page.locator("ol.spine");
   await expect(chain).toBeVisible({ timeout: 30_000 });
   await expect(
     page.locator("article header .label", { hasText: "Safeguard record" }),
@@ -126,4 +126,70 @@ test("no page presents a simulated result as a live one", async ({ page }) => {
       expect(body).not.toMatch(/Mainnet writes completed\s*10/);
     }
   }
+});
+
+test("one primary navigation, consistent across every route", async ({ page }) => {
+  const primary = ["Investigate", "Safeguard Records", "Evaluation Lab"];
+  for (const path of ["/", "/records", "/lab", "/incidents", "/safeguards", "/memory", "/evaluation"]) {
+    await page.goto(path);
+    const nav = page.getByRole("navigation", { name: "Primary" });
+    await expect(nav).toBeVisible();
+    for (const label of primary) {
+      await expect(nav.getByRole("link", { name: label })).toBeVisible();
+    }
+    // The exploratory views live in the System menu, not the primary bar.
+    await expect(nav.getByRole("link", { name: "Incident Explorer" })).toHaveCount(0);
+  }
+});
+
+test("the System menu opens, lists the secondary views, and closes on Escape", async ({ page }) => {
+  await page.goto("/");
+  const trigger = page.getByRole("button", { name: "System" });
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
+  await trigger.click();
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  const menu = page.locator("#system-menu");
+  await expect(menu.getByRole("link", { name: /Incident Explorer/ })).toBeVisible();
+  await expect(menu.getByRole("link", { name: /Memory Ledger/ })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#system-menu")).toHaveCount(0);
+});
+
+test("navigation is not duplicated inside the hero", async ({ page }) => {
+  await page.goto("/");
+  // The hero offers exactly two calls to action and no repeated nav links.
+  const hero = page.locator("main section").first();
+  const heroLinks = await hero.getByRole("link").allTextContents();
+  expect(heroLinks.map((t) => t.trim())).toEqual([
+    "Investigate an incident",
+    "Explore how it works",
+  ]);
+});
+
+test("the six-stage causal chain is present and ordered on the homepage", async ({ page }) => {
+  await page.goto("/");
+  const diagram = page.locator(".chain-diagram");
+  await expect(diagram).toBeVisible();
+  const stages = await diagram.locator(".chain-body h3").allTextContents();
+  expect(stages.map((s) => s.trim())).toEqual([
+    "Incident",
+    "Evidence",
+    "Hypothesis",
+    "Safeguard",
+    "Verification",
+    "Memory",
+  ]);
+});
+
+test("a mobile menu is reachable and holds the same destinations", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.goto("/");
+  // The primary bar is hidden on mobile; the disclosure menu takes over.
+  await expect(page.getByRole("navigation", { name: "Primary" })).toBeHidden();
+  await page.getByRole("button", { name: /Open menu/i }).click();
+  const menu = page.locator("#mobile-menu");
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole("link", { name: "Investigate" })).toBeVisible();
+  await expect(menu.getByRole("link", { name: "Safeguard Records" })).toBeVisible();
+  await expect(menu.getByRole("link", { name: "Evaluation Lab" })).toBeVisible();
 });

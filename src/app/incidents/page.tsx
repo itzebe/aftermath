@@ -14,10 +14,10 @@ import {
   EvidencePill,
   Field,
   Loading,
+  PageHeader,
   Panel,
   Pill,
   ProvenancePill,
-  SectionTitle,
 } from "@/components/ui";
 
 interface IncidentRecord {
@@ -74,18 +74,23 @@ export default function IncidentsPage() {
     null;
 
   if (error) {
-    return <Panel title="Incident Explorer">
-      <p className="text-[0.8125rem] text-signal-bad">{error}</p>
-    </Panel>;
+    return (
+      <div>
+        <PageHeader eyebrow="System" title="Incident Explorer" />
+        <Panel>
+          <p className="text-[0.875rem] text-signal-bad">{error}</p>
+        </Panel>
+      </div>
+    );
   }
   if (!data) return <Loading label="Loading incidents…" />;
 
   return (
-    <div className="space-y-5">
-      <SectionTitle
+    <div>
+      <PageHeader
+        eyebrow="System"
         title="Incident Explorer"
-        as="h1"
-        hint="Every attempted action the engine has evaluated, with the evidence it read, the diagnosis it formed, and the decision it reached. Evidence is recorded before any conclusion."
+        lead="Every attempted action the engine has evaluated, with the evidence it read, the diagnosis it formed, and the decision it reached. Evidence is recorded before any conclusion."
       />
 
       {data.incidents.length === 0 ? (
@@ -94,7 +99,7 @@ export default function IncidentsPage() {
           incident timeline.
         </EmptyState>
       ) : (
-        <>
+        <div className="space-y-8">
           <div className="flex flex-wrap items-center gap-2">
             <FilterButton
               active={domainFilter === "all"}
@@ -116,11 +121,11 @@ export default function IncidentsPage() {
             })}
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]">
+          <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]">
             <Panel
               title="Timeline"
               hint={`${filtered.length} incident(s), newest last.`}
-              className="min-w-0"
+              className="min-w-0 self-start"
             >
               <ol className="space-y-1">
                 {filtered.map((r) => {
@@ -131,7 +136,7 @@ export default function IncidentsPage() {
                       <button
                         type="button"
                         onClick={() => setSelectedId(r.incident.incidentId)}
-                        className={`w-full rounded border px-2.5 py-2 text-left transition-colors ${
+                        className={`w-full rounded-md border px-3 py-2.5 text-left transition-colors ${
                           isSelected
                             ? "border-signal-info/50 bg-signal-info/[0.07]"
                             : "border-transparent hover:bg-white/[0.025]"
@@ -143,10 +148,10 @@ export default function IncidentsPage() {
                           </span>
                           <DecisionPill decision={r.decision.decision} />
                         </div>
-                        <div className="mt-1 text-[0.8125rem] leading-snug">
+                        <div className="mt-1.5 text-[0.875rem] leading-snug">
                           {r.incident.actionType.replace(/_/g, " ")}
                         </div>
-                        <div className="mt-1 flex items-center gap-2">
+                        <div className="mt-2 flex items-center gap-2">
                           <EvidencePill status={r.assessment.status} />
                           <ProvenancePill provenance={r.incident.provenance} />
                         </div>
@@ -159,7 +164,7 @@ export default function IncidentsPage() {
 
             {selected ? <IncidentDetail record={selected} rules={data.rules} /> : null}
           </div>
-        </>
+        </div>
       )}
     </div>
   );
@@ -178,7 +183,7 @@ function FilterButton({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded border px-2.5 py-1 text-[0.75rem] transition-colors ${
+      className={`rounded-md border px-3 py-1.5 text-[0.8125rem] transition-colors ${
         active
           ? "border-signal-info/50 bg-signal-info/[0.09] text-paper-100"
           : "hairline border text-paper-500 hover:text-paper-300"
@@ -202,7 +207,7 @@ function IncidentDetail({
   );
 
   return (
-    <div className="min-w-0 space-y-4">
+    <div className="min-w-0 space-y-6">
       <Panel
         title="Attempted action"
         right={<ProvenancePill provenance={incident.provenance} />}
@@ -216,7 +221,7 @@ function IncidentDetail({
         <Field label="Intended outcome">{incident.intendedOutcome}</Field>
         <Field label="Agent claim">
           {incident.claimedOutcome ? (
-            <span className="flex items-center gap-2">
+            <span className="flex flex-wrap items-center gap-2">
               <span>{incident.claimedOutcome.claim}</span>
               <Pill
                 tone={
@@ -273,11 +278,11 @@ function IncidentDetail({
           <Field label="Failure reason">{assessment.failureReason}</Field>
         ) : null}
         {assessment.raw ? (
-          <details className="mt-2">
-            <summary className="mono cursor-pointer text-[0.6875rem] uppercase tracking-[0.1em] text-paper-500">
+          <details className="mt-3">
+            <summary className="mono cursor-pointer text-[0.6875rem] uppercase tracking-[0.12em] text-paper-500">
               Raw evidence payload
             </summary>
-            <pre className="code mt-2">
+            <pre className="code mt-3">
               {JSON.stringify(assessment.raw, null, 2)}
             </pre>
           </details>
@@ -371,17 +376,17 @@ function IncidentDetail({
           {decision.decidedAt}
         </Field>
 
-        <details className="mt-2" open>
-          <summary className="mono cursor-pointer text-[0.6875rem] uppercase tracking-[0.1em] text-paper-500">
+        <details className="mt-3" open>
+          <summary className="mono cursor-pointer text-[0.6875rem] uppercase tracking-[0.12em] text-paper-500">
             Decision trace
           </summary>
-          <ol className="mt-2 space-y-1.5">
+          <ol className="mt-3 space-y-2">
             {decision.trace.map((t, i) => (
-              <li key={`${t.step}-${i}`} className="flex gap-2">
-                <span className="mono shrink-0 text-[0.625rem] uppercase tracking-[0.08em] text-paper-500">
+              <li key={`${t.step}-${i}`} className="flex gap-3">
+                <span className="mono shrink-0 text-[0.6875rem] uppercase tracking-[0.08em] text-paper-500">
                   {t.step.replace(/_/g, " ")}
                 </span>
-                <span className="text-[0.75rem] leading-relaxed text-paper-300">
+                <span className="text-[0.8125rem] leading-relaxed text-paper-300">
                   {t.detail}
                 </span>
               </li>

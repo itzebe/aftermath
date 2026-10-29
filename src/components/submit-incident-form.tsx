@@ -4,7 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import Link from "next/link";
 import type { SafeguardRecord } from "@/lib/schemas";
 import { SafeguardRecordView } from "@/components/safeguard-record";
-import { Notice, Panel } from "@/components/ui";
+import { Notice } from "@/components/ui";
 
 /**
  * The incident submission form — the product's front door.
@@ -40,6 +40,7 @@ export function SubmitIncidentForm({ sample }: { sample?: string }) {
   const [service, setService] = useState("");
   const [expected, setExpected] = useState("");
   const [actual, setActual] = useState("");
+  const [advanced, setAdvanced] = useState(false);
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState(-1);
   const [error, setError] = useState<ApiError | null>(null);
@@ -98,83 +99,103 @@ export function SubmitIncidentForm({ sample }: { sample?: string }) {
   );
 
   return (
-    <div className="space-y-5">
-      <Panel
-        title="Submit an incident"
-        hint="Paste the real material — an error, a stack trace, a log excerpt, a failed request. It is treated strictly as data: parsed with rules, never executed. Do not paste secrets."
-      >
-        <form onSubmit={submit} className="space-y-3">
+    <div className="space-y-8">
+      <form onSubmit={submit} className="panel p-6 md:p-8">
+        <div className="flex flex-col gap-6">
           <div>
-            <label htmlFor="incident-text" className="label mb-1 block">
-              Incident material (required)
-            </label>
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <label htmlFor="incident-text" className="heading text-[0.9375rem]">
+                Incident material
+              </label>
+              <span className="mono text-[0.6875rem] text-paper-600">
+                required · {text.length.toLocaleString()}/20,000
+              </span>
+            </div>
+            <p className="mt-1.5 text-[0.8125rem] leading-relaxed text-paper-500">
+              Paste the real material — an error, a stack trace, a log excerpt, a
+              failed request. It is parsed with rules and never executed. Do not
+              paste secrets.
+            </p>
             <textarea
               id="incident-text"
-              className="field"
-              rows={9}
+              className="field mt-3"
+              rows={10}
               required
               maxLength={20000}
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder={"Paste the error, stack trace, or log excerpt here.\n\nExample:\n2026-03-01T10:00:00Z ERROR checkout-service POST /v1/charge returned 503 Service Unavailable after retry"}
+              placeholder={
+                "Paste the error, stack trace, or log excerpt here.\n\nExample:\n2026-03-01T10:00:00Z ERROR checkout-service POST /v1/charge returned 503 Service Unavailable after retry"
+              }
             />
-            <div className="mt-1 flex justify-between">
+            <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
               <button
                 type="button"
-                className="mono text-[0.6875rem] text-signal-info underline-offset-2 hover:underline"
+                className="link-quiet mono text-[0.75rem]"
                 onClick={() => sample && setText(sample)}
               >
                 Use a sample incident
               </button>
-              <span className="mono text-[0.6875rem] text-paper-500">
-                {text.length}/20000
-              </span>
+              <button
+                type="button"
+                className="link-quiet mono text-[0.75rem]"
+                aria-expanded={advanced}
+                aria-controls="incident-context"
+                onClick={() => setAdvanced((v) => !v)}
+              >
+                {advanced ? "Hide" : "Add"} context fields
+              </button>
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div>
-              <label htmlFor="incident-service" className="label mb-1 block">
-                Service (optional)
-              </label>
-              <input
-                id="incident-service"
-                className="field"
-                maxLength={200}
-                value={service}
-                onChange={(e) => setService(e.target.value)}
-                placeholder="checkout-service"
-              />
+          {advanced ? (
+            <div
+              id="incident-context"
+              className="grid gap-4 border-t hairline pt-6 sm:grid-cols-3"
+            >
+              <div>
+                <label htmlFor="incident-service" className="label mb-2 block">
+                  Service
+                </label>
+                <input
+                  id="incident-service"
+                  className="field"
+                  maxLength={200}
+                  value={service}
+                  onChange={(e) => setService(e.target.value)}
+                  placeholder="checkout-service"
+                />
+              </div>
+              <div>
+                <label htmlFor="incident-expected" className="label mb-2 block">
+                  Expected behaviour
+                </label>
+                <input
+                  id="incident-expected"
+                  className="field"
+                  maxLength={2000}
+                  value={expected}
+                  onChange={(e) => setExpected(e.target.value)}
+                  placeholder="Charge completes once"
+                />
+              </div>
+              <div>
+                <label htmlFor="incident-actual" className="label mb-2 block">
+                  Actual behaviour
+                </label>
+                <input
+                  id="incident-actual"
+                  className="field"
+                  maxLength={2000}
+                  value={actual}
+                  onChange={(e) => setActual(e.target.value)}
+                  placeholder="Charge never completed"
+                />
+              </div>
             </div>
-            <div>
-              <label htmlFor="incident-expected" className="label mb-1 block">
-                Expected (optional)
-              </label>
-              <input
-                id="incident-expected"
-                className="field"
-                maxLength={2000}
-                value={expected}
-                onChange={(e) => setExpected(e.target.value)}
-                placeholder="Charge completes once"
-              />
-            </div>
-            <div>
-              <label htmlFor="incident-actual" className="label mb-1 block">
-                Actual (optional)
-              </label>
-              <input
-                id="incident-actual"
-                className="field"
-                maxLength={2000}
-                value={actual}
-                onChange={(e) => setActual(e.target.value)}
-                placeholder="Charge never completed"
-              />
-            </div>
-          </div>
+          ) : null}
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-3 border-t hairline pt-6">
             <button
               type="submit"
               className="action primary"
@@ -182,27 +203,29 @@ export function SubmitIncidentForm({ sample }: { sample?: string }) {
             >
               {busy ? "Investigating…" : "Investigate incident"}
             </button>
-            <span className="text-[0.75rem] text-paper-500">
+            <span className="max-w-md text-[0.8125rem] leading-snug text-paper-500">
               You will get a Safeguard Record: evidence, hypotheses, a proposed
               safeguard, and how to verify it.
             </span>
           </div>
-        </form>
+        </div>
 
         {busy ? (
-          <ol className="mt-4 space-y-1" aria-live="polite">
+          <ol className="mt-6 border-t hairline pt-6" aria-live="polite">
             {STAGES.map((s, i) => (
               <li
                 key={s}
-                className={`mono flex items-center gap-2 text-[0.6875rem] ${
+                className={`mono flex items-center gap-2.5 py-1 text-[0.75rem] ${
                   i < stage
                     ? "text-paper-500"
                     : i === stage
                       ? "stage-active text-signal-info"
-                      : "text-paper-500/50"
+                      : "text-paper-500"
                 }`}
               >
-                <span aria-hidden>{i < stage ? "✓" : i === stage ? "▸" : "·"}</span>
+                <span aria-hidden className="w-3">
+                  {i < stage ? "✓" : i === stage ? "▸" : "·"}
+                </span>
                 {s}
               </li>
             ))}
@@ -210,7 +233,7 @@ export function SubmitIncidentForm({ sample }: { sample?: string }) {
         ) : null}
 
         {error ? (
-          <div className="mt-4">
+          <div className="mt-6 border-t hairline pt-6">
             <Notice
               tone={error.retryable ? "warn" : "bad"}
               title={
@@ -233,7 +256,7 @@ export function SubmitIncidentForm({ sample }: { sample?: string }) {
               {error.issues && error.issues.length > 0 ? (
                 <ul className="mt-2 list-disc pl-4">
                   {error.issues.map((i) => (
-                    <li key={i.path} className="mono text-[0.6875rem]">
+                    <li key={i.path} className="mono text-[0.75rem]">
                       {i.path}: {i.message}
                     </li>
                   ))}
@@ -242,17 +265,14 @@ export function SubmitIncidentForm({ sample }: { sample?: string }) {
             </Notice>
           </div>
         ) : null}
-      </Panel>
+      </form>
 
-      <div ref={resultRef} className="scroll-mt-20">
+      <div ref={resultRef} className="scroll-mt-24">
         {record ? (
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="label">Investigation complete</div>
-              <Link
-                href="/records"
-                className="mono text-[0.6875rem] text-signal-info underline-offset-2 hover:underline"
-              >
+              <Link href="/records" className="link-quiet text-[0.8125rem]">
                 View all records →
               </Link>
             </div>

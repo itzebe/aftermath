@@ -26,11 +26,8 @@ export default async function RecordDetailPage({
   if (!record) notFound();
 
   return (
-    <div className="space-y-4">
-      <Link
-        href="/records"
-        className="mono text-[0.6875rem] text-signal-info underline-offset-2 hover:underline"
-      >
+    <div className="space-y-6">
+      <Link href="/records" className="link-quiet mono text-[0.75rem]">
         ← All records
       </Link>
       <h1 className="sr-only">Safeguard Record {record.recordId.slice(0, 8)}</h1>

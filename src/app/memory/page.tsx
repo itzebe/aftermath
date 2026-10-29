@@ -6,9 +6,9 @@ import {
   Loading,
   Metric,
   Notice,
+  PageHeader,
   Panel,
   Pill,
-  SectionTitle,
 } from "@/components/ui";
 
 type WriteState = "requested" | "processing" | "completed" | "failed";
@@ -130,9 +130,12 @@ export default function MemoryPage() {
 
   if (error) {
     return (
-      <Panel title="Memory Ledger">
-        <p className="text-[0.8125rem] text-signal-bad">{error}</p>
-      </Panel>
+      <div>
+        <PageHeader eyebrow="System" title="Memory Ledger" />
+        <Panel>
+          <p className="text-[0.875rem] text-signal-bad">{error}</p>
+        </Panel>
+      </div>
     );
   }
   if (!data) return <Loading label="Loading memory ledger…" />;
@@ -143,11 +146,11 @@ export default function MemoryPage() {
   const failed = data.writes.filter((w) => w.state === "failed");
 
   return (
-    <div className="space-y-5">
-      <SectionTitle
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow="System"
         title="Memory Ledger"
-        as="h1"
-        hint="Every write this application attempted against the memory backend, with its true lifecycle. A write is only counted as complete once the relayer returned a blob id, and only counted as verified once a recall query returned the record."
+        lead="Every write this application attempted against the memory backend, with its true lifecycle. A write is only counted as complete once the relayer returned a blob id, and only counted as verified once a recall query returned the record."
         right={
           <button
             type="button"
@@ -227,7 +230,7 @@ export default function MemoryPage() {
         </div>
       </Panel>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Metric
           label="Mainnet writes completed"
           value={`${completedLive.length} / 10`}
@@ -333,7 +336,7 @@ export default function MemoryPage() {
           <div className="space-y-2">
             {[...data.writes].reverse().slice(0, 8).map((w) => (
               <details key={w.writeId} className="rounded border hairline">
-                <summary className="mono cursor-pointer px-3 py-2 text-[0.6875rem] text-paper-300">
+                <summary className="mono cursor-pointer px-4 py-3 text-[0.6875rem] text-paper-300">
                   {w.writeId} · {w.kind} · {w.state}
                   {w.blobId ? ` · ${w.blobId}` : ""}
                 </summary>

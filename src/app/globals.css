@@ -2,56 +2,112 @@
 @tailwind components;
 @tailwind utilities;
 
+/* =====================================================================
+   AFTERMATH — design tokens
+
+   The visual identity is built around one idea: a failure and its
+   safeguard are the same object seen at two ends of a causal chain.
+   The "spine" — a single connected rail — is the signature element, and
+   it appears wherever a record or a process is shown. Colour is never
+   decorative: every tone below means a specific, documented state.
+   ===================================================================== */
+
 :root {
-  --bg: #07090c;
-  --panel: #0b0e13;
-  --panel-2: #10141b;
-  --line: #1e2530;
-  --line-2: #2b3442;
-  --text: #eef1f6;
-  --muted: #8d99ac;
-  --muted-2: #c3ccda;
+  /* surfaces — a quiet, layered dark, not a black box */
+  --bg: #06080b;
+  --bg-2: #090c11;
+  --panel: #0c1016;
+  --panel-2: #11161e;
+  --panel-3: #161c26;
+
+  /* rules — hairlines do the structural work, so they stay restrained */
+  --line: #1a2029;
+  --line-2: #252d39;
+  --line-3: #333d4c;
+
+  /* text — three deliberate steps, not a gradient of greys */
+  --text: #eceff5;
+  --text-2: #b6c0cf;
+  --muted: #7e8a9c;
+  --muted-2: #5c6675;
+
+  /* signal — each tone is a state, never an accent */
+  --ok: #3fbf6f;
+  --warn: #d7a63f;
+  --bad: #f0564a;
+  --info: #5b9dff;
+  --unknown: #a98bf5;
+
+  /* brand accent: the spine */
+  --accent: #5b9dff;
+  --accent-strong: #2f6fc4;
+
+  /* rhythm */
+  --content: 78rem;
+  --prose: 40rem;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
 }
 
 html,
 body {
+  overflow-wrap: break-word;
   background: var(--bg);
   color: var(--text);
 }
 
 body {
+  font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, sans-serif;
   font-feature-settings: "tnum" 1, "cv05" 1;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 ::selection {
   background: #1f3a5f;
+  color: #eaf2ff;
 }
 
-/* A restrained, engineering-console texture. No decorative gradients on data. */
+/* The console texture is a single fixed hairline grid, kept very faint so it
+   reads as a material rather than a pattern. */
 .grid-bg {
   background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.022) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.022) 1px, transparent 1px);
-  background-size: 44px 44px;
+    linear-gradient(to right, rgba(255, 255, 255, 0.017) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.017) 1px, transparent 1px);
+  background-size: 56px 56px;
+  background-position: center top;
 }
+
+/* ---- surfaces ------------------------------------------------------- */
 
 .panel {
   border: 1px solid var(--line);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.014), transparent 40%),
-    var(--panel);
+  background: var(--panel);
+  border-radius: 6px;
+}
+
+.panel-2 {
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  border-radius: 6px;
 }
 
 .hairline {
   border-color: var(--line);
 }
 
+/* ---- typography ----------------------------------------------------- */
+
 .mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
   font-variant-ligatures: none;
   /* Hashes, blob ids and digests are long and unbreakable. Allow them to wrap
-     rather than widen the page on a narrow viewport; the tables that must stay
-     on one line opt out with `whitespace-nowrap` inside a `scroll-x` wrapper. */
+     rather than widen the page on a narrow viewport; tables that must stay on
+     one line opt out with `whitespace-nowrap` inside a `scroll-x` wrapper. */
   overflow-wrap: anywhere;
 }
 
@@ -59,48 +115,84 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* Status pills — colour is the only decoration, and it always means something. */
+/* The one technical label style in the system. Uppercase + mono is reserved
+   for it, so it never competes with prose. */
+.label {
+  font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+
+/* Editorial display heading. Tight, large, confident. */
+.display {
+  font-weight: 600;
+  letter-spacing: -0.028em;
+  line-height: 1.04;
+  text-wrap: balance;
+}
+
+/* Section heading. */
+.heading {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+/* Lead paragraph under a heading. */
+.lead {
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  color: var(--text-2);
+  text-wrap: pretty;
+}
+
+/* ---- status pills --------------------------------------------------- *
+   Colour is the only decoration, and it always means something. */
+
 .pill {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
-  border-radius: 3px;
-  padding: 0.1rem 0.45rem;
+  gap: 0.4rem;
+  border-radius: 4px;
+  padding: 0.15rem 0.5rem;
   font-size: 0.6875rem;
-  line-height: 1.4;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  font-weight: 600;
+  line-height: 1.45;
+  letter-spacing: 0.03em;
+  font-weight: 500;
   border: 1px solid transparent;
   white-space: nowrap;
 }
 .pill-ok {
-  color: #6fdd82;
-  border-color: rgba(63, 185, 80, 0.35);
-  background: rgba(63, 185, 80, 0.09);
+  color: #6fe39a;
+  border-color: rgba(63, 191, 111, 0.32);
+  background: rgba(63, 191, 111, 0.09);
 }
 .pill-bad {
-  color: #ff8a76;
-  border-color: rgba(240, 80, 58, 0.35);
-  background: rgba(240, 80, 58, 0.09);
+  color: #ff9086;
+  border-color: rgba(240, 86, 74, 0.32);
+  background: rgba(240, 86, 74, 0.09);
 }
 .pill-warn {
-  color: #e3b341;
-  border-color: rgba(210, 153, 34, 0.35);
-  background: rgba(210, 153, 34, 0.09);
+  color: #ecc16a;
+  border-color: rgba(215, 166, 63, 0.32);
+  background: rgba(215, 166, 63, 0.09);
 }
 .pill-info {
-  color: #7cb7ff;
-  border-color: rgba(74, 158, 255, 0.35);
-  background: rgba(74, 158, 255, 0.09);
+  color: #8cbbff;
+  border-color: rgba(91, 157, 255, 0.32);
+  background: rgba(91, 157, 255, 0.09);
 }
 .pill-unknown {
-  color: #c1a6ff;
-  border-color: rgba(163, 113, 247, 0.35);
-  background: rgba(163, 113, 247, 0.09);
+  color: #c6b2ff;
+  border-color: rgba(169, 139, 245, 0.32);
+  background: rgba(169, 139, 245, 0.09);
 }
 .pill-neutral {
-  color: var(--muted-2);
+  color: var(--text-2);
   border-color: var(--line-2);
   background: rgba(255, 255, 255, 0.02);
 }
@@ -112,48 +204,156 @@ body {
   display: inline-block;
 }
 
-a.nav-link {
-  display: block;
-  padding: 0.4rem 0.6rem;
-  border-radius: 4px;
-  font-size: 0.8125rem;
-  color: var(--muted-2);
-  border-left: 2px solid transparent;
-}
-a.nav-link:hover {
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--text);
-}
-a.nav-link[data-active="true"] {
-  background: rgba(74, 158, 255, 0.08);
-  color: var(--text);
-  border-left-color: #4a9eff;
-}
+/* ---- controls ------------------------------------------------------- */
 
 button.action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
   border: 1px solid var(--line-2);
   background: var(--panel-2);
   color: var(--text);
-  border-radius: 4px;
-  padding: 0.45rem 0.8rem;
+  border-radius: 5px;
+  padding: 0.5rem 0.9rem;
   font-size: 0.8125rem;
   font-weight: 500;
+  line-height: 1.2;
+  min-height: 2.25rem;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
 }
 button.action:hover:not(:disabled) {
-  border-color: #3d4859;
-  background: #161c25;
+  border-color: var(--line-3);
+  background: var(--panel-3);
 }
 button.action:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
 }
-button.primary {
-  background: #1f4d8f;
-  border-color: #2f6fc4;
+button.action.primary {
+  background: var(--accent-strong);
+  border-color: #3f83d6;
+  color: #f2f7ff;
 }
-button.primary:hover:not(:disabled) {
-  background: #24599f;
+button.action.primary:hover:not(:disabled) {
+  background: #3576cf;
+  border-color: #4b90e2;
 }
+
+/* A link that reads as a quiet text action. */
+.link-quiet {
+  color: var(--info);
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(91, 157, 255, 0.4);
+}
+.link-quiet:hover {
+  text-decoration: underline;
+}
+
+/* ---- navigation ----------------------------------------------------- */
+
+a.nav-item,
+button.nav-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: 5px;
+  font-size: 0.875rem;
+  line-height: 1.2;
+  color: var(--text-2);
+  border: 1px solid transparent;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+a.nav-item:hover,
+button.nav-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+}
+a.nav-item[data-active="true"],
+button.nav-item[data-active="true"] {
+  color: var(--text);
+  background: rgba(91, 157, 255, 0.1);
+}
+
+/* Mobile rows inside the disclosure menu. */
+a[data-active="true"].flex {
+  color: var(--text);
+  background: rgba(91, 157, 255, 0.1);
+}
+
+.skip-link {
+  position: absolute;
+  left: 0.75rem;
+  top: -3rem;
+  z-index: 50;
+  border-radius: 0 0 5px 5px;
+  background: var(--accent-strong);
+  color: #f2f7ff;
+  padding: 0.5rem 0.85rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  transition: top 0.12s ease;
+}
+.skip-link:focus {
+  top: 0;
+}
+
+/* ---- the spine: the signature element ------------------------------- *
+   A single connected rail. Nodes hang off it; the line is what makes a
+   record read as one argument rather than a stack of panels. */
+
+.spine {
+  position: relative;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.spine-node {
+  position: relative;
+  padding-left: 2.25rem;
+  padding-bottom: 1.5rem;
+}
+.spine-node::before {
+  content: "";
+  position: absolute;
+  left: 0.4rem;
+  top: 1.35rem;
+  bottom: 0;
+  width: 1px;
+  background: var(--line-2);
+}
+.spine-node:last-child::before {
+  display: none;
+}
+.spine-dot {
+  position: absolute;
+  left: 0;
+  top: 0.4rem;
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 999px;
+  border: 1px solid var(--line-3);
+  background: var(--bg);
+}
+.spine-node[data-state="ok"] .spine-dot {
+  border-color: var(--ok);
+  background: rgba(63, 191, 111, 0.25);
+}
+.spine-node[data-state="warn"] .spine-dot {
+  border-color: var(--warn);
+  background: rgba(215, 166, 63, 0.25);
+}
+.spine-node[data-state="bad"] .spine-dot {
+  border-color: var(--bad);
+  background: rgba(240, 86, 74, 0.25);
+}
+.spine-node[data-state="info"] .spine-dot {
+  border-color: var(--info);
+  background: rgba(91, 157, 255, 0.25);
+}
+
+/* ---- data tables ---------------------------------------------------- */
 
 table.data {
   width: 100%;
@@ -164,32 +364,35 @@ table.data th {
   text-align: left;
   font-size: 0.6875rem;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
   color: var(--muted);
-  font-weight: 600;
-  padding: 0.5rem 0.65rem;
-  border-bottom: 1px solid var(--line);
+  font-weight: 500;
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid var(--line-2);
   white-space: nowrap;
 }
 table.data td {
-  padding: 0.55rem 0.65rem;
+  padding: 0.6rem 0.7rem;
   border-bottom: 1px solid var(--line);
   vertical-align: top;
 }
-table.data tr:hover td {
-  background: rgba(255, 255, 255, 0.014);
+table.data tbody tr:last-child td {
+  border-bottom: 0;
+}
+table.data tbody tr:hover td {
+  background: rgba(255, 255, 255, 0.012);
 }
 
 pre.code {
-  background: #06080b;
+  background: var(--bg-2);
   border: 1px solid var(--line);
-  border-radius: 4px;
-  padding: 0.7rem 0.8rem;
+  border-radius: 5px;
+  padding: 0.75rem 0.85rem;
   overflow-x: auto;
   font-size: 0.75rem;
-  line-height: 1.55;
-  color: var(--muted-2);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  line-height: 1.6;
+  color: var(--text-2);
+  font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 .scroll-x {
@@ -197,24 +400,19 @@ pre.code {
 }
 
 /* ---- accessibility -------------------------------------------------- *
- * Visible focus for keyboard users on every interactive element, and a
- * reduced-motion escape hatch. These are requirements, not decoration. */
+   Visible focus for keyboard users on every interactive element, and a
+   reduced-motion escape hatch. Requirements, not decoration. */
 
 :focus-visible {
-  outline: 2px solid #6fb2ff;
+  outline: 2px solid #7db4ff;
   outline-offset: 2px;
   border-radius: 3px;
 }
-button.action:focus-visible,
-a:focus-visible,
-input:focus-visible,
-textarea:focus-visible,
-summary:focus-visible {
-  outline: 2px solid #6fb2ff;
-  outline-offset: 2px;
-}
 
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
   *,
   *::before,
   *::after {
@@ -225,98 +423,133 @@ summary:focus-visible {
   }
 }
 
-/* ---- incident submission ------------------------------------------- */
-
-.hero-grid {
-  background-image:
-    radial-gradient(60rem 30rem at 15% -10%, rgba(74, 158, 255, 0.10), transparent 60%),
-    linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-  background-size: 100% 100%, 46px 46px, 46px 46px;
-}
+/* ---- forms ---------------------------------------------------------- */
 
 .field {
   width: 100%;
-  background: #06080b;
+  background: var(--bg-2);
   border: 1px solid var(--line-2);
   border-radius: 5px;
   color: var(--text);
-  padding: 0.6rem 0.7rem;
-  font-size: 0.8125rem;
-  line-height: 1.5;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
 .field::placeholder {
-  color: #5b6675;
+  color: var(--muted-2);
 }
 .field:focus {
   border-color: #3d6fa8;
+  box-shadow: 0 0 0 3px rgba(91, 157, 255, 0.12);
+  outline: none;
 }
 
 textarea.field {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.75rem;
-  line-height: 1.6;
+  font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8125rem;
+  line-height: 1.65;
   resize: vertical;
-}
-
-button.action.primary {
-  background: #1f4d8f;
-  border-color: #2f6fc4;
 }
 
 /* A slow, purposeful pulse used only to mark a stage that is genuinely in
    progress. Never used decoratively. */
 @keyframes stage-pulse {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.45; }
+  50% { opacity: 0.5; }
 }
 .stage-active {
   animation: stage-pulse 1.4s ease-in-out infinite;
 }
 
-/* ---- the causal chain (the signature visual) ------------------------ *
- * A single connected rail: Incident -> Evidence -> Hypothesis -> Safeguard
- * -> Verification -> Memory. The connecting line is what makes the record
- * read as one argument rather than a stack of cards. */
+/* ---- the causal chain diagram (homepage) ---------------------------- *
+   Six real stages, one connected rail. Distinct from a row of cards: the
+   connector carries meaning, and only the final node resolves. */
 
-.chain {
-  position: relative;
+.chain-diagram {
+  display: grid;
+  gap: 0;
+  grid-template-columns: 1fr;
 }
-.chain-node {
+.chain-stage {
   position: relative;
-  padding-left: 2rem;
-  padding-bottom: 1.15rem;
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr);
+  gap: 1rem;
+  padding-bottom: 1.75rem;
 }
-.chain-node::before {
+.chain-stage:last-child {
+  padding-bottom: 0;
+}
+.chain-marker {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+.chain-marker::before {
   content: "";
   position: absolute;
-  left: 0.34rem;
-  top: 1.05rem;
-  bottom: -0.15rem;
+  top: 1.9rem;
+  bottom: -0.25rem;
   width: 1px;
-  background: var(--line-2);
+  background: linear-gradient(to bottom, var(--line-2), var(--line));
 }
-.chain-node:last-child::before {
+.chain-stage:last-child .chain-marker::before {
   display: none;
 }
-.chain-dot {
-  position: absolute;
-  left: 0;
-  top: 0.35rem;
-  width: 0.7rem;
-  height: 0.7rem;
-  border-radius: 999px;
+.chain-badge {
+  position: relative;
+  z-index: 1;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 8px;
   border: 1px solid var(--line-2);
-  background: var(--panel);
+  background: var(--panel-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.75rem;
+  color: var(--text-2);
+}
+.chain-stage[data-final="true"] .chain-badge {
+  border-color: rgba(63, 191, 111, 0.45);
+  background: rgba(63, 191, 111, 0.1);
+  color: #7fe3a2;
+}
+.chain-body {
+  padding-top: 0.35rem;
 }
 
-/* A thin monospace label used above values, giving the record an
-   instrument-panel feel without adding noise. */
-.label {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.625rem;
-  text-transform: uppercase;
-  letter-spacing: 0.11em;
-  color: var(--muted);
+@media (min-width: 60rem) {
+  .chain-diagram {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  .chain-stage {
+    grid-template-columns: 1fr;
+    gap: 0;
+    padding-bottom: 0;
+    padding-right: 1.25rem;
+  }
+  .chain-stage:last-child {
+    padding-right: 0;
+  }
+  .chain-marker {
+    justify-content: flex-start;
+  }
+  .chain-marker::before {
+    top: 1.25rem;
+    left: 2.5rem;
+    right: -1.25rem;
+    bottom: auto;
+    width: auto;
+    height: 1px;
+    background: var(--line-2);
+  }
+  .chain-stage:last-child .chain-marker::before {
+    display: none;
+  }
+  .chain-body {
+    padding-top: 0.85rem;
+  }
 }
-

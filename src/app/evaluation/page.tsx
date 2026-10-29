@@ -9,9 +9,10 @@ import {
   Loading,
   Metric,
   Notice,
+  PageHeader,
   Panel,
   Pill,
-  SectionTitle,
+  Section,
 } from "@/components/ui";
 
 interface EvaluationResponse {
@@ -40,9 +41,12 @@ export default function EvaluationPage() {
 
   if (error) {
     return (
-      <Panel title="Evaluation">
-        <p className="text-[0.8125rem] text-signal-bad">{error}</p>
-      </Panel>
+      <div>
+        <PageHeader eyebrow="System" title="Learning Evaluation" />
+        <Panel>
+          <p className="text-[0.875rem] text-signal-bad">{error}</p>
+        </Panel>
+      </div>
     );
   }
   if (!data) return <Loading label="Loading evaluation…" />;
@@ -53,11 +57,11 @@ export default function EvaluationPage() {
   // explicit empty state rather than a client-side crash on `m.scenarios`.
   if (!m) {
     return (
-      <div className="space-y-5">
-        <SectionTitle
+      <div>
+        <PageHeader
+          eyebrow="System"
           title="Learning Evaluation"
-          as="h1"
-          hint="Did the activated safeguards actually change the outcome? These figures are measured over the controlled scenarios in the last run. They are scenario measurements, not claims about production reliability."
+          lead="Did the activated safeguards actually change the outcome? These figures are measured over the controlled scenarios in the last run. They are scenario measurements, not claims about production reliability."
         />
         <EmptyState title="No scenario run recorded yet">
           Run the demonstrations from the Evaluation Lab. Every metric on this
@@ -70,10 +74,11 @@ export default function EvaluationPage() {
   const pct = (n: number) => `${(n * 100).toFixed(0)}%`;
 
   return (
-    <div className="space-y-5">
-      <SectionTitle
+    <div className="space-y-14">
+      <PageHeader
+        eyebrow="System"
         title="Learning Evaluation"
-        hint="Did the activated safeguards actually change the outcome? These figures are measured over the controlled scenarios in the last run. They are scenario measurements, not claims about production reliability."
+        lead="Did the activated safeguards actually change the outcome? These figures are measured over the controlled scenarios in the last run. They are scenario measurements, not claims about production reliability."
       />
 
       {m.scenarios === 0 ? (
@@ -90,7 +95,8 @@ export default function EvaluationPage() {
             two is what the safeguards changed.
           </Notice>
 
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <Section eyebrow="Outcomes" title="What the safeguards changed">
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <Metric
               label="Unsupported claims caught"
               value={`${m.unsupportedClaimsCaught} / ${m.unsupportedClaims}`}
@@ -128,8 +134,10 @@ export default function EvaluationPage() {
               sub="Valid actions that were blocked. Safe behaviour is not the same as denying everything."
             />
           </div>
+          </Section>
 
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <Section eyebrow="Mechanism" title="Retrieval and evidence quality">
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <Metric
               label="Evidence unavailable"
               value={pct(m.evidenceVerificationFailureRate)}
@@ -154,11 +162,14 @@ export default function EvaluationPage() {
               sub="Repeats that were still allowed through."
             />
           </div>
+          </Section>
 
-          <Panel
+          <Section
+            eyebrow="Distribution"
             title="Decision distribution"
-            hint="Every scenario resolves to exactly one decision."
+            lead="Every scenario resolves to exactly one decision."
           >
+          <Panel>
             <div className="flex flex-wrap gap-2">
               {Object.entries(m.decisions).map(([decision, count]) => (
                 <div
@@ -175,11 +186,14 @@ export default function EvaluationPage() {
               ))}
             </div>
           </Panel>
+          </Section>
 
-          <Panel
+          <Section
+            eyebrow="Evidence"
             title="Per-scenario outcomes"
-            hint="Each row is one controlled scenario. Ground truth is set when the scenario is defined, never inferred from the engine's decision."
+            lead="Each row is one controlled scenario. Ground truth is set when the scenario is defined, never inferred from the engine's decision."
           >
+          <Panel>
             <div
               className="scroll-x"
               role="region"
@@ -246,6 +260,7 @@ export default function EvaluationPage() {
               </table>
             </div>
           </Panel>
+          </Section>
         </>
       )}
     </div>

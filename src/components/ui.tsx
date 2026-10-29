@@ -69,6 +69,7 @@ export function ProvenancePill({ provenance }: { provenance: Provenance }) {
   );
 }
 
+/** A single measured figure. The value is the hero; the label is quiet. */
 export function Metric({
   label,
   value,
@@ -91,44 +92,88 @@ export function Metric({
             ? "text-signal-unknown"
             : "text-paper-100";
   return (
-    <div className="panel rounded p-3.5">
-      <div className="mono text-[0.625rem] uppercase tracking-[0.1em] text-paper-500">
-        {label}
+    <div className="panel p-4">
+      <div className="label">{label}</div>
+      <div className={`tabular mt-3 text-[1.75rem] font-semibold leading-none ${accent}`}>
+        {value}
       </div>
-      <div className={`tabular mt-2 text-2xl font-semibold ${accent}`}>{value}</div>
       {sub ? (
-        <div className="mt-1 text-[0.6875rem] leading-snug text-paper-500">{sub}</div>
+        <div className="mt-2 text-[0.75rem] leading-snug text-paper-500">{sub}</div>
       ) : null}
     </div>
   );
 }
 
-export function SectionTitle({
+/**
+ * A page's opening block: an eyebrow, a single primary heading, and a short
+ * orientation. Used on every route so the top of every page reads the same.
+ */
+export function PageHeader({
+  eyebrow,
   title,
-  hint,
+  lead,
   right,
-  as: Heading = "h2",
+  as: Heading = "h1",
 }: {
+  eyebrow?: string;
   title: string;
-  hint?: string;
+  lead?: string;
   right?: React.ReactNode;
-  /** Use "h1" for a page's single primary heading. */
   as?: "h1" | "h2";
 }) {
   return (
-    <div className="mb-3 flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
-      <div className="min-w-0">
-        <Heading className="text-[0.9375rem] font-semibold tracking-tight">
-          {title}
-        </Heading>
-        {hint ? (
-          <p className="mt-0.5 max-w-2xl text-[0.75rem] leading-relaxed text-paper-500">
-            {hint}
-          </p>
-        ) : null}
+    <header className="mb-10 border-b hairline pb-8">
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
+        <div className="min-w-0 max-w-prose">
+          {eyebrow ? <div className="label mb-3">{eyebrow}</div> : null}
+          <Heading className="heading text-[1.75rem] md:text-[2rem]">{title}</Heading>
+          {lead ? <p className="lead mt-3">{lead}</p> : null}
+        </div>
+        {right ? <div className="shrink-0">{right}</div> : null}
       </div>
-      {right}
-    </div>
+    </header>
+  );
+}
+
+/**
+ * A labelled sub-section within a page. Gives every section the same
+ * generous rhythm and a consistent heading level.
+ */
+export function Section({
+  id,
+  eyebrow,
+  title,
+  lead,
+  right,
+  children,
+  className = "",
+}: {
+  id?: string;
+  eyebrow?: string;
+  title?: string;
+  lead?: string;
+  right?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section id={id} className={`scroll-mt-24 ${className}`}>
+      {title ? (
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+          <div className="min-w-0 max-w-prose">
+            {eyebrow ? <div className="label mb-3">{eyebrow}</div> : null}
+            <h2 className="heading text-[1.375rem] md:text-[1.5rem]">{title}</h2>
+            {lead ? (
+              <p className="mt-2 text-[0.9375rem] leading-relaxed text-paper-500">
+                {lead}
+              </p>
+            ) : null}
+          </div>
+          {right ? <div className="shrink-0">{right}</div> : null}
+        </div>
+      ) : null}
+      {children}
+    </section>
   );
 }
 
@@ -150,10 +195,10 @@ export function Notice({
           ? "border-signal-ok/40 bg-signal-ok/[0.06]"
           : "border-signal-info/40 bg-signal-info/[0.06]";
   return (
-    <div className={`rounded border p-3 ${border}`}>
-      <div className="text-[0.8125rem] font-semibold">{title}</div>
+    <div className={`rounded-md border p-4 ${border}`}>
+      <div className="text-[0.875rem] font-semibold">{title}</div>
       {children ? (
-        <div className="mt-1 text-[0.75rem] leading-relaxed text-paper-300">
+        <div className="mt-1.5 text-[0.8125rem] leading-relaxed text-paper-300">
           {children}
         </div>
       ) : null}
@@ -167,23 +212,23 @@ export function Panel({
   right,
   children,
   className = "",
+  as: Tag = "section",
 }: {
   title?: string;
   hint?: string;
   right?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
+  as?: "section" | "div";
 }) {
   return (
-    <section className={`panel rounded ${className}`}>
+    <Tag className={`panel ${className}`}>
       {title ? (
-        <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 border-b hairline px-3.5 py-2.5">
+        <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 border-b hairline px-5 py-4">
           <div className="min-w-0">
-            <h3 className="text-[0.8125rem] font-semibold tracking-tight break-words">
-              {title}
-            </h3>
+            <h3 className="heading text-[0.9375rem] break-words">{title}</h3>
             {hint ? (
-              <p className="mt-0.5 max-w-2xl text-[0.6875rem] leading-relaxed text-paper-500">
+              <p className="mt-1 max-w-2xl text-[0.8125rem] leading-relaxed text-paper-500">
                 {hint}
               </p>
             ) : null}
@@ -191,8 +236,8 @@ export function Panel({
           {right}
         </header>
       ) : null}
-      <div className="p-3.5">{children}</div>
-    </section>
+      <div className="p-5">{children}</div>
+    </Tag>
   );
 }
 
@@ -207,11 +252,11 @@ export function Field({
   mono?: boolean;
 }) {
   return (
-    <div className="grid grid-cols-1 gap-1 border-b hairline py-1.5 last:border-b-0 sm:grid-cols-[9.5rem_minmax(0,1fr)] sm:gap-3">
-      <div className="mono pt-0.5 text-[0.625rem] uppercase tracking-[0.1em] text-paper-500">
-        {label}
-      </div>
-      <div className={`min-w-0 text-[0.8125rem] leading-relaxed ${mono ? "mono text-[0.75rem]" : ""}`}>
+    <div className="grid grid-cols-1 gap-1 border-b hairline py-2.5 last:border-b-0 sm:grid-cols-[10rem_minmax(0,1fr)] sm:gap-4">
+      <div className="label pt-0.5">{label}</div>
+      <div
+        className={`min-w-0 text-[0.8125rem] leading-relaxed ${mono ? "mono text-[0.75rem]" : ""}`}
+      >
         {children}
       </div>
     </div>
@@ -226,10 +271,10 @@ export function EmptyState({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="rounded border border-dashed hairline px-4 py-6 text-center">
-      <div className="text-[0.8125rem] font-medium text-paper-300">{title}</div>
+    <div className="rounded-md border border-dashed hairline px-6 py-12 text-center">
+      <div className="text-[0.9375rem] font-medium text-paper-300">{title}</div>
       {children ? (
-        <div className="mx-auto mt-1 max-w-md text-[0.75rem] leading-relaxed text-paper-500">
+        <div className="mx-auto mt-2 max-w-md text-[0.8125rem] leading-relaxed text-paper-500">
           {children}
         </div>
       ) : null}
@@ -239,7 +284,7 @@ export function EmptyState({
 
 export function Loading({ label = "Loading…" }: { label?: string }) {
   return (
-    <div className="mono py-6 text-center text-[0.75rem] text-paper-500">
+    <div className="mono py-16 text-center text-[0.8125rem] text-paper-500">
       {label}
     </div>
   );

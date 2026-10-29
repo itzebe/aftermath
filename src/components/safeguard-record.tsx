@@ -53,26 +53,28 @@ function ChainNode({
   index,
   title,
   state,
+  tone,
   children,
 }: {
   index: number;
   title: string;
   state?: React.ReactNode;
+  tone?: Tone;
   children: React.ReactNode;
 }) {
   return (
-    <li className="chain-node">
-      <span className="chain-dot" aria-hidden />
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <h3 className="text-[0.8125rem] font-semibold tracking-tight">
-          <span className="mono mr-1.5 text-[0.6875rem] text-paper-500">
+    <li className="spine-node" data-state={tone}>
+      <span className="spine-dot" aria-hidden />
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1.5">
+        <h3 className="heading text-[1rem]">
+          <span className="mono mr-2 text-[0.75rem] text-paper-600">
             {String(index).padStart(2, "0")}
           </span>
           {title}
         </h3>
         {state}
       </div>
-      <div className="mt-1.5 space-y-2 text-[0.8125rem] leading-relaxed">
+      <div className="mt-3 space-y-3 text-[0.8125rem] leading-relaxed">
         {children}
       </div>
     </li>
@@ -87,18 +89,21 @@ function FactList({
   tone?: Tone;
 }) {
   if (facts.length === 0) {
-    return <p className="text-[0.75rem] text-paper-500">None extracted.</p>;
+    return <p className="text-[0.8125rem] text-paper-500">None extracted.</p>;
   }
   return (
-    <ul className="space-y-1.5">
+    <ul className="space-y-2">
       {facts.map((f, i) => (
-        <li key={`${f.kind}-${f.value}-${i}`} className="rounded border hairline bg-[#0a0d12] px-2.5 py-1.5">
+        <li
+          key={`${f.kind}-${f.value}-${i}`}
+          className="rounded-md border hairline bg-[#090c11] px-3 py-2"
+        >
           <div className="flex flex-wrap items-center gap-2">
             <Pill tone={tone}>{f.kind.replace(/_/g, " ")}</Pill>
             <span className="mono min-w-0 break-all text-[0.75rem]">{f.value}</span>
           </div>
-          <div className="mt-1 border-l-2 border-[#2b3442] pl-2 text-[0.6875rem] leading-snug text-paper-500">
-            <span className="mono">span:</span> {f.source}
+          <div className="mt-1.5 border-l-2 border-[#252d39] pl-2.5 text-[0.75rem] leading-snug text-paper-500">
+            <span className="mono text-paper-600">span:</span> {f.source}
           </div>
         </li>
       ))}
@@ -109,11 +114,14 @@ function FactList({
 function Bullets({ items }: { items: string[] }) {
   if (items.length === 0) return null;
   return (
-    <ul className="space-y-1">
+    <ul className="space-y-1.5">
       {items.map((t, i) => (
-        <li key={i} className="flex gap-2">
-          <span className="mt-[0.45rem] h-1 w-1 shrink-0 rounded-full bg-paper-500" aria-hidden />
-          <span>{t}</span>
+        <li key={i} className="flex gap-2.5">
+          <span
+            className="mt-[0.5rem] h-1 w-1 shrink-0 rounded-full bg-paper-500"
+            aria-hidden
+          />
+          <span className="text-paper-300">{t}</span>
         </li>
       ))}
     </ul>
@@ -125,14 +133,14 @@ export function SafeguardRecordView({ record }: { record: SafeguardRecord }) {
   const c = investigation.categories;
 
   return (
-    <article className="panel overflow-hidden rounded">
-      <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 border-b hairline px-4 py-3">
+    <article className="panel overflow-hidden">
+      <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 border-b hairline px-6 py-5">
         <div className="min-w-0">
           <div className="label">Safeguard record</div>
-          <h2 className="mt-0.5 text-[0.9375rem] font-semibold tracking-tight">
+          <h2 className="heading mt-1.5 text-[1.125rem]">
             {investigation.summary}
           </h2>
-          <div className="mono mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[0.6875rem] text-paper-500">
+          <div className="mono mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[0.6875rem] text-paper-500">
             <span>record {record.recordId.slice(0, 8)}</span>
             <span>incident {record.incidentId.slice(0, 8)}</span>
             <span>{record.createdAt.slice(0, 19).replace("T", " ")}</span>
@@ -147,11 +155,12 @@ export function SafeguardRecordView({ record }: { record: SafeguardRecord }) {
         </div>
       </header>
 
-      <div className="px-4 py-4">
-        <ol className="chain">
+      <div className="px-6 py-7 md:px-8">
+        <ol className="spine">
           <ChainNode
             index={1}
             title="Incident"
+            tone="neutral"
             state={<Pill tone="neutral">reported by a person</Pill>}
           >
             <p className="text-paper-300">
@@ -185,6 +194,7 @@ export function SafeguardRecordView({ record }: { record: SafeguardRecord }) {
           <ChainNode
             index={2}
             title="Evidence"
+            tone={c.confirmedFacts.length > 0 ? "ok" : "warn"}
             state={
               <Pill tone={c.confirmedFacts.length > 0 ? "ok" : "warn"}>
                 {c.observedEvidence.length} observed · {c.confirmedFacts.length} confirmed
@@ -236,6 +246,7 @@ export function SafeguardRecordView({ record }: { record: SafeguardRecord }) {
           <ChainNode
             index={3}
             title="Hypothesis"
+            tone={investigation.diagnosis.actionable ? "warn" : "unknown"}
             state={
               <Pill tone={investigation.diagnosis.actionable ? "warn" : "unknown"}>
                 {investigation.diagnosis.pattern.replace(/_/g, " ")} ·{" "}
@@ -263,6 +274,7 @@ export function SafeguardRecordView({ record }: { record: SafeguardRecord }) {
           <ChainNode
             index={4}
             title="Safeguard"
+            tone={recommendation.action === "BLOCK" ? "bad" : "warn"}
             state={
               <div className="flex flex-wrap gap-2">
                 <Pill tone={recommendation.action === "BLOCK" ? "bad" : "warn"}>
@@ -325,6 +337,7 @@ export function SafeguardRecordView({ record }: { record: SafeguardRecord }) {
           <ChainNode
             index={5}
             title="Verification"
+            tone={VERIFICATION_TONE[verification.state]}
             state={
               <Pill tone={VERIFICATION_TONE[verification.state]}>
                 {VERIFICATION_LABEL[verification.state]}
@@ -374,6 +387,13 @@ export function SafeguardRecordView({ record }: { record: SafeguardRecord }) {
           <ChainNode
             index={6}
             title="Memory"
+            tone={
+              memory.recallVerified
+                ? "ok"
+                : memory.lesson?.state === "completed"
+                  ? "warn"
+                  : "neutral"
+            }
             state={
               <Pill
                 tone={

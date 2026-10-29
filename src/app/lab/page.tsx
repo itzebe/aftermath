@@ -1,5 +1,5 @@
 import { getOverview, getLastRun } from "@/lib/service";
-import { EvidencePill, DecisionPill, Metric, Notice, Pill, ProvenancePill, SectionTitle } from "@/components/ui";
+import { EvidencePill, DecisionPill, Metric, Notice, PageHeader, Pill, ProvenancePill, Section } from "@/components/ui";
 import { RunScenariosButton } from "@/components/run-scenarios";
 
 export const dynamic = "force-dynamic";
@@ -17,22 +17,25 @@ export default async function LabPage() {
 
   if ("error" in overview) {
     return (
-      <Notice tone="bad" title="Lab unavailable">
-        {overview.error}
-      </Notice>
+      <div>
+        <PageHeader eyebrow="System" title="Evaluation Lab" />
+        <Notice tone="bad" title="Lab unavailable">
+          {overview.error}
+        </Notice>
+      </div>
     );
   }
 
-  const { counts, configuration, tatumHealth, memoryHealth, memoryStatus, mainnetRequirement, evaluation } =
+  const { counts, configuration, tatumHealth, memoryHealth, memoryStatus, mainnetRequirement, evaluation, lastRunAt } =
     overview;
 
   return (
-    <div className="space-y-8">
-      <section>
-        <SectionTitle
+    <div className="space-y-16">
+      <div>
+        <PageHeader
+          eyebrow="System"
           title="Evaluation Lab"
-          as="h1"
-          hint="The reliability console: live system state and the controlled scenarios that test the mechanism. Every figure is read from the running system; nothing is illustrative."
+          lead="The reliability console: live system state and the controlled scenarios that test the mechanism. Every figure is read from the running system; nothing is illustrative."
           right={<RunScenariosButton />}
         />
 
@@ -58,7 +61,8 @@ export default async function LabPage() {
           </div>
         ) : null}
 
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Section eyebrow="Overview" title="System state">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <Metric label="Total incidents" value={counts.incidents} />
           <Metric
             label="Verified failures"
@@ -79,14 +83,15 @@ export default async function LabPage() {
             sub="Unknown or awaiting verification."
           />
         </div>
-      </section>
+        </Section>
+      </div>
 
-      <section>
-        <SectionTitle
-          title="Walrus Memory"
-          hint="A write only counts once the relayer job completes and returns a blob id, and recall confirms the record is retrievable."
-        />
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-4">
+      <Section
+        eyebrow="Integrity"
+        title="Walrus Memory"
+        lead="A write only counts once the relayer job completes and returns a blob id, and recall confirms the record is retrievable."
+      >
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
           <Metric
             label="Completed Mainnet writes"
             value={mainnetRequirement.completedLive}
@@ -129,7 +134,7 @@ export default async function LabPage() {
         <div className="panel mt-3 rounded p-3.5">
           <div className="grid gap-3 md:grid-cols-2">
             <div>
-              <div className="mono text-[0.625rem] uppercase tracking-[0.1em] text-paper-500">
+              <div className="label">
                 Backend
               </div>
               <div className="mt-1.5 flex items-center gap-2">
@@ -140,12 +145,12 @@ export default async function LabPage() {
                   {configuration.memory.network} · {configuration.memory.relayerUrl}
                 </span>
               </div>
-              <div className="mt-2 text-[0.75rem] leading-relaxed text-paper-300">
+              <div className="mt-2 break-words text-[0.75rem] leading-relaxed text-paper-300">
                 {configuration.memory.reason}
               </div>
             </div>
             <div>
-              <div className="mono text-[0.625rem] uppercase tracking-[0.1em] text-paper-500">
+              <div className="label">
                 Relayer health
               </div>
               <div className="mt-1.5 flex items-center gap-2">
@@ -172,20 +177,20 @@ export default async function LabPage() {
                   </span>
                 ) : null}
               </div>
-              <div className="mt-2 text-[0.75rem] leading-relaxed text-paper-300">
+              <div className="mt-2 break-words text-[0.75rem] leading-relaxed text-paper-300">
                 {memoryStatus.detail}
               </div>
             </div>
           </div>
         </div>
-      </section>
+      </Section>
 
-      <section>
-        <SectionTitle
-          title="Tatum verification health"
-          hint="Read-only Sui Mainnet verification. No transaction is ever broadcast."
-        />
-        <div className="panel rounded p-3.5">
+      <Section
+        eyebrow="Integrity"
+        title="Tatum verification health"
+        lead="Read-only Sui Mainnet verification. No transaction is ever broadcast."
+      >
+        <div className="panel p-5">
           <div className="flex flex-wrap items-center gap-2">
             <Pill tone={tatumHealth.ok ? "ok" : "bad"}>
               {tatumHealth.ok ? "healthy" : "unavailable"}
@@ -199,7 +204,7 @@ export default async function LabPage() {
               {configuration.tatum.interface}
             </span>
           </div>
-          <div className="mt-2 text-[0.75rem] leading-relaxed text-paper-300">
+          <div className="mt-2 break-words text-[0.75rem] leading-relaxed text-paper-300">
             {tatumHealth.detail}
           </div>
           {!configuration.tatum.configured ? (
@@ -212,14 +217,14 @@ export default async function LabPage() {
             </div>
           ) : null}
         </div>
-      </section>
+      </Section>
 
-      <section>
-        <SectionTitle
-          title="Audit index persistence"
-          hint="Where the incident index is stored. The index is an audit record, not an authority; Tatum and Walrus Memory remain the sources of truth."
-        />
-        <div className="panel rounded p-3.5">
+      <Section
+        eyebrow="Persistence"
+        title="Audit index"
+        lead="Where the incident index is stored. The index is an audit record, not an authority; Tatum and Walrus Memory remain the sources of truth."
+      >
+        <div className="panel p-5">
           <div className="flex flex-wrap items-center gap-2">
             <Pill tone={configuration.persistence.durable ? "ok" : "warn"}>
               {configuration.persistence.backend}
@@ -230,7 +235,7 @@ export default async function LabPage() {
                 : "per-instance · not shared"}
             </span>
           </div>
-          <div className="mt-2 text-[0.75rem] leading-relaxed text-paper-300">
+          <div className="mt-2 break-words text-[0.75rem] leading-relaxed text-paper-300">
             {configuration.persistence.detail}
           </div>
           {!configuration.persistence.durable ? (
@@ -243,15 +248,15 @@ export default async function LabPage() {
             </div>
           ) : null}
         </div>
-      </section>
+      </Section>
 
-      <section>
-        <SectionTitle
-          title="Evaluation"
-          hint="Measured over the controlled scenarios in the last run. These are scenario measurements, not claims about production reliability."
-        />
+      <Section
+        eyebrow="Measurement"
+        title="Evaluation"
+        lead="Measured over the controlled scenarios in the last run. These are scenario measurements, not claims about production reliability."
+      >
         {evaluation ? (
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <Metric
               label="Unsupported claims caught"
               value={`${evaluation.unsupportedClaimsCaught}/${evaluation.unsupportedClaims}`}
@@ -315,16 +320,20 @@ export default async function LabPage() {
             />
           </div>
         ) : null}
-      </section>
+      </Section>
 
-      <section>
-        <SectionTitle
-          title="Last scenario run"
-          hint="Each scenario shows the agent claim, the evidence, and the resulting decision."
-        />
+      <Section
+        eyebrow="Evidence"
+        title="Last scenario run"
+        lead={
+          lastRunAt
+            ? `Each scenario shows the agent claim, the evidence, and the resulting decision. This is the most recent run recorded, executed ${lastRunAt.slice(0, 19).replace("T", " ")} UTC.`
+            : "Each scenario shows the agent claim, the evidence, and the resulting decision."
+        }
+      >
         {lastRun ? (
           <div
-            className="panel scroll-x rounded"
+            className="panel scroll-x"
             role="region"
             aria-label="Last scenario run"
             tabIndex={0}
@@ -368,7 +377,7 @@ export default async function LabPage() {
             Use “Run from scratch” to execute the controlled scenarios.
           </Notice>
         )}
-      </section>
+      </Section>
     </div>
   );
 }
