@@ -69,11 +69,24 @@ marked.use({
     // the reader knows which, without altering the code itself.
     code({ text, lang }) {
       const label = lang === "bash" ? "shell" : "console";
-      return `<figure class="term"><figcaption class="term-bar"><span class="term-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="term-label">${label}</span></figcaption><pre><code>${esc(text)}</code></pre></figure>\n`;
+      return `<figure class="term"><figcaption class="term-bar"><span class="term-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="term-label">${label}</span></figcaption><pre tabindex="0"><code>${esc(text)}</code></pre></figure>\n`;
     },
   },
 });
-const bodyHtml = marked.parse(md);
+// The H1 title becomes the hero heading below, so drop it from the article
+// body: otherwise the page would carry two <h1> elements.
+const mdBody = md.replace(/^#\s+.*(?:\n|$)/, "");
+// A wide table overflows on a phone, so wrap each one in a focusable scroll
+// region. Keyboard users can then reach the horizontal scroll (axe's
+// scrollable-region-focusable rule), and the region is labelled for screen
+// readers.
+const bodyHtml = marked
+  .parse(mdBody)
+  .replace(
+    /<table>/g,
+    '<div class="table-wrap" role="region" aria-label="Table" tabindex="0"><table>',
+  )
+  .replace(/<\/table>/g, "</table></div>");
 
 // --- derive metadata from the source ---------------------------------------
 const titleLine = md.split("\n").find((l) => /^#\s+/.test(l));
@@ -91,15 +104,16 @@ const srcListItems = (md.match(/^\s*(?:[-*]|\d+\.)\s+/gm) || []).length;
 const srcLinks = (md.match(/\]\(https?:\/\/[^)]+\)|<https?:\/\/[^>]+>/g) || []).length;
 
 const htmlTableRows = (bodyHtml.match(/<tr>/g) || []).length;
-const htmlCodeBlocks = (bodyHtml.match(/<pre><code/g) || []).length;
+const htmlCodeBlocks = (bodyHtml.match(/<pre[^>]*><code/g) || []).length;
 const htmlListItems = (bodyHtml.match(/<li>/g) || []).length;
 const htmlLinks = (bodyHtml.match(/href="https?:\/\//g) || []).length;
 
-if (headings.length !== srcHeadings.length)
-  fail(`heading count mismatch: source ${srcHeadings.length}, rendered ${headings.length}`);
+if (headings.length !== srcHeadings.length - 1)
+  fail(`heading count mismatch: source ${srcHeadings.length - 1} (excluding the hero H1), rendered ${headings.length}`);
 
-// Every source heading's text must appear verbatim in the rendered output.
-for (const h of srcHeadings) {
+// Every source heading's text must appear verbatim in the rendered output. The
+// H1 is rendered as the hero heading, the rest inside the article.
+for (const h of srcHeadings.slice(1)) {
   const bare = h.replace(/[`*]/g, "");
   if (!bodyHtml.includes(bare.split(" ").slice(0, 3).join(" ")))
     fail(`heading missing from output: "${h}"`);
@@ -323,7 +337,6 @@ const html = `<!doctype html>
 
   /* ---- article ---- */
   article { min-width: 0; max-width: var(--max); overflow-wrap: break-word; }
-  article > h1 { display: none; } /* shown in the hero */
   article h2 {
     font-size: clamp(1.3rem, 3vw, 1.6rem); line-height: 1.22; letter-spacing: -.015em;
     margin: 3rem 0 .8rem; padding-top: 1.2rem; border-top: 1px solid var(--line);
@@ -367,9 +380,11 @@ const html = `<!doctype html>
     font-size: .8125rem; line-height: 1.6; white-space: pre;
   }
 
+  .table-wrap { margin: 1.3rem 0; overflow-x: auto; }
+  .table-wrap:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
   table {
-    width: 100%; border-collapse: collapse; margin: 1.3rem 0;
-    font-size: .84375rem; display: block; overflow-x: auto;
+    width: 100%; border-collapse: collapse;
+    font-size: .84375rem;
   }
   th, td { border: 1px solid var(--line); padding: .5rem .65rem; text-align: left; vertical-align: top; }
   th { background: var(--panel); font-weight: 600; font-size: .75rem; letter-spacing: .02em; color: var(--muted-2); white-space: nowrap; }
@@ -425,7 +440,7 @@ const html = `<!doctype html>
 
 <div class="layout">
   <section class="hero">
-    <p class="kicker">Field notes · commit 10e3b88</p>
+    <p class="kicker">Field notes · Walrus Memory × Tatum</p>
     <h1>${esc(pageTitle)}</h1>
     ${subtitle ? `<p class="lede">${esc(subtitle)}</p>` : ""}
     <ol class="chain" aria-label="The AFTERMATH pipeline, in order">
