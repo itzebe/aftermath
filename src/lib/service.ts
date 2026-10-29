@@ -347,6 +347,7 @@ export async function submitIncident(
         client: resolveModelClient(config),
         text: s.text,
         timeoutMs: config.ai.timeoutMs,
+        maxOutputTokens: config.ai.maxOutputTokens,
         ...(s.service ? { service: s.service } : {}),
         ...(s.expectedBehavior ? { expectedBehavior: s.expectedBehavior } : {}),
         ...(s.actualBehavior ? { actualBehavior: s.actualBehavior } : {}),

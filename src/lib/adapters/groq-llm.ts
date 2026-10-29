@@ -35,7 +35,7 @@ export interface GroqClientOptions {
 }
 
 interface GroqChatResponse {
-  choices?: Array<{ message?: { content?: string | null } }>;
+  choices?: Array<{ message?: { content?: string | null }; finish_reason?: string | null }>;
   usage?: { prompt_tokens?: number; completion_tokens?: number };
   error?: { message?: string; type?: string; code?: string };
 }
@@ -135,12 +135,26 @@ export class GroqModelClient implements ModelClient {
       return { ok: false, kind: "invalid_response", detail: "the provider response was not valid JSON" };
     }
 
-    const content = parsed.choices?.[0]?.message?.content;
+    const choice = parsed.choices?.[0];
+    const content = choice?.message?.content;
     if (typeof content !== "string" || content.trim() === "") {
       return {
         ok: false,
         kind: "invalid_response",
         detail: "the provider returned no completion content",
+      };
+    }
+
+    // A `length` finish reason means the model hit the completion ceiling
+    // mid-answer. For a JSON-schema request that always means a truncated,
+    // unparseable document, so refuse it here rather than let the engine try to
+    // salvage a partial object. This is the failure mode a too-small
+    // `max_completion_tokens` produces with a reasoning model.
+    if (choice?.finish_reason === "length") {
+      return {
+        ok: false,
+        kind: "invalid_response",
+        detail: "the provider stopped early: the completion hit its token ceiling before finishing",
       };
     }
 

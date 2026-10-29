@@ -286,6 +286,7 @@ cannot create the account for you.
 | --- | --- |
 | `GROQ_API_KEY` | Groq API key (free tier). Server-side only. When unset, the record runs deterministic-only and says so. |
 | `AFTERMATH_AI_TIMEOUT_MS` | Per-request ceiling for an AI reading. Defaults to `20000`. |
+| `AFTERMATH_AI_MAX_OUTPUT_TOKENS` | Completion-token ceiling for an AI reading. `gpt-oss-120b` counts its reasoning tokens against this budget, so too small a value truncates the structured answer. Defaults to `8192`, clamped to the provider maximum (`65536`). |
 | `AFTERMATH_AI_VERIFY_TOKEN` | Bearer token for the read-only `POST /api/ai/verify` endpoint. When unset the endpoint is disabled (fails closed) and returns `503`. |
 | `AFTERMATH_AI_VERIFY_MAX` | Requests allowed per caller per window on the verify endpoint. Defaults to `5`. |
 | `AFTERMATH_AI_VERIFY_WINDOW_MS` | Length of the verify endpoint's rate-limit window. Defaults to `60000`. |

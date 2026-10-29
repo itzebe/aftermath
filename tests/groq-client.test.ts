@@ -32,6 +32,7 @@ function baseConfig(overrides: Partial<AftermathConfig["ai"]> = {}): AftermathCo
       model: "openai/gpt-oss-120b",
       apiKey: null,
       timeoutMs: 20000,
+      maxOutputTokens: 8192,
       ...overrides,
     },
     aiVerify: { token: null, maxRequests: 5, windowMs: 60000 },
@@ -159,6 +160,26 @@ describe("GroqModelClient", () => {
     const result = await client.complete(request);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.kind).toBe("invalid_response");
+  });
+
+  it("refuses a length-truncated completion as invalid_response", async () => {
+    // A reasoning model that exhausts its completion budget mid-answer returns
+    // HTTP 200 with finish_reason "length" and partial JSON. It must not be
+    // accepted as a usable result.
+    const client = new GroqModelClient({
+      apiKey: "k",
+      model: "m",
+      fetchImpl: (async () =>
+        jsonResponse({
+          choices: [{ message: { content: '{"interpretation":"partial' }, finish_reason: "length" }],
+        })) as unknown as typeof fetch,
+    });
+    const result = await client.complete(request);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.kind).toBe("invalid_response");
+      expect(result.detail).toMatch(/token ceiling/i);
+    }
   });
 
   it("targets the fixed Groq endpoint", () => {

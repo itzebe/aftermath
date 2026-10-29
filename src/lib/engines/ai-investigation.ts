@@ -31,8 +31,13 @@ import { redact } from "@/lib/util/redact";
 
 /** The material is capped before it is sent, preserving head and tail. */
 const AI_MATERIAL_LIMIT = 60_000;
-/** Bound the response so a runaway generation cannot consume the budget. */
-const AI_MAX_OUTPUT_TOKENS = 2_048;
+/**
+ * Fallback completion ceiling when the caller does not supply one. Kept in
+ * sync with `AI_DEFAULT_MAX_OUTPUT_TOKENS`; the live callers pass the
+ * configured value. `gpt-oss-120b` counts its reasoning tokens against this
+ * budget, so a small cap truncates the structured answer.
+ */
+const AI_MAX_OUTPUT_TOKENS = 8_192;
 /** Per-request ceiling. The route's own budget is larger than this. */
 export const AI_TIMEOUT_MS = 20_000;
 
@@ -182,9 +187,12 @@ export async function runAiInvestigation(input: {
   actualBehavior?: string;
   /** Per-request ceiling. Defaults to `AI_TIMEOUT_MS` when omitted. */
   timeoutMs?: number;
+  /** Completion-token ceiling. Defaults to `AI_MAX_OUTPUT_TOKENS` when omitted. */
+  maxOutputTokens?: number;
 }): Promise<AiAnalysis> {
   const { client } = input;
   const timeoutMs = input.timeoutMs ?? AI_TIMEOUT_MS;
+  const maxOutputTokens = input.maxOutputTokens ?? AI_MAX_OUTPUT_TOKENS;
   // Redact before the material leaves the process. A pasted log often contains
   // a token by accident; the model never needs it.
   const material = redact(input.text);
@@ -204,7 +212,7 @@ export async function runAiInvestigation(input: {
         { role: "user", content: buildUserMessage(bounded, input) },
       ],
       jsonSchema: { name: "incident_analysis", schema: RESPONSE_SCHEMA },
-      maxOutputTokens: AI_MAX_OUTPUT_TOKENS,
+      maxOutputTokens,
       temperature: 0.1,
       timeoutMs,
     });

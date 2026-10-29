@@ -62,6 +62,14 @@ export interface AftermathConfig {
     model: string;
     apiKey: string | null;
     timeoutMs: number;
+    /**
+     * Ceiling on the model's completion. `gpt-oss-120b` is a reasoning model:
+     * its hidden reasoning tokens are counted against this budget, so a small
+     * cap truncates the schema-constrained JSON and the provider rejects it.
+     * Configurable so the operator can raise it without a code change; clamped
+     * to the provider's documented maximum.
+     */
+    maxOutputTokens: number;
   };
   /**
    * Read-only AI verification endpoint.
@@ -91,6 +99,23 @@ export interface AftermathConfig {
 /** The Groq model used for AI-assisted analysis. Fixed: the free-tier model. */
 export const GROQ_MODEL = "openai/gpt-oss-120b";
 
+/**
+ * `gpt-oss-120b` caps `max_completion_tokens` at 65,536 (confirmed against the
+ * live API: 131,072 is rejected because the cap is smaller than the context
+ * window). Values above this are clamped down rather than sent.
+ */
+export const GROQ_MAX_COMPLETION_TOKENS = 65_536;
+
+/**
+ * Default completion ceiling. The previous fixed value of 2,048 truncated the
+ * schema-constrained JSON whenever the reasoning model spent many tokens
+ * thinking (observed: 846–1,401 reasoning tokens on a small incident), which the
+ * provider rejects as an incomplete document. 8,192 leaves ample room for both
+ * the reasoning trace and the structured answer at negligible cost on the free
+ * tier.
+ */
+export const AI_DEFAULT_MAX_OUTPUT_TOKENS = 8_192;
+
 function optional(name: string): string | null {
   const value = process.env[name];
   if (!value || value.trim() === "") return null;
@@ -103,6 +128,16 @@ function positiveInt(name: string, fallback: number): number {
   if (raw === null) return fallback;
   const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
+}
+
+/**
+ * As `positiveInt`, but also clamps the result to `max`. Used for values that
+ * are passed to a provider verbatim: an out-of-range setting falls back to the
+ * default rather than being rejected by the API at request time.
+ */
+function clampPositiveInt(name: string, fallback: number, max: number): number {
+  const value = positiveInt(name, fallback);
+  return Math.min(value, max);
 }
 
 /** True when `dir` exists (or can be created) and accepts writes. */
@@ -177,6 +212,13 @@ export function loadConfig(): AftermathConfig {
         model: GROQ_MODEL,
         apiKey: groqKey,
         timeoutMs: positiveInt("AFTERMATH_AI_TIMEOUT_MS", 20_000),
+        // Clamp to the provider's documented maximum so a bad value cannot be
+        // sent straight to the API and rejected there.
+        maxOutputTokens: clampPositiveInt(
+          "AFTERMATH_AI_MAX_OUTPUT_TOKENS",
+          AI_DEFAULT_MAX_OUTPUT_TOKENS,
+          GROQ_MAX_COMPLETION_TOKENS,
+        ),
       };
     })(),
     aiVerify: {

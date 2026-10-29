@@ -18,7 +18,7 @@ function config(token: string | null): AftermathConfig {
       forceSimulated: true,
     },
     tatum: { rpcUrl: "x", grpcUrl: "x", graphqlUrl: "x", apiKey: null, timeoutMs: 12000 },
-    ai: { provider: "none", model: "openai/gpt-oss-120b", apiKey: null, timeoutMs: 20000 },
+    ai: { provider: "none", model: "openai/gpt-oss-120b", apiKey: null, timeoutMs: 20000, maxOutputTokens: 8192 },
     aiVerify: { token, maxRequests: 3, windowMs: 60_000 },
     dbPath: ":memory:",
     harnessDir: "/tmp/h",

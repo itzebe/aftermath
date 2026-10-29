@@ -42,6 +42,7 @@ export async function runAiVerification(input: {
     client,
     text: input.text,
     timeoutMs: config.ai.timeoutMs,
+    maxOutputTokens: config.ai.maxOutputTokens,
     ...(input.service ? { service: input.service } : {}),
     ...(input.expectedBehavior ? { expectedBehavior: input.expectedBehavior } : {}),
     ...(input.actualBehavior ? { actualBehavior: input.actualBehavior } : {}),
