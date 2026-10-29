@@ -60,18 +60,25 @@ Incident -> Evidence -> Hypothesis -> Safeguard -> Verification -> Memory
   material, not proof, so with no connected source the assessment is `UNKNOWN`.
   A Sui digest, if present, is looked up read-only through Tatum and folded in.
 - **Hypothesis** — a deterministic, rule-based diagnosis with a confidence. A
-  rate limit or timeout is classified as `evidence_unavailable`, never a failure.
+  rate limit or timeout *on its own* is classified as `evidence_unavailable`,
+  never a failure; but a named mechanism (such as database connection-pool
+  exhaustion) outranks the transport symptom, so a pool incident is diagnosed
+  as `connection_pool_exhaustion` and reasoned from its own measurements.
 - **Safeguard** — a specific, testable recommendation: rule statement, failure
-  mode, supporting evidence, assumptions, test plan, success criteria. Validated
-  through the shared rule engine; a single submission's rule is `proposed`, never
-  `active`.
+  mode, supporting evidence, assumptions, test plan, success criteria. The
+  recommendation is pattern-specific — a pool incident yields a control that
+  instruments acquisition and release, with measurable success criteria — not a
+  generic "require verification". Validated through the shared rule engine; a
+  single submission's rule is `proposed`, never `active`.
 - **Verification** — the decision engine is executed twice (baseline vs.
   safeguarded) and both decisions are recorded. The state is `test_executed`,
   never `verified`: one incident cannot prove a repeat was prevented.
 - **Memory** — the incident and lesson are written through the Walrus Memory
   adapter with content-hash idempotency keys; recall is reported separately from
-  storage, and recalled records are labelled confirmed recurrence vs. possible
-  similarity.
+  storage, and recalled records are labelled by documented criteria: confirmed
+  recurrence, candidate pattern match (recurrence *not* established), or
+  possible similarity. The similarity distance is shown as a ranking, not a
+  probability.
 
 There is **no language model in this path**. The record states its
 `extractionMethod` as `rule-based` so a reader knows what produced it.

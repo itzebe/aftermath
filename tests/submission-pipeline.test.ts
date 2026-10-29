@@ -8,6 +8,7 @@ import {
   submissionId,
 } from "@/lib/engines/submission-pipeline";
 import type { AuditStore } from "@/lib/db/audit-store";
+import { POOL_EXHAUSTION_INCIDENT } from "./fixtures/incidents";
 
 const stores: AuditStore[] = [];
 afterEach(async () => {
@@ -125,5 +126,88 @@ describe("submission pipeline", () => {
     await runSubmissionPipeline({ text: INCIDENT }, d);
     const counts = await d.store.counts();
     expect(counts.records).toBe(1);
+  });
+});
+
+/**
+ * Regression, end to end: a connection-pool incident is reasoned from its own
+ * evidence and produces a pool-specific safeguard, not the generic
+ * "unknown outcome" recommendation.
+ */
+describe("submission pipeline — connection-pool incident", () => {
+  it("classifies and safeguards the reported mechanism", async () => {
+    const d = deps();
+    const record = await runSubmissionPipeline(
+      { text: POOL_EXHAUSTION_INCIDENT, service: "payment-api" },
+      d,
+    );
+    expect(record.investigation.diagnosis.pattern).toBe("connection_pool_exhaustion");
+    // The safeguard names the pool mechanism, not the generic fallback.
+    expect(record.recommendation.statement).toMatch(/pool/i);
+    expect(record.recommendation.successCriteria).toMatch(/utilization|utilisation|threshold/i);
+    expect(record.recommendation.testPlan.join(" ")).toMatch(/pool|acquisition/i);
+  });
+
+  it("does not record a verdict from material that establishes no outcome", async () => {
+    const d = deps();
+    const record = await runSubmissionPipeline(
+      { text: POOL_EXHAUSTION_INCIDENT },
+      d,
+    );
+    // No authoritative source answered, so the outcome is not established and
+    // no success claim may be allowed to stand.
+    expect(record.decision.decision).not.toBe("ALLOW");
+    expect(record.verification.state).not.toBe("verified");
+  });
+
+  it("does not confirm a recurrence from a merely similar first occurrence", async () => {
+    const d = deps();
+    const record = await runSubmissionPipeline(
+      { text: POOL_EXHAUSTION_INCIDENT },
+      d,
+    );
+    for (const m of record.recalledMemories) {
+      expect(m.relation).not.toBe("confirmed_recurrence");
+      expect(m.recurrenceEstablished).toBe(false);
+      expect(m.matchBasis.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("labels a seeded, same-pattern prior record as a candidate match, not a recurrence", async () => {
+    const d = deps();
+    // Seed a prior lesson that shares the domain and pattern. An incident-domain
+    // submission carries no authoritative evidence reference, so the documented
+    // recurrence criteria are NOT met and the record must not be labelled a
+    // confirmed recurrence.
+    await d.memory.rememberLesson({
+      type: "corrective_lesson",
+      domain: "incident",
+      failure_pattern: "connection_pool_exhaustion",
+      observation: "pool exhausted under load",
+      verified_evidence: "prior incident, no authoritative record",
+      corrective_rule: "Instrument connection acquisition and release.",
+      scope: "incident:investigate_reported_failure",
+      validation_status: "proposed",
+      rule_version: 1,
+      incident_id: "inc-prior",
+      evidence_reference: "none",
+      created_at: new Date().toISOString(),
+      provenance: "simulated",
+    });
+
+    const record = await runSubmissionPipeline(
+      { text: POOL_EXHAUSTION_INCIDENT, service: "payment-api" },
+      d,
+    );
+    expect(record.recalledMemories.length).toBeGreaterThan(0);
+    const poolMatch = record.recalledMemories.find(
+      (m) => m.failurePattern === "connection_pool_exhaustion",
+    );
+    expect(poolMatch).toBeDefined();
+    expect(poolMatch!.relation).toBe("candidate_pattern_match");
+    expect(poolMatch!.recurrenceEstablished).toBe(false);
+    expect(poolMatch!.matchBasis).toMatch(/not established/i);
+    // A simulated recall must not be presented as a live Mainnet recall.
+    expect(poolMatch!.provenance).toBe("simulated");
   });
 });

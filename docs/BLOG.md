@@ -151,17 +151,27 @@ and a model here would make the output unauditable. The record states its
 vocabulary the controlled scenarios use, producing a deterministic diagnosis
 with a confidence and an applicability — a hypothesis, exactly as in the
 scenario engine, never a verdict. The single most important classification the
-product makes lives here: a rate limit or a timeout is classified as
-`evidence_unavailable`, not as a failure. The dependency did not answer; the
+product makes lives here: a rate limit or a timeout, on its own, is classified
+as `evidence_unavailable`, not as a failure. The dependency did not answer; the
 operation's true outcome is unknown; recording it as a failure would convert
-missing evidence into a verdict.
+missing evidence into a verdict. But a *named mechanism* outranks a transport
+symptom. If the material states that the database connection pool was
+exhausted, the diagnosis is `connection_pool_exhaustion` — reasoned from the
+pool measurements in the material — and a timeout in the same text is treated
+as a symptom of that mechanism, not as a separate unknown. The precedence is
+deliberate and tested: the material is read for what it actually establishes
+before it is reduced to "we could not tell".
 
 **Safeguard.** The diagnosis yields a specific, testable recommendation: a rule
 statement, the failure mode it addresses, why the evidence supports it, the
-assumptions it rests on, a test plan, and success criteria. It is validated
-through the same rule engine the scenarios use. A single submission persists its
-rule as **proposed**, never **active** — one incident cannot justify a standing
-rule, and the record says so.
+assumptions it rests on, a test plan, and success criteria. The recommendation is
+*pattern-specific*: a connection-pool incident yields a control that instruments
+connection acquisition and release, alerts on pool saturation, and states a
+measurable success criterion (utilisation below a declared threshold, acquisition
+latency within a declared budget), rather than a generic "require verification".
+It is validated through the same rule engine the scenarios use. A single
+submission persists its rule as **proposed**, never **active** — one incident
+cannot justify a standing rule, and the record says so.
 
 **Verification.** This is where the product refuses to flatter itself. The
 recommendation is verified by *actually executing* the decision engine twice for
@@ -177,11 +187,16 @@ the label is honest about how much a genuine test of one incident can establish.
 **Memory.** The incident and the corrective lesson are written through the same
 Walrus Memory adapter the scenarios use, with content-hash idempotency keys, and
 recall is reported separately from storage. Recalled prior records are labelled
-by *how* they relate: a lesson whose failure pattern matches exactly is a
-**confirmed recurrence**; a looser match is a **possible similarity**; a first
-occurrence recalls nothing and says so. When the memory backend is simulated,
-the record is stamped `simulated` and says that these writes were not stored on
-Walrus Mainnet.
+by *how* they relate, using documented criteria rather than the raw similarity
+score: a lesson that parses as a structured record, matches the current domain
+and failure pattern exactly, **and** is anchored to a traceable evidence
+reference is a **confirmed recurrence**; the same match without that anchor is a
+**candidate pattern match**, and the record says recurrence is *not* established;
+a looser match is a **possible similarity**; a first occurrence recalls nothing
+and says so. The vector distance is shown as a retrieval ranking, never as a
+probability, and each recalled record carries the comparison behind its label.
+When the memory backend is simulated, the record is stamped `simulated` and says
+that these writes were not stored on Walrus Mainnet.
 
 ### Idempotency, again
 
@@ -202,6 +217,46 @@ the dependency asked for — and **records no verdict about the incident**. A
 transport problem on the way to an investigation is not a result of the
 investigation. The form says as much, and a retry is safe because the record id
 is deterministic.
+
+### Three correctness fixes, and the tests that pin them
+
+Three defects were demonstrated on the submission path. Each was a way of
+reading more certainty out of the material than the material contains, so each
+fix is accompanied by a regression test that fails on the old behaviour.
+
+**1. Ordinary words were extracted as error codes.** The first extractor
+matched `E[A-Z]{3,}` and any `WORD_WORD` shape. That is a reasonable guess for
+`ERR_...` and `SQLSTATE`, but it also matched plain English field labels written
+in upper case — `ENVIRONMENT`, `EXPECTED`, `ERROR` — and reported them as error
+codes. The fix inverts the rule: a token is a code only when it is
+*code-shaped* (an explicit prefix such as `ERR_` or `ORA-`, a labelled
+`SQLSTATE`, a letter-plus-digits form like `E5031`, an underscored form that
+also contains a digit, or a value from the finite set of real `errno` constants).
+A bare capitalised word is never a code, and a generic label is not promoted to
+one merely because an `error_code:` field precedes it.
+
+**2. A named mechanism was reduced to "unknown outcome".** A connection-pool
+exhaustion incident contains a timeout, and the diagnosis checked the timeout
+first — so it classified a fully-described pool failure as
+`evidence_unavailable`, discarding the mechanism the material actually stated.
+The fix reorders the classification so a concrete mechanism outranks a transport
+symptom: pool exhaustion is diagnosed as `connection_pool_exhaustion`, and the
+pool measurements in the material (active/idle/max connections, utilisation,
+acquisition latency) are extracted as observed evidence with their spans. The
+investigation then reasons from them — it names connection-release, concurrency,
+and slow-query hypotheses, asks the pool-specific unknowns, and proposes
+pool-specific checks — instead of treating the incident as an unknown outcome.
+
+**3. Similarity was reported as confirmed recurrence.** A recalled memory that
+was merely *semantically similar* was labelled `confirmed_recurrence`. The fix
+makes the recurrence criteria explicit and testable in one place: recurrence is
+confirmed only when the recalled record parses as a structured lesson, matches
+the current domain and failure pattern exactly, and the current incident carries
+a traceable evidence reference. A same-pattern match without that anchor is a
+`candidate_pattern_match` that states recurrence is *not* established; anything
+weaker is a `possible_similarity`. The vector distance is shown as a retrieval
+ranking, never a probability, and recalled records are deduplicated on their
+stable identity without altering what was returned.
 
 ### Where the reliability console lives
 

@@ -24,7 +24,7 @@ import {
   type SafeguardRule,
 } from "@/lib/schemas";
 import type { EvidenceAdapter } from "@/lib/adapters/evidence";
-import type { MemoryAdapter, MemoryWriteReceipt } from "@/lib/adapters/memory";
+import type { MemoryAdapter, MemoryWriteReceipt, RecalledLesson } from "@/lib/adapters/memory";
 import type { AuditStore } from "@/lib/db/audit-store";
 import { incidentToMemoryText, lessonToMemoryText } from "@/lib/adapters/memory";
 import { proposeRule, validateRule } from "@/lib/engines/rule-engine";
@@ -38,6 +38,7 @@ import {
   buildRecommendation,
   verifySafeguard,
 } from "@/lib/engines/safeguard-verification";
+import { classifyRecurrence, dedupeRecalled } from "@/lib/engines/recurrence";
 import { IncidentSchema, CorrectiveLessonRecordSchema } from "@/lib/schemas";
 
 export interface InvestigationDeps {
@@ -137,8 +138,15 @@ export async function runSubmissionPipeline(
   const recalled = await deps.memory.recallRelevantLessons(recallQuery, {
     limit: 5,
   });
-  const recalledMemories: RecalledMemory[] = recalled.map((r) =>
-    describeRecall(r, investigation.diagnosis.pattern),
+  const recalledMemories: RecalledMemory[] = dedupeRecalled(
+    recalled.map((r) =>
+      describeRecall(r, {
+        domain: investigation.domain,
+        pattern: investigation.diagnosis.pattern,
+        hasAuthoritativeReference:
+          investigation.domain === "finance" && signals.digests.length > 0,
+      }),
+    ),
   );
 
   // Stage D: propose and validate the safeguard against the shared rule engine.
@@ -270,42 +278,49 @@ export async function runSubmissionPipeline(
 /**
  * Describe how a recalled record relates to the current submission.
  *
- * The relation is derived from the recalled lesson's own fields, never from a
- * claim about memory improving outcomes. A distance below the relayer's
- * similarity threshold, with a matching domain and pattern, is a confirmed
- * recurrence; a looser match is a possible similarity.
+ * The relation is decided by the documented recurrence criteria in
+ * `engines/recurrence.ts`, from the recalled lesson's own structured fields —
+ * never from the vector distance, and never from the mere fact that the record
+ * was returned. A record that only shares a pattern is a *candidate* match; a
+ * confirmed recurrence additionally requires a traceable evidence reference on
+ * the current incident.
  */
 function describeRecall(
-  recalled: {
-    blobId: string;
-    distance: number;
-    record?: {
-      domain?: string;
-      failure_pattern?: string;
-      corrective_rule?: string;
-    };
-  },
-  pattern: string,
+  recalled: RecalledLesson,
+  current: { domain: string; pattern: string; hasAuthoritativeReference: boolean },
 ): RecalledMemory {
   const r = recalled.record;
-  const samePattern = r?.failure_pattern === pattern;
-  const relation: RecalledMemory["relation"] = samePattern
-    ? "confirmed_recurrence"
-    : "possible_similarity";
-  const why = r
-    ? samePattern
-      ? `A prior lesson with the same failure pattern (${pattern}) was retrieved for ${r.domain}. This is a confirmed recurrence of a known pattern.`
-      : `A prior lesson in ${r.domain ?? "another domain"} with pattern ${r.failure_pattern ?? "unknown"} was retrieved; the match is on similarity, not an exact recurrence.`
-    : "A prior memory was retrieved by similarity; its text did not parse as a structured lesson, so it is treated as a possible similarity only.";
+  const verdict = classifyRecurrence({
+    ...(r ? { record: r } : {}),
+    domain: current.domain,
+    pattern: current.pattern,
+    hasAuthoritativeReference: current.hasAuthoritativeReference,
+  });
+
+  const why =
+    verdict.relation === "confirmed_recurrence"
+      ? `A prior lesson with the same failure pattern (${current.pattern}) was retrieved, and the documented recurrence criteria are satisfied.`
+      : verdict.relation === "candidate_pattern_match"
+        ? `A prior lesson in ${r?.domain ?? "another domain"} shares the failure pattern ${current.pattern}, but recurrence is not established; this is a possible pattern match.`
+        : r
+          ? `A prior lesson in ${r.domain ?? "another domain"} with pattern ${r.failure_pattern ?? "unknown"} was retrieved; the match is on similarity, not an exact recurrence.`
+          : "A prior memory was retrieved by similarity; its text did not parse as a structured lesson, so it is treated as a possible similarity only.";
+
   return {
     blobId: recalled.blobId,
-    relation,
+    relation: verdict.relation,
     why,
     distance: recalled.distance,
     ...(r?.corrective_rule ? { ruleStatement: r.corrective_rule } : {}),
     ...(r?.domain ? { domain: r.domain } : {}),
     ...(r?.failure_pattern ? { failurePattern: r.failure_pattern } : {}),
-    provenance: "live",
+    ...(r?.incident_id ? { incidentId: r.incident_id } : {}),
+    ...(r?.failure_pattern ? { patternKey: r.failure_pattern } : {}),
+    matchBasis: verdict.basis,
+    recurrenceEstablished: verdict.recurrenceEstablished,
+    // Preserve the adapter's own provenance: a record recalled from the
+    // simulated backend must not be presented as a live Mainnet recall.
+    provenance: recalled.provenance,
   };
 }
 

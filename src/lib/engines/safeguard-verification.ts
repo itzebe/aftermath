@@ -28,6 +28,10 @@ import { PATTERN_ACTION, PATTERN_SEVERITY } from "@/lib/engines/rule-engine";
  *
  * The statement is the diagnosis's rule sketch when one exists; the reasoning
  * quotes the observed evidence so the user can see exactly what supports it.
+ * The safeguard is *pattern-specific*: a connection-pool incident yields a
+ * control that instruments and measures the pool, not the generic
+ * "require verification" fallback, which is reserved for incidents whose
+ * central issue genuinely is an unknown operation outcome.
  */
 export function buildRecommendation(input: {
   investigation: Investigation;
@@ -48,6 +52,7 @@ export function buildRecommendation(input: {
       "reported result is accepted.";
 
   const failureMode = explainFailureMode(pattern);
+  const specific = patternSpecificControl(pattern);
 
   const whyEvidenceSupports = evidenceSummary
     ? `The material records ${evidenceSummary}. Combined with an evidence ` +
@@ -64,6 +69,7 @@ export function buildRecommendation(input: {
       `The recommended mechanism assumes the leading hypothesis holds: ${categories.hypotheses[0]}`,
     );
   }
+  for (const extra of specific.assumptions) assumptions.push(extra);
   if (investigation.domain === "incident") {
     assumptions.push(
       "No authoritative source was connected for this submission, so the " +
@@ -76,18 +82,14 @@ export function buildRecommendation(input: {
       "generalise to unrelated operations.",
   );
 
-  const testPlan = [
-    `Replay the reported action through the decision engine with the safeguard active and confirm the outcome.`,
-    ...categories.nextChecks.slice(0, 3),
-  ];
+  const testPlan = [...specific.testPlan, ...categories.nextChecks.slice(0, 3)];
 
-  const successCriteria =
-    pattern === "unsupported_completion_claim" || pattern === "repeated_failed_operation"
-      ? "The engine refuses to let the unsupported claim stand (BLOCK), while still allowing a genuinely evidenced success."
-      : "The engine requires authoritative verification (REQUIRE_VERIFICATION) for this action, while still allowing a genuinely evidenced success.";
+  const successCriteria = specific.successCriteria;
 
   return SafeguardRecommendationSchema.parse({
-    statement,
+    statement: specific.controlStatement
+      ? `${statement} ${specific.controlStatement}`
+      : statement,
     failureMode,
     whyEvidenceSupports,
     assumptions,
@@ -96,6 +98,79 @@ export function buildRecommendation(input: {
     action: PATTERN_ACTION[pattern],
     severity: PATTERN_SEVERITY[pattern],
   });
+}
+
+interface PatternControl {
+  /** An additional, concrete control sentence appended to the rule statement. */
+  controlStatement: string;
+  assumptions: string[];
+  testPlan: string[];
+  successCriteria: string;
+}
+
+/**
+ * The pattern-specific control, test, and measurable criteria.
+ *
+ * Every branch states a *measurable* pass/fail condition, so a later run can
+ * actually be judged. The generic branch is honest about having no mechanism
+ * to measure: it can only require that the missing evidence be obtained.
+ */
+function patternSpecificControl(pattern: Diagnosis["pattern"]): PatternControl {
+  switch (pattern) {
+    case "connection_pool_exhaustion":
+      return {
+        controlStatement:
+          "Instrument connection acquisition, usage, and release; alert on sustained pool saturation and rising acquisition latency; and treat the pool's capacity as unproven until a controlled concurrency test demonstrates it.",
+        assumptions: [
+          "It is assumed the pool's configured maximum is the intended capacity; the material does not state the configuration or how it was chosen.",
+          "It is assumed the reported measurements (active/idle/max) came from the pool under test; their source is not named in the material.",
+        ],
+        testPlan: [
+          "Exercise a controlled workload with a documented concurrency level and duration, against the same pool configuration.",
+          "Measure connection-acquisition latency, pool utilisation, request latency, and the HTTP 5xx rate throughout the run.",
+        ],
+        successCriteria:
+          "Under the documented workload, pool utilisation stays below the test's declared safety threshold (for example 90%) for the whole run, connection-acquisition latency stays within the declared budget, and the request error rate stays within the declared error budget. Record the exact workload, the measurements, and the pass/fail result.",
+      };
+    case "upstream_dependency_failure":
+      return {
+        controlStatement:
+          "Establish the operation's own outcome from an authoritative record before accepting or rejecting the result, and record which upstream dependency returned the error.",
+        assumptions: [
+          "It is assumed the 5xx originated from the named dependency; the material does not always name which component produced it.",
+        ],
+        testPlan: [
+          "Replay the request against a stubbed dependency that returns the same status, and confirm the operation's own outcome is recorded from an authoritative source rather than inferred from the status.",
+        ],
+        successCriteria:
+          "For a replayed request whose dependency returns the recorded status, the operation's outcome is recorded from an authoritative source (not inferred from the status), and the upstream component responsible is named. The outcome and the source are both written to the record.",
+      };
+    case "evidence_unavailable":
+      return {
+        controlStatement:
+          "Obtain an authoritative record of the operation's outcome before accepting or rejecting the result; a missing answer must not be recorded as either success or failure.",
+        assumptions: [
+          "It is assumed no authoritative record of this operation is currently available; if one exists, the control reduces to consulting it.",
+        ],
+        testPlan: [
+          "Re-run the action and capture its own authoritative record (exit code, HTTP response, transaction status) rather than relying on narration.",
+        ],
+        successCriteria:
+          "A subsequent run of the action yields an authoritative record of its outcome, and the engine's decision is derived from that record rather than from the absence of an answer. Until such a record exists, the outcome stays UNKNOWN.",
+      };
+    default:
+      return {
+        controlStatement: "",
+        assumptions: [],
+        testPlan: [
+          "Replay the reported action through the decision engine with the safeguard active and confirm the outcome.",
+        ],
+        successCriteria:
+          pattern === "unsupported_completion_claim" || pattern === "repeated_failed_operation"
+            ? "The engine refuses to let the unsupported claim stand (BLOCK), while still allowing a genuinely evidenced success."
+            : "The engine requires authoritative verification (REQUIRE_VERIFICATION) for this action, while still allowing a genuinely evidenced success.",
+      };
+  }
 }
 
 function explainFailureMode(pattern: Diagnosis["pattern"]): string {
@@ -112,6 +187,10 @@ function explainFailureMode(pattern: Diagnosis["pattern"]): string {
       return "A decision relies on evidence that no longer reflects the current state.";
     case "incorrect_execution_state_assumption":
       return "The reported state does not match the state an authoritative source records.";
+    case "connection_pool_exhaustion":
+      return "The database connection pool is exhausted, so connection acquisitions time out and requests fail, because connections are not released, concurrency exceeds capacity, or slow operations hold connections too long.";
+    case "upstream_dependency_failure":
+      return "An upstream dependency returned a server error, so the operation's own outcome is not established by the error alone.";
     case "evidence_unavailable":
       return "A dependency did not answer, so the outcome is unknown and must not be recorded as either success or failure.";
     case "conflicting_evidence":

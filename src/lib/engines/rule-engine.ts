@@ -15,6 +15,8 @@ export const PATTERN_SEVERITY: Record<FailurePattern, Severity> = {
   inadequate_verification: "medium",
   stale_evidence: "medium",
   incorrect_execution_state_assumption: "medium",
+  connection_pool_exhaustion: "high",
+  upstream_dependency_failure: "medium",
   evidence_unavailable: "low",
   conflicting_evidence: "high",
 };
@@ -26,6 +28,8 @@ export const PATTERN_ACTION: Record<FailurePattern, "BLOCK" | "REQUIRE_VERIFICAT
   inadequate_verification: "REQUIRE_VERIFICATION",
   stale_evidence: "REQUIRE_VERIFICATION",
   incorrect_execution_state_assumption: "REQUIRE_VERIFICATION",
+  connection_pool_exhaustion: "REQUIRE_VERIFICATION",
+  upstream_dependency_failure: "REQUIRE_VERIFICATION",
   evidence_unavailable: "REQUIRE_VERIFICATION",
   conflicting_evidence: "BLOCK",
 };

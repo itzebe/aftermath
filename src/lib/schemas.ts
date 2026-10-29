@@ -124,7 +124,15 @@ export const EvidenceAssessmentSchema = z.object({
 });
 export type EvidenceAssessment = z.infer<typeof EvidenceAssessmentSchema>;
 
-/** Candidate failure patterns. A diagnosis is a hypothesis, not a verdict. */
+/**
+ * Candidate failure patterns. A diagnosis is a hypothesis, not a verdict.
+ *
+ * `connection_pool_exhaustion` and `upstream_dependency_failure` exist so a
+ * submission whose material names a concrete mechanism is classified by that
+ * mechanism, rather than being forced into the generic `evidence_unavailable`
+ * bucket merely because the material also contains a timeout keyword. The
+ * generic pattern is reserved for material that genuinely establishes nothing.
+ */
 export const FailurePatternSchema = z.enum([
   "unsupported_completion_claim",
   "missing_prerequisite",
@@ -132,6 +140,8 @@ export const FailurePatternSchema = z.enum([
   "inadequate_verification",
   "stale_evidence",
   "incorrect_execution_state_assumption",
+  "connection_pool_exhaustion",
+  "upstream_dependency_failure",
   "evidence_unavailable",
   "conflicting_evidence",
 ]);
@@ -395,10 +405,23 @@ export const VerificationSchema = z.object({
 });
 export type Verification = z.infer<typeof VerificationSchema>;
 
-/** How a recalled prior record relates to the current submission. */
+/**
+ * How a recalled prior record relates to the current submission.
+ *
+ * The labels are deliberately ordinal and conservative:
+ *  - `retrieved`            — returned by the search; nothing further claimed.
+ *  - `possible_similarity`  — semantically similar, but not a compatible pattern.
+ *  - `candidate_pattern_match` — a compatible structured failure classification,
+ *                               but not enough traceable evidence to call it a
+ *                               recurrence. This is the honest default when only
+ *                               vector similarity and a shared pattern exist.
+ *  - `confirmed_recurrence` — the documented recurrence criteria are satisfied
+ *                             by sufficiently strong, traceable evidence.
+ */
 export const MemoryRelationSchema = z.enum([
   "retrieved",
   "possible_similarity",
+  "candidate_pattern_match",
   "confirmed_recurrence",
 ]);
 export type MemoryRelation = z.infer<typeof MemoryRelationSchema>;
@@ -453,6 +476,22 @@ export const RecalledMemorySchema = z.object({
   ruleStatement: z.string().max(4000).optional(),
   domain: z.string().max(120).optional(),
   failurePattern: z.string().max(120).optional(),
+  /**
+   * Stable identifiers used to compare and deduplicate this recalled record.
+   * `incidentId` is the originating incident; `patternKey` is the structured
+   * failure classification it was filed under. Both are read from the recalled
+   * lesson, never inferred from the vector distance.
+   */
+  incidentId: z.string().max(200).optional(),
+  patternKey: z.string().max(120).optional(),
+  /**
+   * How the record meets (or fails) the documented recurrence criteria, stated
+   * for the reader. This is the traceability the brief requires: what was
+   * compared, and why recurrence was or was not established.
+   */
+  matchBasis: z.string().min(1).max(2000),
+  /** Whether the documented recurrence criteria were satisfied by evidence. */
+  recurrenceEstablished: z.boolean(),
   provenance: ProvenanceSchema,
 });
 export type RecalledMemory = z.infer<typeof RecalledMemorySchema>;

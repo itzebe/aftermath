@@ -38,10 +38,82 @@ const HEX_TX = /\b0x[0-9a-fA-F]{40,64}\b/g;
 const HTTP_STATUS_WORDED =
   /\b([45]\d{2})\s+(?:Bad Request|Unauthorized|Forbidden|Not Found|Conflict|Too Many Requests|Internal Server Error|Bad Gateway|Service Unavailable|Gateway Timeout|Request Timeout)\b/gi;
 const HTTP_STATUS_LABELLED =
-  /\b(?:status(?:\s*code)?|http|code)\s*[:=]?\s*([45]\d{2})\b/gi;
+  /\b(?:status(?:\s*code)?|http(?:\s*status)?|response\s+code)\s*[:=]?\s*([45]\d{2})\b/gi;
 
-const ERROR_CODE =
-  /\b(ERR_[A-Z0-9_]+|E[A-Z]{3,}|[A-Z]{2,}_[A-Z0-9_]{2,}|SQLSTATE\s*[0-9A-Z]{5}|ORA-\d{3,5})\b/g;
+/**
+ * Error codes are extracted only from shapes that are unambiguously codes.
+ *
+ * The earlier rule (`E[A-Z]{3,}` and any `WORD_WORD`) matched ordinary English
+ * words in upper case — "ERROR", "EXPECTED", "ENVIRONMENT" — because they look
+ * like errno constants and underscore codes. The rule below inverts that: a
+ * token must carry a code-shaped marker (an explicit prefix such as `ERR_` or
+ * `ORA-`, a `SQLSTATE`, a letter-plus-digits form like `E5031`, an underscored
+ * form that also contains a digit, or a value from the finite set of real errno
+ * constants). A bare capitalised word is never a code.
+ */
+const ERROR_CODE_TOKEN =
+  /\b(ERR_[A-Z0-9_]{2,}|ORA-\d{3,5}|E\d{3,}|(?=[A-Z0-9_-]*\d)[A-Z][A-Z0-9]*(?:[_-][A-Z0-9]+)+|E[A-Z]{3,})\b/g;
+/** A SQLSTATE is labelled and exactly five alphanumerics, e.g. `SQLSTATE: 23505`. */
+const SQLSTATE = /\bSQLSTATE\s*[:=]?\s*([0-9A-Z]{5})\b/gi;
+/** A code written into an explicitly labelled field, e.g. `error_code: PG503`. */
+const ERROR_CODE_LABELLED =
+  /\b(?:error[_\s-]?code|errno|exception[_\s-]?code|fault[_\s-]?code)\s*[:=]\s*([A-Za-z][A-Za-z0-9_-]{1,40})\b/gi;
+/**
+ * Real POSIX/Node errno constants. Only these capitalised `E…` tokens are
+ * codes; every other capitalised word is ordinary text.
+ */
+const KNOWN_ERRNO = new Set([
+  "ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "ENOTFOUND", "EADDRINUSE",
+  "EADDRNOTAVAIL", "EAI_AGAIN", "EPIPE", "EBADF", "EACCES", "EPERM", "EEXIST",
+  "ENOENT", "ENOSPC", "EIO", "EINTR", "EAGAIN", "EBUSY", "EDEADLK", "EFAULT",
+  "EINVAL", "EMFILE", "ENFILE", "ENOMEM", "ENOSYS", "ENOTDIR", "ENOTEMPTY",
+  "ENOTSUP", "EOVERFLOW", "ERANGE", "EROFS", "ESPIPE", "ESRCH", "ETXTBSY",
+  "EXDEV", "EHOSTUNREACH", "ENETUNREACH", "EHOSTDOWN", "ENETDOWN",
+  "ECONNABORTED", "EISDIR", "ENODEV", "ENXIO", "ELOOP", "ENAMETOOLONG",
+  "EMSGSIZE",
+]);
+
+/**
+ * Whether a value is shaped like an error code rather than a prose word.
+ * Used for both the unlabelled and the labelled extraction paths, so a generic
+ * label can never be promoted to a code simply by being written after one.
+ */
+function isCodeShaped(value: string): boolean {
+  if (KNOWN_ERRNO.has(value)) return true;
+  if (/^ERR_[A-Z0-9_]+$/.test(value)) return true;
+  if (/^ORA-\d{3,5}$/.test(value)) return true;
+  if (/^E\d{3,}$/.test(value)) return true;
+  // Underscored/hyphenated code with at least one digit, e.g. HTTP_500, S3_403.
+  if (/^[A-Z][A-Z0-9]*(?:[_-][A-Z0-9]+)+$/.test(value) && /\d/.test(value)) return true;
+  // Letters then digits, e.g. PG503.
+  if (/^[A-Za-z]+[_-]?\d+$/.test(value)) return true;
+  return false;
+}
+
+/**
+ * A database connection-pool failure, stated in the material.
+ *
+ * Matched as a whole phrase so a heading that merely contains the word "pool"
+ * is not treated as a signal.
+ */
+const DB_POOL_EXHAUSTED =
+  /\b(?:connection\s+pool\s+(?:is\s+|was\s+|has\s+been\s+)?(?:exhausted|saturated|depleted|full)|pool\s+exhaust(?:ed|ion)|connection\s+pool\s+exhaust(?:ed|ion)|no\s+connections?\s+available)\b/i;
+/** A labelled pool measurement, e.g. "Active connections: 50", "max pool size: 50". */
+const POOL_MEASUREMENT =
+  /\b(active|idle|in[- ]?use|open|max(?:imum)?|total|waiting|pending)\s+(?:connections?|pool\s+size|pool)\s*[:=]\s*(\d+)\b/gi;
+/** A pool utilisation figure, e.g. "Database pool utilization reached 100%". */
+const POOL_UTILIZATION =
+  /\b([A-Za-z][A-Za-z0-9 _-]{0,40}?)\s+utilization\s+(?:reached|is|was|at|of)\s*[:=]?\s*(\d+(?:\.\d+)?)\s*(%|percent)?(?=\s|$|[.,;)])/gi;
+/** A named quantity that exceeded a threshold, e.g. "Request duration exceeded threshold: 10042ms". */
+const THRESHOLD_EXCEEDED =
+  /\b([A-Za-z][A-Za-z0-9 _-]{1,40}?)\s+exceeded\s+(?:the\s+)?(?:threshold|budget|limit)\s*[:=]?\s*(\d+(?:\.\d+)?)\s*(ms|s|sec|secs|seconds|%|percent)?(?=\s|$|[.,;)])/gi;
+/** An operation that timed out after a stated duration, preserving the duration. */
+const TIMEOUT_AFTER =
+  /\b([A-Za-z][A-Za-z0-9 _-]{1,40}?)\s+timed\s+out\s+after\s+(\d+(?:\.\d+)?)\s*(ms|s|sec|secs|seconds)\b/gi;
+/** An explicit failure signal such as a failed health or readiness check. */
+const FAILURE_SIGNAL =
+  /\b((?:health|readiness|liveness)\s+(?:check|probe)\s+failed|connection\s+unavailable|service\s+unavailable|database\s+unavailable)\b[^\n]*/i;
+
 const EXCEPTION_TYPE =
   /\b([A-Z][A-Za-z0-9]*(?:Error|Exception|Fault|Panic|Timeout|Refused|Denied|Unavailable))\b/g;
 const ISO_TIMESTAMP =
@@ -79,7 +151,11 @@ function collect(
   map: (m: RegExpExecArray) => { value: string; source: string } | null,
 ): ExtractedFact[] {
   const out: ExtractedFact[] = [];
-  const re = new RegExp(pattern.source, pattern.flags);
+  // Ensure the global flag: some source patterns are declared without it so
+  // that a plain `.test()` on them stays stateless. Without `g`, `exec` would
+  // never advance and this loop would run forever.
+  const flags = pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`;
+  const re = new RegExp(pattern.source, flags);
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
     const mapped = map(m);
@@ -89,17 +165,86 @@ function collect(
   return out;
 }
 
+/** Keep at most MAX_FACTS_PER_KIND of each kind, de-duplicating by kind+value. */
 function cap(facts: ExtractedFact[]): ExtractedFact[] {
   const seen = new Set<string>();
+  const perKind = new Map<string, number>();
   const out: ExtractedFact[] = [];
   for (const f of facts) {
-    const key = `${f.kind}:${f.value}`;
+    const key = `${f.kind}:${f.value.toLowerCase()}`;
     if (seen.has(key)) continue;
+    const count = perKind.get(f.kind) ?? 0;
+    if (count >= MAX_FACTS_PER_KIND) continue;
     seen.add(key);
+    perKind.set(f.kind, count + 1);
     out.push(f);
-    if (out.length >= MAX_FACTS_PER_KIND) break;
   }
   return out;
+}
+
+/**
+ * Extract error codes, from both code-shaped tokens and explicitly labelled
+ * fields, rejecting anything that is not code-shaped. A generic label such as
+ * "ENVIRONMENT" or "ERROR" is never returned: it is neither a known errno nor
+ * code-shaped, and it does not appear after an error-code field name.
+ */
+function extractErrorCodeFacts(text: string): ExtractedFact[] {
+  const facts: ExtractedFact[] = [];
+  for (const f of collect(text, ERROR_CODE_TOKEN, "error_code", (m) => ({
+    value: m[1],
+    source: m[0],
+  }))) {
+    if (isCodeShaped(f.value)) facts.push(f);
+  }
+  facts.push(
+    ...collect(text, SQLSTATE, "error_code", (m) => ({
+      value: m[1],
+      source: m[0],
+    })),
+  );
+  for (const f of collect(text, ERROR_CODE_LABELLED, "error_code", (m) => ({
+    value: m[1],
+    source: m[0],
+  }))) {
+    if (isCodeShaped(f.value)) facts.push(f);
+  }
+  return facts;
+}
+
+/** Quantitative / structural evidence beyond codes: pool, thresholds, timeouts. */
+function extractMeasurementFacts(text: string): ExtractedFact[] {
+  const facts: ExtractedFact[] = [];
+  facts.push(
+    ...collect(text, POOL_MEASUREMENT, "pool_metric", (m) => ({
+      value: `${m[1].toLowerCase().replace(/\s+/g, " ")} connections = ${m[2]}`,
+      source: m[0],
+    })),
+  );
+  facts.push(
+    ...collect(text, POOL_UTILIZATION, "pool_metric", (m) => ({
+      value: `${m[1].trim().toLowerCase()} utilization = ${m[2]}${m[3] === "percent" ? "%" : m[3]}`,
+      source: m[0],
+    })),
+  );
+  facts.push(
+    ...collect(text, THRESHOLD_EXCEEDED, "measurement", (m) => ({
+      value: `${m[1].trim().toLowerCase()} exceeded threshold = ${m[2]}${m[3] ?? ""}`,
+      source: m[0],
+    })),
+  );
+  facts.push(
+    ...collect(text, TIMEOUT_AFTER, "measurement", (m) => ({
+      value: `${m[1].trim().toLowerCase()} timed out after ${m[2]}${m[3]}`,
+      source: m[0],
+    })),
+  );
+  facts.push(
+    ...collect(text, FAILURE_SIGNAL, "failure_signal", (m) => ({
+      value: m[1].trim(),
+      source: m[0],
+    })),
+  );
+  return facts;
 }
 
 /** Signals the parse found, reused to shape hypotheses and next checks. */
@@ -114,6 +259,10 @@ export interface SubmissionSignals {
   hasTimeout: boolean;
   hasRateLimit: boolean;
   hasRetry: boolean;
+  /** The material states a database connection-pool failure. */
+  hasDbPoolExhaustion: boolean;
+  /** The material states an explicit failure signal (failed health check, etc.). */
+  hasFailureSignal: boolean;
   claimsSuccess: boolean;
   reportsFailure: boolean;
 }
@@ -139,12 +288,7 @@ export function extractSignals(text: string): SubmissionSignals {
     })).map((f) => f.value),
   ]);
 
-  const errorCodes = uniq(
-    collect(text, ERROR_CODE, "error_code", (m) => ({
-      value: m[1],
-      source: m[0],
-    })).map((f) => f.value),
-  );
+  const errorCodes = uniq(extractErrorCodeFacts(text).map((f) => f.value));
 
   const exceptions = uniq(
     collect(text, EXCEPTION_TYPE, "exception", (m) => ({
@@ -185,6 +329,8 @@ export function extractSignals(text: string): SubmissionSignals {
     hasTimeout: TIMEOUT.test(text),
     hasRateLimit: RATE_LIMIT.test(text),
     hasRetry: RETRY.test(text),
+    hasDbPoolExhaustion: DB_POOL_EXHAUSTED.test(text),
+    hasFailureSignal: FAILURE_SIGNAL.test(text),
     // An explicit attribution ("the agent reported success") is decisive: it
     // names a completion claim directly, even alongside failure language.
     claimsSuccess:
@@ -248,12 +394,8 @@ export function buildObservedEvidence(
         source: m[0],
       })),
     ),
-    ...cap(
-      collect(text, ERROR_CODE, "error_code", (m) => ({
-        value: m[1],
-        source: m[0],
-      })),
-    ),
+    ...cap(extractErrorCodeFacts(text)),
+    ...cap(extractMeasurementFacts(text)),
     ...cap(
       collect(text, EXCEPTION_TYPE, "exception", (m) => ({
         value: m[1],
@@ -286,6 +428,14 @@ export function buildObservedEvidence(
     ),
   ];
 
+  if (signals.hasDbPoolExhaustion) {
+    const span = DB_POOL_EXHAUSTED.exec(text);
+    facts.push({
+      kind: "signal",
+      value: "the material reports database connection pool exhaustion",
+      source: span?.[0] ?? "connection pool exhausted",
+    });
+  }
   if (signals.hasTimeout) {
     const span = TIMEOUT.exec(text);
     facts.push({
@@ -372,17 +522,33 @@ export function buildConfirmedFacts(input: {
 /** Hypotheses consistent with the signals. Each is explicitly unverified. */
 export function buildHypotheses(signals: SubmissionSignals): string[] {
   const h: string[] = [];
+  if (signals.hasDbPoolExhaustion) {
+    h.push(
+      "Database connections may not be released promptly after use, so the pool drains over time. The material does not show acquisition/release pairing, so this is a hypothesis, not a finding.",
+    );
+    h.push(
+      "Concurrent request volume may exceed the pool's configured capacity, so requests queue for a connection. Whether concurrency was the cause is not established by the logs alone.",
+    );
+    h.push(
+      "Slow or blocked database operations may hold connections for too long, keeping the pool saturated even at steady concurrency. Query latency during the incident is not in the material.",
+    );
+  }
   if (signals.hasRateLimit) {
     h.push(
       "A dependency applied a rate limit, so the request was throttled rather than genuinely refused.",
     );
   }
-  if (signals.hasTimeout) {
+  if (signals.hasTimeout && !signals.hasDbPoolExhaustion) {
     h.push(
       "The operation exceeded a deadline before completing, so its true outcome is not yet known.",
     );
   }
-  if (signals.httpStatuses.some((s) => s.startsWith("5"))) {
+  if (signals.hasFailureSignal) {
+    h.push(
+      "A health or readiness check failed, which indicates the dependency was not serving when the check ran; the check itself does not establish why.",
+    );
+  }
+  if (signals.httpStatuses.some((s) => s.startsWith("5")) && !signals.hasDbPoolExhaustion) {
     h.push(
       "An upstream dependency returned a server error, which is a transport condition and not a verdict on the operation.",
     );
@@ -422,6 +588,33 @@ export function buildUnknowns(
   hasActual: boolean,
 ): string[] {
   const u: string[] = [];
+  if (signals.hasDbPoolExhaustion) {
+    u.push(
+      "Connection acquisition and release metrics: whether every acquired connection is released, and how many acquisitions are waiting.",
+    );
+    u.push(
+      "Connection hold-time distribution: how long each connection is held, to distinguish a leak from slow queries.",
+    );
+    u.push(
+      "Database query latency during the incident window, which would show whether connections are held by slow operations.",
+    );
+    u.push(
+      "Request concurrency and the pool configuration (max size, acquire timeout), to test whether capacity was sufficient for the offered load.",
+    );
+    u.push(
+      "Whether the saturation recurs under a controlled load, which is what would establish a repeatable cause.",
+    );
+  }
+  if (signals.hasFailureSignal && !signals.hasDbPoolExhaustion) {
+    u.push(
+      "Why the health or readiness check failed: what the check exercises and what it observed at that moment.",
+    );
+  }
+  if (signals.httpStatuses.some((s) => s.startsWith("5")) && !signals.hasDbPoolExhaustion) {
+    u.push(
+      "Which upstream component produced the server error, and whether the operation itself completed despite it.",
+    );
+  }
   if (!hasExpected) {
     u.push("What the correct outcome was expected to be.");
   }
@@ -456,12 +649,23 @@ export function buildNextChecks(
       "Confirm the transaction digest against the Sui ledger (AFTERMATH performs this read-only lookup through Tatum).",
     );
   }
+  if (signals.hasDbPoolExhaustion) {
+    c.push(
+      "Instrument connection acquisition, usage, and release, then replay the incident window to see whether connections are held past their work.",
+    );
+    c.push(
+      "Alert on sustained pool saturation and on rising connection-acquisition latency, so the next occurrence is detected before requests time out.",
+    );
+    c.push(
+      "Run a controlled concurrency test at documented load to determine whether the configured pool capacity is sufficient, and investigate a connection leak if instrumentation shows connections are not released.",
+    );
+  }
   if (signals.hasRateLimit) {
     c.push(
       "Re-issue the request after the dependency's stated retry interval and record whether it then succeeds; a rate limit must not be recorded as a failure.",
     );
   }
-  if (signals.hasTimeout) {
+  if (signals.hasTimeout && !signals.hasDbPoolExhaustion) {
     c.push(
       "Re-run with a longer deadline, or fetch the operation's status by its id, before concluding anything about the outcome.",
     );
@@ -512,6 +716,7 @@ export function diagnoseSubmission(input: {
   if (signals.exceptions.length) {
     observedFacts.push(`exceptions=${signals.exceptions.join(",")}`);
   }
+  if (signals.hasDbPoolExhaustion) observedFacts.push("dbPoolExhaustion=true");
   if (signals.hasTimeout) observedFacts.push("timeout=true");
   if (signals.hasRateLimit) observedFacts.push("rateLimited=true");
   if (signals.hasRetry) observedFacts.push("retried=true");
@@ -522,6 +727,7 @@ export function diagnoseSubmission(input: {
     confidence: number,
     actionable: boolean,
     action: "BLOCK" | "REQUIRE_VERIFICATION",
+    requiredEvidence = "an authoritative record of the operation's outcome",
   ): Diagnosis => {
     const base = {
       pattern,
@@ -536,7 +742,7 @@ export function diagnoseSubmission(input: {
       ruleSketch: {
         statement: hypothesis,
         applicability: `${input.domain}:${input.actionType}`,
-        requiredEvidence: "an authoritative record of the operation's outcome",
+        requiredEvidence,
         action:
           action === "BLOCK"
             ? "Allow a success claim only when the evidence is VERIFIED_SUCCESS; otherwise refuse it."
@@ -545,20 +751,8 @@ export function diagnoseSubmission(input: {
     });
   };
 
-  // A rate limit or timeout is missing evidence, never a verdict. This is the
-  // single most important classification the product makes.
-  if (signals.hasRateLimit || signals.hasTimeout) {
-    return build(
-      "evidence_unavailable",
-      "The dependency did not answer (rate limit or timeout), so the operation's " +
-        "true outcome is unknown. Recording this as a failure would convert " +
-        "missing evidence into a verdict, which is exactly the mistake to avoid.",
-      0.9,
-      true,
-      "REQUIRE_VERIFICATION",
-    );
-  }
-
+  // An authoritative source, when one was actually consulted, outranks the
+  // material: it is the only thing that can establish the operation's outcome.
   if (evidenceStatus === "VERIFIED_SUCCESS") {
     return build(
       "incorrect_execution_state_assumption",
@@ -581,6 +775,7 @@ export function diagnoseSubmission(input: {
     );
   }
 
+  // The agent's own completion claim, with nothing authoritative behind it.
   if (signals.claimsSuccess) {
     return build(
       "unsupported_completion_claim",
@@ -589,6 +784,55 @@ export function diagnoseSubmission(input: {
       0.85,
       true,
       "BLOCK",
+    );
+  }
+
+  // A concrete mechanism named in the material outranks a generic transport
+  // symptom. Connection-pool exhaustion is the strongest such signal: the
+  // material states the mechanism, the measurements, and the failure, so a
+  // timeout in the same text is a *symptom* of it, not a separate unknown. This
+  // branch therefore precedes the timeout/rate-limit branch on purpose.
+  if (signals.hasDbPoolExhaustion) {
+    return build(
+      "connection_pool_exhaustion",
+      "The material reports the database connection pool as exhausted, with " +
+        "connections held against a full pool and acquisitions timing out. The " +
+        "mechanism is reported in the material; whether it was caused by " +
+        "connections not being released, by excessive concurrency, or by slow " +
+        "queries is not established by the logs alone and remains a hypothesis.",
+      0.7,
+      true,
+      "REQUIRE_VERIFICATION",
+      "connection acquisition/release instrumentation, pool-utilisation and " +
+        "acquisition-latency measurements, and the pool configuration",
+    );
+  }
+
+  // A rate limit, on its own, is missing evidence, never a verdict. This is the
+  // single most important classification the product makes.
+  if (signals.hasRateLimit) {
+    return build(
+      "evidence_unavailable",
+      "The dependency did not answer because it applied a rate limit, so the " +
+        "operation's true outcome is unknown. Recording this as a failure would " +
+        "convert missing evidence into a verdict, which is exactly the mistake to avoid.",
+      0.9,
+      true,
+      "REQUIRE_VERIFICATION",
+    );
+  }
+
+  // A timeout with no stronger mechanism in the material is likewise missing
+  // evidence: the operation may or may not have completed.
+  if (signals.hasTimeout) {
+    return build(
+      "evidence_unavailable",
+      "The operation timed out before a result was recorded, so its true outcome " +
+        "is unknown. Recording this as a failure would convert missing evidence " +
+        "into a verdict, which is exactly the mistake to avoid.",
+      0.85,
+      true,
+      "REQUIRE_VERIFICATION",
     );
   }
 
@@ -610,6 +854,21 @@ export function diagnoseSubmission(input: {
       "A concrete fault was raised, but no authoritative record establishes the " +
         "operation's outcome, so the report cannot be turned into a verdict yet.",
       0.6,
+      true,
+      "REQUIRE_VERIFICATION",
+    );
+  }
+
+  // A server-side HTTP status with no more specific mechanism named: the
+  // upstream returned an error, which is a real dependency failure, but the
+  // operation's own outcome still has to be established.
+  if (signals.httpStatuses.some((s) => s.startsWith("5"))) {
+    return build(
+      "upstream_dependency_failure",
+      "An upstream dependency returned a server error. That is a real failure of " +
+        "the dependency, but it does not by itself establish whether this " +
+        "operation completed, so its outcome still has to be verified.",
+      0.55,
       true,
       "REQUIRE_VERIFICATION",
     );

@@ -7,6 +7,10 @@ import {
   type SubmissionSignals,
 } from "@/lib/engines/investigation";
 import type { IncidentSubmission } from "@/lib/schemas";
+import {
+  POOL_EXHAUSTION_INCIDENT,
+  REAL_ERROR_CODE_INCIDENT,
+} from "./fixtures/incidents";
 
 const noLookup = {
   attempted: false,
@@ -91,6 +95,8 @@ describe("diagnoseSubmission", () => {
     hasTimeout: false,
     hasRateLimit: false,
     hasRetry: false,
+    hasDbPoolExhaustion: false,
+    hasFailureSignal: false,
     claimsSuccess: false,
     reportsFailure: false,
     ...over,
@@ -166,5 +172,92 @@ describe("investigateSubmission", () => {
     // cannot assert the action succeeded.
     expect(inv.diagnosis.pattern).not.toBe("evidence_unavailable");
     expect(inv.authoritativeLookup.verified).toBe(false);
+  });
+});
+
+/**
+ * Regression: ordinary words must not be extracted as error codes.
+ *
+ * The material below writes its field labels in upper case ("ENVIRONMENT",
+ * "EXPECTED", "ERROR"), which the earlier `E[A-Z]{3,}` / `WORD_WORD` rule
+ * misread as error codes. These tests pin the corrected behaviour: a bare
+ * capitalised word is never a code, while a genuine, code-shaped value is.
+ */
+describe("regression: error-code extraction", () => {
+  it("does not treat ordinary upper-case field labels as error codes", () => {
+    const s = extractSignals(POOL_EXHAUSTION_INCIDENT);
+    expect(s.errorCodes).not.toContain("ENVIRONMENT");
+    expect(s.errorCodes).not.toContain("EXPECTED");
+    expect(s.errorCodes).not.toContain("ERROR");
+    expect(s.errorCodes).not.toContain("ACTUAL");
+    expect(s.errorCodes).not.toContain("SEVERITY");
+    expect(s.errorCodes).toHaveLength(0);
+  });
+
+  it("still extracts a genuine, code-shaped error code", () => {
+    const s = extractSignals(REAL_ERROR_CODE_INCIDENT);
+    expect(s.errorCodes).toContain("E5031");
+  });
+
+  it("extracts codes from explicit prefixes and labelled fields", () => {
+    const s = extractSignals(
+      "failed with ERR_STREAM_PREMATURE_CLOSE and SQLSTATE: 23505 and error_code: PG503",
+    );
+    expect(s.errorCodes).toContain("ERR_STREAM_PREMATURE_CLOSE");
+    expect(s.errorCodes).toContain("23505");
+    expect(s.errorCodes).toContain("PG503");
+  });
+
+  it("does not promote a prose word merely because a code field precedes it", () => {
+    const s = extractSignals("error_code: not-available");
+    expect(s.errorCodes).toHaveLength(0);
+  });
+});
+
+/**
+ * Regression: a named mechanism must drive the diagnosis.
+ *
+ * A connection-pool incident contains a timeout, but the timeout is a symptom
+ * of the reported mechanism, not a reason to classify the incident as an
+ * unknown operation outcome. These tests pin the corrected precedence and the
+ * incident-specific evidence, hypotheses, unknowns, and checks.
+ */
+describe("regression: connection-pool incidents are reasoned from their evidence", () => {
+  const inv = investigate(POOL_EXHAUSTION_INCIDENT, { service: "payment-api" });
+
+  it("classifies the mechanism, not the generic unknown", () => {
+    expect(inv.diagnosis.pattern).toBe("connection_pool_exhaustion");
+    expect(inv.diagnosis.pattern).not.toBe("evidence_unavailable");
+    expect(inv.diagnosis.actionable).toBe(true);
+  });
+
+  it("states the mechanism in the hypothesis rather than only the timeout", () => {
+    expect(inv.diagnosis.hypothesis).toMatch(/pool/i);
+    expect(inv.diagnosis.observedFacts).toContain("dbPoolExhaustion=true");
+  });
+
+  it("records the pool measurements as observed evidence, with spans", () => {
+    const values = inv.categories.observedEvidence.map((f) => f.value);
+    expect(values).toContain("active connections = 50");
+    expect(values).toContain("idle connections = 0");
+    expect(values).toContain("max connections = 50");
+    expect(values.some((v) => v.includes("utilization = 100%"))).toBe(true);
+    expect(values.some((v) => v.includes("timed out after 5000ms"))).toBe(true);
+  });
+
+  it("asks pool-specific unknowns and proposes pool-specific checks", () => {
+    expect(inv.categories.unknowns.join(" ")).toMatch(/connection/i);
+    expect(inv.categories.unknowns.join(" ")).toMatch(/latency|hold/i);
+    expect(inv.categories.nextChecks.join(" ")).toMatch(/acquisition|pool/i);
+  });
+
+  it("does not assert an authoritative outcome from the material alone", () => {
+    expect(inv.authoritativeLookup.verified).toBe(false);
+    // A confirmed fact may exist for supplied input (the service name), but no
+    // fact may assert the operation's *outcome* without an authoritative source.
+    const outcomeFacts = inv.categories.confirmedFacts.filter((f) =>
+      /outcome|success|fail|complet/i.test(`${f.kind} ${f.value}`),
+    );
+    expect(outcomeFacts).toHaveLength(0);
   });
 });

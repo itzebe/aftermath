@@ -40,12 +40,14 @@ const VERIFICATION_LABEL: Record<VerificationState, string> = {
 const RELATION_TONE: Record<MemoryRelation, Tone> = {
   retrieved: "info",
   possible_similarity: "warn",
+  candidate_pattern_match: "warn",
   confirmed_recurrence: "bad",
 };
 
 const RELATION_LABEL: Record<MemoryRelation, string> = {
   retrieved: "retrieved",
   possible_similarity: "possible similarity",
+  candidate_pattern_match: "candidate pattern match · recurrence not established",
   confirmed_recurrence: "confirmed recurrence",
 };
 
@@ -452,11 +454,20 @@ export function SafeguardRecordView({ record }: { record: SafeguardRecord }) {
                           {RELATION_LABEL[m.relation]}
                         </Pill>
                         <span className="mono text-[0.6875rem] text-paper-500">
-                          {m.blobId.slice(0, 12)}… · distance {m.distance.toFixed(3)}
+                          {m.blobId.slice(0, 12)}…
+                          {m.incidentId ? ` · incident ${m.incidentId.slice(0, 8)}…` : ""}
+                          {m.failurePattern ? ` · ${m.failurePattern}` : ""}
                         </span>
                       </div>
                       <div className="mt-1 text-[0.75rem] leading-relaxed text-paper-300">
                         {m.why}
+                      </div>
+                      <div className="mt-1 text-[0.6875rem] leading-relaxed text-paper-500">
+                        <span className="mono text-paper-600">compared:</span> {m.matchBasis}
+                      </div>
+                      <div className="mono mt-1 text-[0.6875rem] text-paper-600">
+                        similarity distance {m.distance.toFixed(3)} (a retrieval
+                        ranking, not a probability)
                       </div>
                     </li>
                   ))}
