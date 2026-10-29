@@ -586,7 +586,7 @@ append-only, and it keeps counting everything that happened before the fix. I am
 not rewriting it, and I am not hiding it. Three distinctions matter:
 
 - **Completed writes and recall-verified writes are different numbers.** The
-  live instance reports **87 completed** Mainnet writes and **86
+  live instance reports **88 completed** Mainnet writes and **87
   recall-verified**. The gap is one write that reached a blob id and was
   recorded as completed, but whose *follow-up recall query* was itself
   rate-limited — so it is completed-but-not-recall-verified. It is counted once,
@@ -610,7 +610,7 @@ not rewriting it, and I am not hiding it. Three distinctions matter:
   observed it.
 
 None of this changes the headline the brief cares about: the requirement is ten
-genuine, completed Mainnet memories, and the instance has 87 completed and 86
+genuine, completed Mainnet memories, and the instance has 88 completed and 87
 recall-verified, all written through the real SDK against Mainnet.
 
 ## What I measured
@@ -713,8 +713,8 @@ conflating them would be dishonest in one direction or the other:
 A single counter cannot be honest about both "what did this process do" and
 "what is actually on chain". So there are two.
 
-As of this submission, the operator's own instance reports **87 completed
-Mainnet writes and 86 recall-verified writes**, with zero simulated writes in
+As of this submission, the operator's own instance reports **88 completed
+Mainnet writes and 87 recall-verified writes**, with zero simulated writes in
 that total — read straight from `GET /api/overview` on the running application,
 not asserted from memory. The two numbers are deliberately different and are
 never presented as equivalent: one write reached a blob id and was recorded as
