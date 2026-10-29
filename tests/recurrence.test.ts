@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { classifyRecurrence, dedupeRecalled } from "@/lib/engines/recurrence";
-import type { CorrectiveLessonRecord } from "@/lib/schemas";
+import { RecalledMemorySchema, type CorrectiveLessonRecord } from "@/lib/schemas";
 
 type LessonKey = Pick<
   CorrectiveLessonRecord,
@@ -110,5 +110,38 @@ describe("recalled-record deduplication", () => {
     ];
     const out = dedupeRecalled(items);
     expect(out.map((i) => i.blobId)).toEqual(["b1", "b2"]);
+  });
+});
+
+/**
+ * Regression: a record persisted before the recurrence-traceability fields
+ * existed must still parse and render. The store is durable and append-only, so
+ * a stricter schema would strand real production records on an empty page.
+ */
+describe("recalled-memory schema compatibility", () => {
+  const legacy = {
+    blobId: "blob-legacy",
+    relation: "possible_similarity",
+    why: "retrieved by similarity",
+    distance: 0.42,
+    provenance: "live",
+  };
+
+  it("accepts a record written before matchBasis existed", () => {
+    const parsed = RecalledMemorySchema.safeParse(legacy);
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.matchBasis).toBeUndefined();
+  });
+
+  it("accepts a record carrying the new traceability fields", () => {
+    const parsed = RecalledMemorySchema.safeParse({
+      ...legacy,
+      matchBasis: "compared domain and pattern",
+      recurrenceEstablished: false,
+    });
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.matchBasis).toBe(
+      "compared domain and pattern",
+    );
   });
 });

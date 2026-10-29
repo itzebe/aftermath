@@ -487,11 +487,13 @@ export const RecalledMemorySchema = z.object({
   /**
    * How the record meets (or fails) the documented recurrence criteria, stated
    * for the reader. This is the traceability the brief requires: what was
-   * compared, and why recurrence was or was not established.
+   * compared, and why recurrence was or was not established. Optional only so
+   * that records written before this field existed still load and render; every
+   * new record populates it.
    */
-  matchBasis: z.string().min(1).max(2000),
+  matchBasis: z.string().min(1).max(2000).optional(),
   /** Whether the documented recurrence criteria were satisfied by evidence. */
-  recurrenceEstablished: z.boolean(),
+  recurrenceEstablished: z.boolean().optional(),
   provenance: ProvenanceSchema,
 });
 export type RecalledMemory = z.infer<typeof RecalledMemorySchema>;

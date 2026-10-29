@@ -169,7 +169,7 @@ describe("submission pipeline — connection-pool incident", () => {
     for (const m of record.recalledMemories) {
       expect(m.relation).not.toBe("confirmed_recurrence");
       expect(m.recurrenceEstablished).toBe(false);
-      expect(m.matchBasis.length).toBeGreaterThan(0);
+      expect(m.matchBasis).toBeTruthy();
     }
   });
 

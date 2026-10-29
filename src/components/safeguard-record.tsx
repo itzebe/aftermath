@@ -462,9 +462,11 @@ export function SafeguardRecordView({ record }: { record: SafeguardRecord }) {
                       <div className="mt-1 text-[0.75rem] leading-relaxed text-paper-300">
                         {m.why}
                       </div>
-                      <div className="mt-1 text-[0.6875rem] leading-relaxed text-paper-500">
-                        <span className="mono text-paper-600">compared:</span> {m.matchBasis}
-                      </div>
+                      {m.matchBasis ? (
+                        <div className="mt-1 text-[0.6875rem] leading-relaxed text-paper-500">
+                          <span className="mono text-paper-600">compared:</span> {m.matchBasis}
+                        </div>
+                      ) : null}
                       <div className="mono mt-1 text-[0.6875rem] text-paper-600">
                         similarity distance {m.distance.toFixed(3)} (a retrieval
                         ranking, not a probability)
