@@ -1,0 +1,124 @@
+1
+00:00:00,000 --> 00:00:04,660
+Aftermath. Every failure should leave a safeguard. A demonstration for the Total
+
+2
+00:00:04,660 --> 00:00:07,766
+Recall hackathon, built on Tatum and Walrus Memory.
+
+3
+00:00:07,766 --> 00:00:12,311
+Aftermath's thesis is one line: a claim is not evidence. When an AI agent
+
+4
+00:00:12,311 --> 00:00:16,856
+reports that something worked, that is a claim, not a fact. Aftermath asks for
+
+5
+00:00:16,856 --> 00:00:21,726
+the proof, and when a failure is verified, it leaves behind a safeguard so the
+
+6
+00:00:21,726 --> 00:00:23,349
+same failure cannot recur unnoticed.
+
+7
+00:00:23,349 --> 00:00:28,551
+This is the real product. I paste the shipped sample incident: a charge request
+
+8
+00:00:28,551 --> 00:00:33,382
+that returned a 503, was retried, and then an agent claimed it succeeded.
+
+9
+00:00:33,382 --> 00:00:37,842
+Aftermath parses the material, and never executes it. The Safeguard Record shown
+
+10
+00:00:37,842 --> 00:00:41,186
+here is the genuine result of this exact submission.
+
+11
+00:00:41,186 --> 00:00:45,930
+Read the record top to bottom. Evidence first: every observed fact carries a
+
+12
+00:00:45,930 --> 00:00:50,308
+verbatim span copied from the submitted material. Notice the evidence status is
+
+13
+00:00:50,308 --> 00:00:54,322
+Unknown. The material names no authoritative system, so Aftermath refuses to
+
+14
+00:00:54,322 --> 00:00:59,065
+decide whether the charge succeeded. That refusal is the product working, not a
+
+15
+00:00:59,065 --> 00:01:03,809
+gap. The AI reading is additive, never an authority. A Groq model proposes
+
+16
+00:01:03,809 --> 00:01:08,552
+candidate mechanisms, but every fact it keeps must cite a span that appears
+
+17
+00:01:08,552 --> 00:01:13,661
+verbatim in the material, or it is discarded and counted as a rejected claim.
+
+18
+00:01:13,661 --> 00:01:18,404
+The model never sets the evidence status, the diagnosis, the decision, or the
+
+19
+00:01:18,404 --> 00:01:21,323
+verification. The deterministic engine owns all of those.
+
+20
+00:01:21,323 --> 00:01:26,496
+Every verified incident and its lesson is written to Walrus Memory on Mainnet,
+
+21
+00:01:26,496 --> 00:01:31,272
+under a content-hash idempotency key, and confirmed by a recall query. The
+
+22
+00:01:31,272 --> 00:01:36,047
+ledger reads live. Against a requirement of ten genuine Mainnet memories, this
+
+23
+00:01:36,047 --> 00:01:39,230
+instance reports eighty-eight completed writes, and eighty-seven independently
+
+24
+00:01:39,230 --> 00:01:43,210
+recall-verified. Simulated writes are excluded, and the relayer reports two
+
+25
+00:01:43,210 --> 00:01:45,597
+hundred forty-three memories in the namespace.
+
+26
+00:01:45,597 --> 00:01:50,215
+In the Evaluation Lab, the controlled scenarios show the learning loop. A repeat
+
+27
+00:01:50,215 --> 00:01:54,477
+attempt is refused, because a previously stored lesson was recalled and required
+
+28
+00:01:54,477 --> 00:01:59,095
+verification. That is memory changing a later decision. I will be precise: this
+
+29
+00:01:59,095 --> 00:02:03,712
+is a controlled scenario, and I am not claiming it proves a production
+
+30
+00:02:03,712 --> 00:02:07,974
+intervention. The recall itself is real. Aftermath is open source, with the
+
+31
+00:02:07,974 --> 00:02:11,881
+repository and blog on screen. Every failure should leave a safeguard.
+

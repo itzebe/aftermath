@@ -1,9 +1,13 @@
 # AFTERMATH — demo storyboard (2–3 minutes)
 
-Recording status: **not recorded.** No screen-capture tool is available in the
-build environment, so this is a timestamped storyboard with exact click paths and
-copy-paste material, plus recording instructions. Nothing here is presented as a
-recorded video.
+Recording status: **recorded.** The playable video is
+`/mnt/data/aftermath-hackathon-demo.mp4` (2:12, 1920×1080, H.264 + AAC, with
+burned-in captions; sidecar SRT at [`DEMO.srt`](DEMO.srt); in-repo copy at
+`.agent_tmp/video/demo_subbed.mp4`). It was captured from the **live
+production deployment** with Playwright, narrated with a local TTS voice, and cut
+with ffmpeg. This storyboard remains the source of truth for what each scene shows
+and the claim it supports; the verbatim narration is in
+[`DEMO-narration.md`](DEMO-narration.md) and [`DEMO.srt`](DEMO.srt).
 
 The whole run is reproducible against the **live production deployment**:
 <https://aftermath-7tij.vercel.app/>. Every figure it shows is read from the live

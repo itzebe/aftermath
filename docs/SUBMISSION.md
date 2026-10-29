@@ -34,7 +34,7 @@ fail the same way twice.
 | --- | --- | --- | --- |
 | 01 | Walrus Memory integrated and writing on Mainnet | ✅ | Real SDK writes to `https://relayer.memory.walrus.xyz`, namespace `aftermath`. Each write is awaited to a blob id and confirmed by a recall query. See [`src/lib/adapters/memwal-memory.ts`](../src/lib/adapters/memwal-memory.ts) and the live counts on `/memory`. |
 | 02 | Tatum RPC used for onchain data where relevant | ✅ | Read-only Sui adapter on the documented gRPC primary with a GraphQL fallback, server-side API key. Real Mainnet transactions (successful **and** unsuccessful) back the finance evidence cases. No transaction is ever broadcast. See [`src/lib/adapters/tatum-sui.ts`](../src/lib/adapters/tatum-sui.ts). |
-| 03 | At least 10 memories stored on Mainnet | ✅ | The live ledger reports **87 completed** and **86 recall-verified** Mainnet writes — see `GET /api/overview` (`completedLiveWrites`, `recallVerifiedWrites`). Simulated writes are tracked separately and excluded. |
+| 03 | At least 10 memories stored on Mainnet | ✅ | The live ledger reports **88 completed** and **87 recall-verified** Mainnet writes — see `GET /api/overview` (`completedLiveWrites`, `recallVerifiedWrites`). `mainnetRequirement` returns `{required: 10, completedLive: 88, recallVerified: 87, remaining: 0, satisfied: true}`. `simulatedWrites` is **0**; every write carries `backend: memwal-mainnet`, `provenance: live`. The relayer reports **243** memories in the `aftermath` namespace. Simulated writes are tracked separately and excluded. |
 | 04 | Published blog post (what it does, how it uses Tatum + Walrus, how it learned) | ✅ | [`BLOG.md`](BLOG.md), published on Medium and mirrored on GitHub Pages. Covers the pipeline, both integrations, the transient-failure/deferral fix, and measured results. |
 | 05 | Working demo and public repo | ✅ | Demo: <https://aftermath-7tij.vercel.app/>. Repo: <https://github.com/itzebe/aftermath> (public). |
 | 06 | Optional: build with Tatum AI Builder (ai.tatum.io) — $500 bonus | ⛔ Not pursued | AFTERMATH was built as an indie project. The dedicated AI-Builder award is out of scope; the app still uses Tatum RPC/Data APIs directly. |
@@ -114,8 +114,9 @@ a dependency being briefly unavailable is never mistaken for a verified failure.
 (`GET /api/overview`, `GET /api/memory`):
 
 - Walrus Memory is **live** (`backend: memwal-mainnet`, `isLive: true`,
-  `MAINNET_AUTH_CONFIRMED`); the live ledger reports **87 completed** and **86
-  recall-verified** Mainnet writes, and the namespace holds **242 memories**.
+  `MAINNET_AUTH_CONFIRMED`); the live ledger reports **88 completed** and **87
+  recall-verified** Mainnet writes (`simulatedWrites: 0`), and the namespace
+  holds **243 memories**.
 - Tatum Sui adapter configured; gateway health check passes; finance cases read
   genuine Mainnet transactions.
 - On the controlled scenarios (figures from the last verified run; see
@@ -151,7 +152,7 @@ the account owner and must not be guessed.
 | Demo URL | <https://aftermath-7tij.vercel.app/> |
 | Repository URL | <https://github.com/itzebe/aftermath> |
 | Blog URL | <https://itzebe.github.io/aftermath/> (also on Medium) |
-| Demo video URL | *pending* — not recorded; storyboard in [`DEMO.md`](DEMO.md) |
+| Demo video URL | `/mnt/data/aftermath-hackathon-demo.mp4` (2:12) — also in-repo at `.agent_tmp/video/demo_subbed.mp4`; upload and paste the hosted URL here |
 | Tatum dashboard account ID | *owner* |
 | `MEMWAL_AGENT_ID` (Walrus Memory delegate public key) | *owner* |
 
@@ -180,6 +181,41 @@ the account owner and must not be guessed.
 - The exact **form fields** and whether `MEMWAL_AGENT_ID` is the delegate public
   key verbatim. The form is authenticated and was not filled in.
 - Whether the wallet/account used must be shared as part of the submission.
+
+## Mainnet memory requirement — verification
+
+Requirement 03 (≥ 10 genuine memories on Walrus Memory Mainnet) is verified from
+read-only production endpoints. No write was made to produce this evidence.
+
+| Check | Command / source | Result |
+| --- | --- | --- |
+| Genuine Mainnet writes completed | `GET /api/overview` → `counts.completedLiveWrites` | **88** |
+| Writes confirmed retrievable by recall | `GET /api/overview` → `counts.recallVerifiedWrites` | **87** |
+| Simulated writes (excluded) | `GET /api/overview` → `counts.simulatedWrites` | **0** |
+| Requirement eval | `GET /api/overview` → `mainnetRequirement` | `{required: 10, completedLive: 88, recallVerified: 87, remaining: 0, satisfied: true}` |
+| Namespace memories (relayer-reported, authoritative) | `GET /api/overview` → `memoryStatus.namespaceMemoryCount` | **243** |
+| Backend is genuinely Mainnet | `GET /api/config` / `/api/overview` | `backend: memwal-mainnet`, `isLive: true`, `network: mainnet` |
+| Every ledger row | `GET /api/memory` → `writes[]` | 121 rows, **all** `backend: memwal-mainnet`, `provenance: live` |
+| Relayer auth | `GET /api/overview` → `memoryStatus` | `state: MAINNET_AUTH_CONFIRMED`, `authenticated: true` |
+
+**Interpretation.** 88 completed writes and 87 recall-verified writes means the
+instance has written at least **87 memories that a recall query returned**, more
+than eight times the required ten. Because `simulatedWrites` is `0` and every
+ledger row carries `backend: memwal-mainnet` with `provenance: live`, the count
+is not inflated by fixtures: the simulated input worlds the scenarios use are
+labelled `simulated`, and none of them is counted here. Completed and
+recall-verified are reported **separately** and never merged, so a write that
+completed but whose follow-up recall was rate-limited is not silently promoted.
+
+The standalone check `npm run verify:prod` includes the memory checks and passes
+**20/20**; `verify:ai` is read-only.
+
+## Demo video
+
+- Video: `/mnt/data/aftermath-hackathon-demo.mp4` (in-repo copy:
+  `.agent_tmp/video/demo_subbed.mp4`), 2:12, 1920×1080, H.264 + AAC, subtitled.
+- Captions (SRT): `/mnt/data/aftermath-hackathon-demo.srt`.
+- Storyboard and script: [`DEMO.md`](DEMO.md).
 
 ## Demo plan (2–3 minutes)
 
