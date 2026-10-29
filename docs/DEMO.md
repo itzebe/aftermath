@@ -45,80 +45,95 @@ honest statement is "a rate limit is not a verdict."
 
 ### 0:20–0:55 — The front door: submit an incident
 
-1. Open <https://aftermath-7tij.vercel.app/> (the **Investigate** page). The hero
-   reads *"Every failure should leave a safeguard."*
-2. Paste this sample into the incident box (the app ships a similar default):
+- **Page:** the **Investigate** page, <https://aftermath-7tij.vercel.app/>.
+- **Action:** paste the sample below into the incident box and click
+  **Investigate incident**.
+- **Observe:** the hero reads *"Every failure should leave a safeguard."* The
+  progress steps appear in order: validating → parsing (rule-based) → reading
+  (AI-assisted, if configured) → consulting connected sources → assembling the
+  evidence assessment → retrieving related memories → proposing a safeguard →
+  verifying against the decision engine → preserving the record.
+- **Claim it supports:** AFTERMATH turns pasted failure material into a structured
+  record through a fixed, inspectable pipeline — the input is parsed, never
+  executed.
 
-   ```text
-   2026-03-01T10:00:00Z ERROR checkout-service
-   POST /v1/charge returned 503 Service Unavailable
-   retrying (attempt 2/3)...
-   2026-03-01T10:00:07Z WARN checkout-service charge status: unknown
-   2026-03-01T10:00:08Z INFO agent "the charge completed successfully"
-   ```
+Sample (identical to the app's built-in *"Use a sample incident"* button):
 
-3. Click **Investigate incident**. The progress steps appear in order:
-   validating → parsing (rule-based) → reading (AI-assisted, if configured) →
-   consulting connected sources → assembling the evidence assessment → retrieving
-   related memories → proposing a safeguard → verifying against the decision
-   engine → preserving the record.
+```text
+2026-03-01T10:00:00Z ERROR checkout-service
+POST /v1/charge returned 503 Service Unavailable
+retrying (attempt 2/3)...
+2026-03-01T10:00:07Z WARN checkout-service charge status: unknown
+2026-03-01T10:00:08Z INFO agent "the charge completed successfully"
+```
 
 ### 0:55–1:35 — The evidence is grounded, and uncertainty is explicit
 
-1. On the resulting **Safeguard Record**, point at the **observed facts**: each
-   one carries a **verbatim span** copied from the submitted material. Nothing is
-   paraphrased into a "fact."
-2. Point at **Evidence: UNKNOWN** — the sample names no authoritative system, so
-   the engine will not conclude the charge succeeded or failed. That label is the
-   product working, not a gap.
-3. Show **Supporting / Contradicting / Unknowns / Assumptions** as separate
-   lists, with **Expected / Actual** kept apart.
-4. **Key line:** the record refuses to upgrade the agent's claim into a verdict
-   without evidence.
+- **Page/feature:** the **Safeguard Record** returned from that submission.
+- **Action:** scroll through the record's stages: Evidence → Hypothesis →
+  Safeguard → Verification → Memory.
+- **Observe:**
+  1. Each **observed fact** carries a **verbatim span** copied from the submitted
+     material — nothing is paraphrased into a "fact."
+  2. **Evidence: UNKNOWN**. The sample names no authoritative system, so the
+     engine will not conclude the charge succeeded or failed. That label is the
+     product working, not a gap.
+  3. **Supporting / Contradicting / Unknowns / Assumptions** appear as separate
+     lists, and **Expected** and **Actual** are kept apart.
+- **Claim it supports:** a claim in the material is not upgraded into a verdict
+  without evidence; the record states exactly how far each remark is verified.
 
 ### 1:35–2:00 — The AI reading is additive, and says whether it ran
 
-1. On the record, show the AI section and the **`aiAnalysis.ran`** flag. In
-   production the provider is `groq`, model `openai/gpt-oss-120b`, so `ran` is
-   `true` and a grounded reading appears.
-2. **Key line:** every fact the model keeps must cite a span that appears
-   verbatim in the submission; anything else is discarded and counted as a
-   rejected claim. The model cannot set the evidence status, the diagnosis, the
-   decision, or the verification — it is a claim generator, not a decider.
-3. If you want to show the no-provider path, note that without `GROQ_API_KEY`
-   the same record is the deterministic parse and states no model was configured.
-   Do not imply a model ran when `ran` is `false`.
+- **Page/feature:** the **AI-assisted reading** section of the same record.
+- **Action:** point at the **`aiAnalysis.ran`** flag and the **Facts grounded in
+  the material** list.
+- **Observe:** in production the provider is `groq`, model `openai/gpt-oss-120b`,
+  so `ran` is `true` and a grounded reading appears. Every fact the model keeps
+  cites a span that appears verbatim in the submission; anything else is
+  discarded and listed under **Model claims rejected by grounding**.
+- **Claim it supports:** the model is a *claim generator, not a decider* — it
+  cannot set the evidence status, diagnosis, decision, or verification, and
+  whether it ran is reported, never inferred.
+- **If `GROQ_API_KEY` is unset** (locally): the same record is the deterministic
+  parse and states no model was configured. Do not imply a model ran when `ran`
+  is `false`.
 
 ### 2:00–2:30 — Memory: the lesson is preserved on Walrus Mainnet
 
-1. Click **Memory Ledger** in the nav (`/memory`).
-2. Show the two numbers kept **separately**: **Completed Mainnet writes** and
-   **Recall-verified** writes, plus **Memories in namespace** (the authoritative
-   relayer count). Explain why they differ: a write can be completed but its
-   follow-up recall can itself be rate-limited.
-3. Run a recall query on the page and show real blobs coming back — the stored
-   lesson is retrievable, not just written.
-4. **Key line:** the requirement is ten genuine Mainnet memories; the live
-   instance reports far more, read from the ledger rather than asserted.
+- **Page/feature:** **Memory Ledger** in the nav (`/memory`).
+- **Action:** read the headline counters, then run a recall query on the page.
+- **Observe:** **Completed Mainnet writes** and **Recall-verified** writes are
+  kept separate, alongside **Memories in namespace** (the authoritative relayer
+  count). Read live, the instance currently shows 87 completed, 86
+  recall-verified, and 242 memories in the namespace. The two write counters
+  differ because a write can complete while its follow-up recall is itself
+  rate-limited. The recall query returns real blobs (ids, similarity distances).
+- **Claim it supports:** the Walrus integration is real Mainnet persistence —
+  writes are confirmed by recall, and the ≥10-memory requirement is met from the
+  ledger, not asserted.
 
 ### 2:30–3:00 — The learning loop and the close
 
-1. Open the **Evaluation Lab** (`/lab`).
-2. Press **Run from scratch**. The run advances in bounded batches (a full run
-   exceeds one serverless request) because several scenarios perform a real
-   Walrus Memory Mainnet write. Show the repeat scenario
-   `workflow-repeat-refused`, titled "Repeat attempt refused by the safeguard":
-   the engine **recalls** the earlier lesson and the decision is
-   `REQUIRE_VERIFICATION`, not `ALLOW`. That is memory changing the decision —
-   the whole point.
-   - Honesty note if asked: the scenario's input fixture is labelled
-     `simulated` (it is a controlled world), but the memory write it produces is
-     real — on the live deployment every write carries
-     `backend: memwal-mainnet`, `provenance: live`.
-3. Show **Safeguard Records** (`/records`) listing the connected artifacts.
-4. Close on the repo and blog on screen:
-   - Repo: <https://github.com/itzebe/aftermath>
-   - Blog: <https://itzebe.github.io/aftermath/>
+- **Page/feature:** **Evaluation Lab** (`/lab`), then **Safeguard Records**
+  (`/records`).
+- **Action:** press **Run from scratch**; then open **Safeguard Records**.
+- **Observe:** the run advances in bounded batches (a full run exceeds one
+  serverless request) because several scenarios perform a real Walrus Memory
+  Mainnet write. Watch the repeat scenario `workflow-repeat-refused`, titled
+  *"Repeat attempt refused by the safeguard"*: the engine **recalls** the earlier
+  lesson and the decision is `REQUIRE_VERIFICATION`, not `ALLOW` — a previously
+  learned safeguard changing a later decision.
+- **Claim it supports:** memory changes the decision. A learning loop that
+  persists a lesson and applies it to the next occurrence is the product's
+  central claim, and it is reproducible from a clean run.
+- **Honesty note if asked:** the scenario's *input fixture* is labelled
+  `simulated` (it is a controlled world), but the *memory write* it produces is
+  real — on the live deployment every write carries `backend: memwal-mainnet`,
+  `provenance: live`.
+- **Close on screen:** the repo and blog:
+  - Repo: <https://github.com/itzebe/aftermath>
+  - Blog: <https://itzebe.github.io/aftermath/>
 
 > Every failure leaves a safeguard. The engine states exactly how far each claim
 > is verified, and never further.

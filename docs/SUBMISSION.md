@@ -118,8 +118,9 @@ a dependency being briefly unavailable is never mistaken for a verified failure.
   recall-verified** Mainnet writes, and the namespace holds **242 memories**.
 - Tatum Sui adapter configured; gateway health check passes; finance cases read
   genuine Mainnet transactions.
-- On the nine controlled scenarios: **4/4** unsupported claims caught, **0**
-  allowed to stand, **100%** repeat-prevention, **0%** false-block, **100%**
+- On the controlled scenarios (figures from the last verified run; see
+  [`BLOG.md`](BLOG.md)): **4/4** unsupported claims caught, **0** allowed to
+  stand, **100%** repeat-prevention, **0%** false-block, **100%**
   memory-retrieval relevance. These describe the controlled scenarios, not
   production reliability.
 - Checks: `typecheck` clean, `lint` clean, unit suite **345 passed / 21
@@ -182,32 +183,31 @@ the account owner and must not be guessed.
 
 ## Demo plan (2–3 minutes)
 
-The full timestamped storyboard, click paths, recording instructions, and the
-"what is genuinely demonstrable live" table are in [`DEMO.md`](DEMO.md). The
-summary below is the five beats that storyboard covers.
+The full timestamped storyboard, click paths, per-scene factual claims, recording
+instructions, and the "what is genuinely demonstrable live" table are in
+[`DEMO.md`](DEMO.md). In short, five scenes, each with a claim it supports:
 
-1. **The front door — a claim is not evidence.** Submit a pasted failure:
-   `HTTP 500` plus `Connection pool exhausted / max pool size: 50`. Read the
-   Safeguard Record: observed facts with their verbatim spans, hypotheses,
-   unknowns, and next checks, each labelled with how far it is verified. Point at
-   the `Evidence: UNKNOWN` label — a paste is material, not proof.
-2. **The AI reading is additive.** Show `aiAnalysis.ran` on the record. When
-   `GROQ_API_KEY` is set, a grounded reading appears; every fact it keeps cites a
-   span that appears verbatim in the submission. Without a key the record is the
-   deterministic parse and says so. The model never sets the evidence status,
-   diagnosis, decision, or verification.
-3. **The learning loop.** Open the **Evaluation Lab** (`/lab`) → **Run from
-   scratch**. The run advances in bounded batches because every scenario waits on
-   a real Mainnet write. Watch a repeat scenario (`workflow-repeat-refused`)
-   recall a lesson and be refused — that is the memory changing the decision.
-4. **Honesty under pressure.** If a batch hits the shared relayer rate limit,
-   show the deferral: the scenario returns to `pending`, the batch stops, the
-   client waits `retry_after_seconds`, and the next batch resumes it — *no
-   verdict recorded*. A transport problem is never a scenario failure.
-5. **The ledger.** Open `/memory` and read the counts directly: completed vs
-   recall-verified writes are separate columns; historical failed writes stay
-   counted. The requirement is ten genuine Mainnet memories; the instance has
-   far more, and says so from the ledger rather than asserting it.
+1. **0:00–0:20 — The problem.** A claim is not evidence; every failure should
+   leave a safeguard. *Claim:* AFTERMATH exists to stop the same failure recurring.
+2. **0:20–0:55 — Submit an incident.** Paste the app's own sample on the
+   **Investigate** page and run it. *Claim:* failure material becomes a structured
+   record through a fixed, inspectable pipeline (parsed, never executed).
+3. **0:55–2:00 — Grounded evidence, additive AI.** On the **Safeguard Record**:
+   observed facts carry verbatim spans; **Evidence: UNKNOWN** because the sample
+   names no authoritative source; `aiAnalysis.ran` shows whether a model actually
+   ran. *Claim:* a claim is not upgraded into a verdict without evidence; the
+   model cannot set the status, diagnosis, decision, or verification.
+4. **2:00–2:30 — Walrus Memory.** **Memory Ledger** (`/memory`) shows completed
+   vs recall-verified writes separately, beside the relayer's namespace count;
+   a recall query returns real blobs. *Claim:* genuine Mainnet persistence,
+   confirmed by recall.
+5. **2:30–3:00 — The learning loop.** **Evaluation Lab** (`/lab`) → **Run from
+   scratch**: `workflow-repeat-refused` recalls an earlier lesson and the repeat
+   decision is `REQUIRE_VERIFICATION`, not `ALLOW`. *Claim:* memory changes a
+   later decision. Close on the public repo and blog.
+
+> Deferral under a relayer rate limit is **not** reproducible on demand; if it
+> appears mid-run it is narrated honestly, and never staged.
 
 ## Pre-submission checks
 
