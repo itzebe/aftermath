@@ -146,6 +146,7 @@ export default function MemoryPage() {
     <div className="space-y-5">
       <SectionTitle
         title="Memory Ledger"
+        as="h1"
         hint="Every write this application attempted against the memory backend, with its true lifecycle. A write is only counted as complete once the relayer returned a blob id, and only counted as verified once a recall query returned the record."
         right={
           <button
@@ -262,7 +263,12 @@ export default function MemoryPage() {
             Run the demonstrations to produce incidents and lessons.
           </EmptyState>
         ) : (
-          <div className="scroll-x">
+          <div
+            className="scroll-x"
+            role="region"
+            aria-label="Write log"
+            tabIndex={0}
+          >
             <table className="data">
               <thead>
                 <tr>

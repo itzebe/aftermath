@@ -3,8 +3,20 @@ import { z } from "zod";
 /**
  * Domains AFTERMATH covers. The safeguard mechanism is shared; only the
  * evidence adapter differs per domain.
+ *
+ * `incident` is the user-submission domain. A submission is only assigned a
+ * different domain when the material itself names an authoritative source that
+ * can actually be consulted (for example a Sui transaction digest, which the
+ * finance adapter can look up through Tatum). Otherwise it stays `incident`,
+ * whose adapter honestly reports that no authoritative source is connected
+ * rather than inventing one.
  */
-export const DomainSchema = z.enum(["finance", "coding", "workflow"]);
+export const DomainSchema = z.enum([
+  "finance",
+  "coding",
+  "workflow",
+  "incident",
+]);
 export type Domain = z.infer<typeof DomainSchema>;
 
 /**
@@ -220,3 +232,270 @@ export const CorrectiveLessonRecordSchema = z.object({
   provenance: ProvenanceSchema,
 });
 export type CorrectiveLessonRecord = z.infer<typeof CorrectiveLessonRecordSchema>;
+
+/* ------------------------------------------------------------------ *
+ * User-submitted incident investigation
+ *
+ * Everything below is the product's primary surface: a person pastes real
+ * incident material, AFTERMATH investigates it, and the result is a structured,
+ * inspectable Safeguard Record. The pipeline reuses the same evidence,
+ * diagnosis, rule, decision, and memory primitives the controlled scenarios use,
+ * so the mechanisms a judge can see working in the Evaluation Lab are the same
+ * ones that run on a submission.
+ * ------------------------------------------------------------------ */
+
+/** Maximum sizes, so a hostile or accidental huge paste cannot exhaust the host. */
+export const SUBMISSION_LIMITS = {
+  text: 20_000,
+  short: 2_000,
+} as const;
+
+/**
+ * A person's incident report. This is the only untrusted input in the product.
+ * It is treated as data throughout: it is never executed, never evaluated as
+ * code or SQL, and never echoed into a shell.
+ */
+export const IncidentSubmissionSchema = z.object({
+  /** The raw material: error text, stack trace, logs, a failed request, prose. */
+  text: z.string().min(1).max(SUBMISSION_LIMITS.text),
+  /** Optional structured context. */
+  expectedBehavior: z.string().max(SUBMISSION_LIMITS.short).optional(),
+  actualBehavior: z.string().max(SUBMISSION_LIMITS.short).optional(),
+  service: z.string().max(200).optional(),
+  /** Optional caller-supplied idempotency key. Falls back to a content hash. */
+  idempotencyKey: z.string().min(1).max(200).optional(),
+});
+export type IncidentSubmission = z.infer<typeof IncidentSubmissionSchema>;
+export type IncidentSubmissionDraft = z.input<typeof IncidentSubmissionSchema>;
+
+/**
+ * A single extracted fact, with the exact evidence span it came from.
+ *
+ * `source` records where the value was found so the UI can show provenance and
+ * a reader can check the claim against the original text. Nothing is asserted
+ * without a span behind it.
+ */
+export const ExtractedFactSchema = z.object({
+  kind: z.string().min(1),
+  value: z.string().min(1).max(SUBMISSION_LIMITS.short),
+  /** The verbatim substring of the submission that supports this fact. */
+  source: z.string().min(1).max(SUBMISSION_LIMITS.text),
+});
+export type ExtractedFact = z.infer<typeof ExtractedFactSchema>;
+
+/**
+ * The four evidence categories the brief requires, kept strictly separate so
+ * the UI can never blur what is known into what is merely suspected.
+ */
+export const EvidenceAssessmentCategoriesSchema = z.object({
+  /** Directly supported by the submitted material. */
+  observedEvidence: z.array(ExtractedFactSchema),
+  /** Established by the input or an authoritative connected-system response. */
+  confirmedFacts: z.array(ExtractedFactSchema),
+  /** Plausible explanations that still need verification. */
+  hypotheses: z.array(z.string().min(1).max(SUBMISSION_LIMITS.short)),
+  /** Important questions the evidence does not answer. */
+  unknowns: z.array(z.string().min(1).max(SUBMISSION_LIMITS.short)),
+  /** Additional information or tests that could distinguish the hypotheses. */
+  nextChecks: z.array(z.string().min(1).max(SUBMISSION_LIMITS.short)),
+});
+export type EvidenceAssessmentCategories = z.infer<
+  typeof EvidenceAssessmentCategoriesSchema
+>;
+
+/** How the submission was parsed. Stated honestly; there is no LLM in the path. */
+export const ExtractionMethodSchema = z.enum(["rule-based", "model"]);
+export type ExtractionMethod = z.infer<typeof ExtractionMethodSchema>;
+
+/** Whether a connected authoritative source was actually consulted. */
+export const AuthoritativeLookupSchema = z.object({
+  attempted: z.boolean(),
+  source: z.string().min(1),
+  /** True only when the lookup returned a definitive, verified result. */
+  verified: z.boolean(),
+  status: EvidenceStatusSchema,
+  detail: z.string().min(1).max(4000),
+  evidenceReference: z.string().min(1),
+});
+export type AuthoritativeLookup = z.infer<typeof AuthoritativeLookupSchema>;
+
+/** The investigation of one submission: parse + evidence assessment. */
+export const InvestigationSchema = z.object({
+  extractionMethod: ExtractionMethodSchema,
+  /** The inferred domain, and why. */
+  domain: DomainSchema,
+  domainReason: z.string().min(1).max(2000),
+  actionType: z.string().min(1).max(120),
+  /** Concise restatement of what was reported. */
+  summary: z.string().min(1).max(4000),
+  categories: EvidenceAssessmentCategoriesSchema,
+  authoritativeLookup: AuthoritativeLookupSchema,
+  /** The deterministic diagnosis hypothesis derived from the above. */
+  diagnosis: DiagnosisSchema,
+});
+export type Investigation = z.infer<typeof InvestigationSchema>;
+
+/**
+ * A safeguard recommendation. Distinct from a `SafeguardRule`: this is the
+ * proposal shown to the user, with the reasoning that supports it. It becomes a
+ * rule only when the rule engine activates it.
+ */
+export const SafeguardRecommendationSchema = z.object({
+  statement: z.string().min(1).max(4000),
+  failureMode: z.string().min(1).max(4000),
+  whyEvidenceSupports: z.string().min(1).max(4000),
+  assumptions: z.array(z.string().min(1).max(SUBMISSION_LIMITS.short)),
+  testPlan: z.array(z.string().min(1).max(SUBMISSION_LIMITS.short)),
+  successCriteria: z.string().min(1).max(2000),
+  action: z.enum(["BLOCK", "REQUIRE_VERIFICATION"]),
+  severity: SeveritySchema,
+});
+export type SafeguardRecommendation = z.infer<
+  typeof SafeguardRecommendationSchema
+>;
+
+/**
+ * The outcome of verifying a safeguard.
+ *
+ * The state vocabulary is deliberately ordinal and pessimistic. A safeguard is
+ * `recommended` the moment it is proposed; it is only `test_executed` once a
+ * real test actually ran; and it is only `verified` when that test's outcome
+ * genuinely demonstrates the safeguard works. A submission can never reach
+ * `verified` on its own, because a single incident cannot demonstrate that a
+ * repeat was prevented — that requires a second, independent occurrence.
+ */
+export const VerificationStateSchema = z.enum([
+  "recommended",
+  "test_planned",
+  "test_executed",
+  "verified",
+  "inconclusive",
+  "failed",
+]);
+export type VerificationState = z.infer<typeof VerificationStateSchema>;
+
+export const VerificationStepSchema = z.object({
+  step: z.string().min(1).max(SUBMISSION_LIMITS.short),
+  detail: z.string().min(1).max(4000),
+  outcome: z.enum(["pass", "fail", "inconclusive", "info"]),
+});
+
+export const VerificationSchema = z.object({
+  state: VerificationStateSchema,
+  /** What was actually executed, stated plainly. Empty when nothing ran. */
+  executed: z.string().min(1).max(2000),
+  steps: z.array(VerificationStepSchema),
+  /** What the test established — or why it could not establish anything. */
+  established: z.string().min(1).max(4000),
+  /**
+   * True only when a real, runnable test was produced and executed. The UI uses
+   * this — never the state label alone — to decide whether to claim testing.
+   */
+  testExecuted: z.boolean(),
+});
+export type Verification = z.infer<typeof VerificationSchema>;
+
+/** How a recalled prior record relates to the current submission. */
+export const MemoryRelationSchema = z.enum([
+  "retrieved",
+  "possible_similarity",
+  "confirmed_recurrence",
+]);
+export type MemoryRelation = z.infer<typeof MemoryRelationSchema>;
+
+/**
+ * Memory-write lifecycle, defined here so the audit record schema below can
+ * validate a receipt without importing the adapter module (which would be a
+ * cycle). The adapter re-exports these types, so there is still one definition.
+ */
+export const MemoryBackendIdSchema = z.enum([
+  "memwal-mainnet",
+  "memwal-staging",
+  "memwal-unknown",
+  "simulated",
+]);
+export type MemoryBackendId = z.infer<typeof MemoryBackendIdSchema>;
+
+export const MemoryWriteStateSchema = z.enum([
+  "requested",
+  "processing",
+  "completed",
+  "failed",
+]);
+export type MemoryWriteState = z.infer<typeof MemoryWriteStateSchema>;
+
+export const MemoryWriteReceiptSchema = z.object({
+  writeId: z.string().min(1),
+  kind: z.enum(["incident", "lesson"]),
+  jobId: z.string().nullable(),
+  state: MemoryWriteStateSchema,
+  blobId: z.string().optional(),
+  owner: z.string().optional(),
+  namespace: z.string().optional(),
+  error: z.string().optional(),
+  recallVerified: z.boolean(),
+  recallMatches: z.number().optional(),
+  backend: MemoryBackendIdSchema,
+  provenance: ProvenanceSchema,
+  requestedAt: z.string(),
+  completedAt: z.string().optional(),
+  text: z.string(),
+});
+export type MemoryWriteReceipt = z.infer<typeof MemoryWriteReceiptSchema>;
+
+export const RecalledMemorySchema = z.object({
+  blobId: z.string().min(1),
+  relation: MemoryRelationSchema,
+  /** Human explanation of why it is relevant, grounded in the recalled record. */
+  why: z.string().min(1).max(2000),
+  distance: z.number(),
+  /** The recalled lesson's rule statement, when the text parsed as a lesson. */
+  ruleStatement: z.string().max(4000).optional(),
+  domain: z.string().max(120).optional(),
+  failurePattern: z.string().max(120).optional(),
+  provenance: ProvenanceSchema,
+});
+export type RecalledMemory = z.infer<typeof RecalledMemorySchema>;
+
+/**
+ * The signature artifact. Connects
+ *   Incident -> Evidence -> Hypothesis -> Safeguard -> Verification -> Memory
+ * with truthful state labels at every join.
+ */
+export const SafeguardRecordSchema = z.object({
+  recordId: z.string().min(1),
+  incidentId: z.string().min(1),
+  createdAt: z.string(),
+  submission: IncidentSubmissionSchema,
+  investigation: InvestigationSchema,
+  recommendation: SafeguardRecommendationSchema,
+  /** The rule the engine proposed from this investigation, if any. */
+  proposedRule: SafeguardRuleSchema.nullable(),
+  /** The rule that was activated, if validation accepted it. */
+  activatedRule: SafeguardRuleSchema.nullable(),
+  /** Reasons the rule was or was not activated. */
+  validationReasons: z.array(z.string()),
+  decision: SafeguardDecisionSchema,
+  verification: VerificationSchema,
+  recalledMemories: z.array(RecalledMemorySchema),
+  memory: z.object({
+    /** Persistence of the incident record. */
+    incident: MemoryWriteReceiptSchema,
+    /** Persistence of the corrective lesson. Null when no lesson applied. */
+    lesson: MemoryWriteReceiptSchema.nullable(),
+    /** Whether a later recall returned the stored lesson. */
+    recallVerified: z.boolean(),
+    /** Backend the writes went to. */
+    backend: z.string().min(1),
+    isLive: z.boolean(),
+  }),
+  provenance: ProvenanceSchema,
+});
+export type SafeguardRecord = z.infer<typeof SafeguardRecordSchema>;
+
+/**
+ * A user-submitted incident is always `live` in the sense that it is real user
+ * material, but it is NOT a Mainnet write. The record carries `simulated`
+ * provenance when the memory backend is not live, so nothing claims a durable
+ * Mainnet memory that does not exist.
+ */

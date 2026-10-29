@@ -3,6 +3,8 @@ import { resolveMemoryAdapter, type MemoryAdapterResolution } from "@/lib/adapte
 import { buildSuiVerifier } from "@/lib/demos/finance";
 import type { SuiVerifier } from "@/lib/adapters/sui-verifier";
 import { FinanceEvidenceAdapter } from "@/lib/adapters/finance-evidence";
+import { IncidentEvidenceAdapter } from "@/lib/adapters/incident-evidence";
+import type { EvidenceAdapter } from "@/lib/adapters/evidence";
 import type { AuditStore } from "@/lib/db/audit-store";
 import { resolveDurableStores, type DurableStores } from "@/lib/db/durable-stores";
 import { IncidentPipeline } from "@/lib/engines/pipeline";
@@ -28,6 +30,13 @@ export interface Runtime {
   financePipeline: IncidentPipeline;
   workflowStore: WorkflowStateStore;
   workflowPipeline: IncidentPipeline;
+  /**
+   * Evidence adapter for a user submission, chosen by the inferred domain. The
+   * finance adapter performs a real read-only Tatum lookup when a digest is
+   * present; otherwise the incident adapter reports honestly that no source is
+   * connected.
+   */
+  resolveSubmissionEvidence(domain: "finance" | "incident"): EvidenceAdapter;
 }
 
 declare global {
@@ -65,6 +74,11 @@ function build(): Runtime {
       memory: memory.adapter,
       store,
     }),
+    resolveSubmissionEvidence(domain: "finance" | "incident"): EvidenceAdapter {
+      return domain === "finance"
+        ? new FinanceEvidenceAdapter(suiVerifier)
+        : new IncidentEvidenceAdapter();
+    },
   };
 }
 

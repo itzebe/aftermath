@@ -195,3 +195,128 @@ pre.code {
 .scroll-x {
   overflow-x: auto;
 }
+
+/* ---- accessibility -------------------------------------------------- *
+ * Visible focus for keyboard users on every interactive element, and a
+ * reduced-motion escape hatch. These are requirements, not decoration. */
+
+:focus-visible {
+  outline: 2px solid #6fb2ff;
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+button.action:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 2px solid #6fb2ff;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---- incident submission ------------------------------------------- */
+
+.hero-grid {
+  background-image:
+    radial-gradient(60rem 30rem at 15% -10%, rgba(74, 158, 255, 0.10), transparent 60%),
+    linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 100% 100%, 46px 46px, 46px 46px;
+}
+
+.field {
+  width: 100%;
+  background: #06080b;
+  border: 1px solid var(--line-2);
+  border-radius: 5px;
+  color: var(--text);
+  padding: 0.6rem 0.7rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+.field::placeholder {
+  color: #5b6675;
+}
+.field:focus {
+  border-color: #3d6fa8;
+}
+
+textarea.field {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+button.action.primary {
+  background: #1f4d8f;
+  border-color: #2f6fc4;
+}
+
+/* A slow, purposeful pulse used only to mark a stage that is genuinely in
+   progress. Never used decoratively. */
+@keyframes stage-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.stage-active {
+  animation: stage-pulse 1.4s ease-in-out infinite;
+}
+
+/* ---- the causal chain (the signature visual) ------------------------ *
+ * A single connected rail: Incident -> Evidence -> Hypothesis -> Safeguard
+ * -> Verification -> Memory. The connecting line is what makes the record
+ * read as one argument rather than a stack of cards. */
+
+.chain {
+  position: relative;
+}
+.chain-node {
+  position: relative;
+  padding-left: 2rem;
+  padding-bottom: 1.15rem;
+}
+.chain-node::before {
+  content: "";
+  position: absolute;
+  left: 0.34rem;
+  top: 1.05rem;
+  bottom: -0.15rem;
+  width: 1px;
+  background: var(--line-2);
+}
+.chain-node:last-child::before {
+  display: none;
+}
+.chain-dot {
+  position: absolute;
+  left: 0;
+  top: 0.35rem;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: var(--panel);
+}
+
+/* A thin monospace label used above values, giving the record an
+   instrument-panel feel without adding noise. */
+.label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+  color: var(--muted);
+}
+

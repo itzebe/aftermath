@@ -5,7 +5,7 @@ import type {
   RuleValidationStatus,
 } from "@/lib/schemas";
 
-type Tone = "ok" | "bad" | "warn" | "info" | "unknown" | "neutral";
+export type Tone = "ok" | "bad" | "warn" | "info" | "unknown" | "neutral";
 
 const TONE_CLASS: Record<Tone, string> = {
   ok: "pill-ok",
@@ -107,15 +107,20 @@ export function SectionTitle({
   title,
   hint,
   right,
+  as: Heading = "h2",
 }: {
   title: string;
   hint?: string;
   right?: React.ReactNode;
+  /** Use "h1" for a page's single primary heading. */
+  as?: "h1" | "h2";
 }) {
   return (
     <div className="mb-3 flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
       <div className="min-w-0">
-        <h2 className="text-[0.9375rem] font-semibold tracking-tight">{title}</h2>
+        <Heading className="text-[0.9375rem] font-semibold tracking-tight">
+          {title}
+        </Heading>
         {hint ? (
           <p className="mt-0.5 max-w-2xl text-[0.75rem] leading-relaxed text-paper-500">
             {hint}

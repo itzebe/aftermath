@@ -134,4 +134,45 @@ maybe("durable audit store across instances", () => {
     expect(writes.some((w) => w.writeId === "w-sim")).toBe(false);
     expect(writes.some((w) => w.writeId === "w-cross-1")).toBe(true);
   });
+
+  it("a Safeguard Record written by one instance is read by another", async () => {
+    const { runSubmissionPipeline } = await import(
+      "@/lib/engines/submission-pipeline"
+    );
+    const { SimulatedMemoryAdapter } = await import(
+      "@/lib/adapters/simulated-memory"
+    );
+    const { IncidentEvidenceAdapter } = await import(
+      "@/lib/adapters/incident-evidence"
+    );
+
+    const record = await runSubmissionPipeline(
+      { text: "2026-03-01T10:00:00Z ERROR checkout-service returned 503" },
+      {
+        store: writer,
+        memory: new SimulatedMemoryAdapter("aftermath-test"),
+        resolveEvidence: () => new IncidentEvidenceAdapter(),
+      },
+    );
+
+    // The reader process never saw the write; the record must come from the DB.
+    const seen = await reader.getSafeguardRecord(record.recordId);
+    expect(seen).not.toBeNull();
+    expect(seen!.verification.state).toBe("test_executed");
+    expect(seen!.provenance).toBe("simulated");
+
+    const listed = await reader.listSafeguardRecords(10);
+    expect(listed.map((r) => r.recordId)).toContain(record.recordId);
+    expect((await reader.counts()).records).toBeGreaterThanOrEqual(1);
+  });
+
+  it("resetSimulated preserves user Safeguard Records", async () => {
+    // A scenario run clears scenario-produced state so figures reproduce; it
+    // must not destroy a person's submitted investigations.
+    const before = await reader.listSafeguardRecords(100);
+    await writer.resetSimulated();
+    const after = await reader.listSafeguardRecords(100);
+    expect(after.length).toBe(before.length);
+    expect(after.length).toBeGreaterThan(0);
+  });
 });

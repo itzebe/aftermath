@@ -43,7 +43,40 @@ the static page is built and deployed.
 
 ## What it actually does
 
-For each attempted action, the engine runs a fixed pipeline:
+The front door is an incident submission. Paste real failure material — an
+error, a stack trace, a log excerpt, a failed request — and AFTERMATH returns a
+**Safeguard Record**: a single connected artifact that runs from the incident to
+the safeguard, with honest state labels at every link.
+
+```
+Incident -> Evidence -> Hypothesis -> Safeguard -> Verification -> Memory
+```
+
+- **Incident** — the submitted text, treated strictly as data: parsed with
+  regular expressions, never executed, credential-shaped strings redacted before
+  storage.
+- **Evidence** — observed facts (each with its verbatim span), confirmed facts,
+  hypotheses, unknowns, and next checks, kept strictly separate. A submission is
+  material, not proof, so with no connected source the assessment is `UNKNOWN`.
+  A Sui digest, if present, is looked up read-only through Tatum and folded in.
+- **Hypothesis** — a deterministic, rule-based diagnosis with a confidence. A
+  rate limit or timeout is classified as `evidence_unavailable`, never a failure.
+- **Safeguard** — a specific, testable recommendation: rule statement, failure
+  mode, supporting evidence, assumptions, test plan, success criteria. Validated
+  through the shared rule engine; a single submission's rule is `proposed`, never
+  `active`.
+- **Verification** — the decision engine is executed twice (baseline vs.
+  safeguarded) and both decisions are recorded. The state is `test_executed`,
+  never `verified`: one incident cannot prove a repeat was prevented.
+- **Memory** — the incident and lesson are written through the Walrus Memory
+  adapter with content-hash idempotency keys; recall is reported separately from
+  storage, and recalled records are labelled confirmed recurrence vs. possible
+  similarity.
+
+There is **no language model in this path**. The record states its
+`extractionMethod` as `rule-based` so a reader knows what produced it.
+
+Underneath, the same seven-stage engine the product was built on still runs:
 
 1. **Incident intake** — a structured record of the attempt, validated with Zod
    at the boundary. A client-supplied "success" is a *claim*, never evidence.
@@ -83,14 +116,14 @@ that those writes are **not** stored on Walrus Mainnet and do **not** count
 toward the requirement. The dashboard shows `Mainnet writes completed: N / 10`
 and never pads the number.
 
-With credentials present, the writes are real. The Overview and Memory pages
+With credentials present, the writes are real. The Lab and Memory pages
 report two numbers separately, because they mean different things:
 
 - **Completed Mainnet writes** — writes submitted through this deployment's
   audit index, awaited to a blob id, and confirmed retrievable by recall. The
   ledger is durable when `DATABASE_URL` is set (shared across instances and
   surviving redeploys); without it the ledger is a per-instance SQLite file and
-  a fresh deployment starts at zero. The Overview page states which of the two
+  a fresh deployment starts at zero. The Lab page states which of the two
   is in effect.
 - **Memories in namespace** — the authoritative count the relayer reports for
   the configured namespace. This comes from the same signed `listNamespaces`
@@ -111,10 +144,10 @@ cp .env.example .env.local   # fill in credentials (see below)
 npm run dev                  # http://localhost:12000
 ```
 
-Then open the Overview page and press **Run from scratch** (or **Resume /
-continue** to pick up an unfinished run). That executes the controlled scenarios
-and populates the incident timeline, safeguards, memory ledger, and evaluation
-metrics. Because each scenario performs real Walrus Mainnet writes, the run
+Then open the **Evaluation Lab** (`/lab`) and press **Run from scratch** (or
+**Resume / continue** to pick up an unfinished run). That executes the controlled
+scenarios and populates the incident timeline, safeguards, memory ledger, and
+evaluation metrics. Because each scenario performs real Walrus Mainnet writes, the run
 advances in bounded batches across several requests; the page reports progress
 until the job completes.
 
@@ -124,7 +157,7 @@ On a serverless host the deployment bundle is read-only and each request may run
 in a different instance, so a file-backed index cannot be shared. Set
 `DATABASE_URL` to a PostgreSQL connection string (Neon, Supabase, RDS, or any
 Postgres) to store the incident index in a shared database. Without it the app
-still runs, but it uses a per-instance SQLite file and the Overview page reports
+still runs, but it uses a per-instance SQLite file and the Lab page reports
 the index as **per-instance · not shared**. The store never silently substitutes
 one for the other: if `DATABASE_URL` is set but unreachable, requests fail with
 an explicit `503` rather than reporting success against a fallback.
@@ -381,7 +414,7 @@ confirms that a rejected Tatum key — over both gRPC and GraphQL — maps to
 
 ```
 src/
-  app/                    Next.js routes (Overview, Incidents, Safeguards,
+  app/                    Next.js routes (Investigate, Records, Lab, Incidents, Safeguards,
                           Memory, Evaluation) and API routes
   components/             Design system and shell
   lib/
@@ -474,7 +507,7 @@ is present, and that no wrapped prose line is mistaken for a list item.
 
 - The audit index is durable only when `DATABASE_URL` is set. Without it the
   index is a per-instance SQLite file (temp-backed on a read-only host) and is
-  not shared between serverless instances. The Overview page reports which
+  not shared between serverless instances. The Lab page reports which
   mode is active; it is never implied to be durable when it is not.
 - The coding and workflow demonstrations are controlled harnesses, not a
   general-purpose coding or automation platform. They are labelled as such in

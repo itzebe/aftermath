@@ -1,46 +1,15 @@
 import type {
   CorrectiveLessonRecord,
   Incident,
+  MemoryBackendId,
+  MemoryWriteReceipt,
+  MemoryWriteState,
   Provenance,
 } from "@/lib/schemas";
 
-/** Where a memory backend actually writes. Surfaced verbatim in the UI. */
-export type MemoryBackendId =
-  | "memwal-mainnet"
-  | "memwal-staging"
-  | "memwal-unknown"
-  | "simulated";
-
-/** Lifecycle of a single memory write, as required by the brief. */
-export type MemoryWriteState =
-  | "requested"
-  | "processing"
-  | "completed"
-  | "failed";
-
-export interface MemoryWriteReceipt {
-  /** Local identifier for this write attempt (stable across polling). */
-  writeId: string;
-  /** What was written: incident summary or corrective lesson. */
-  kind: "incident" | "lesson";
-  /** The relayer job id, when one was returned. */
-  jobId: string | null;
-  state: MemoryWriteState;
-  /** Walrus blob id, only populated once the write actually completes. */
-  blobId?: string;
-  owner?: string;
-  namespace?: string;
-  error?: string;
-  /** True only after a recall query returned this record back. */
-  recallVerified: boolean;
-  recallMatches?: number;
-  backend: MemoryBackendId;
-  provenance: Provenance;
-  requestedAt: string;
-  completedAt?: string;
-  /** The exact text submitted, kept for auditability. */
-  text: string;
-}
+// The receipt shape is defined once in schemas.ts (so the Safeguard Record can
+// validate it without an import cycle) and re-exported here for adapter callers.
+export type { MemoryBackendId, MemoryWriteReceipt, MemoryWriteState };
 
 export interface RecalledLesson {
   blobId: string;

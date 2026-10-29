@@ -4,7 +4,12 @@ import { maskSecret } from "@/lib/util/redact";
 import { runAllScenarios, type DemoRunResult } from "@/lib/demos/runner";
 import { runDemoBatch, type BatchResult } from "@/lib/demos/resumable-runner";
 import { evaluate, type EvaluationMetrics, type ScenarioOutcome } from "@/lib/engines/evaluation";
-import type { IncidentInputDraft } from "@/lib/schemas";
+import { runSubmissionPipeline } from "@/lib/engines/submission-pipeline";
+import type {
+  IncidentInputDraft,
+  IncidentSubmission,
+  SafeguardRecord,
+} from "@/lib/schemas";
 
 export interface ConfigurationStatus {
   memory: {
@@ -70,6 +75,7 @@ export interface StoreCounts {
   recallVerifiedWrites: number;
   simulatedWrites: number;
   totalWrites: number;
+  records: number;
 }
 
 export interface OverviewPayload {
@@ -271,6 +277,45 @@ export async function getLastRun(): Promise<DemoRunResult | null> {
 
 export async function resetAll(): Promise<void> {
   await runtime().store.reset();
+}
+
+/* ------------------------------------------------------------------ *
+ * User-submitted incident workflow
+ * ------------------------------------------------------------------ */
+
+/**
+ * Investigate a submitted incident end to end and persist the Safeguard Record.
+ *
+ * The submission is validated by the route before it reaches here. Nothing in
+ * this path executes the submitted material; it is parsed, assessed, matched
+ * against memory, and turned into a safeguard recommendation.
+ */
+export async function submitIncident(
+  submission: IncidentSubmission,
+): Promise<SafeguardRecord> {
+  const rt = runtime();
+  // Ensure the durable tables exist before the first write, so a fresh
+  // deployment does not fail on the very first submission.
+  await rt.durable.migrate();
+  return runSubmissionPipeline(submission, {
+    resolveEvidence: (domain) => rt.resolveSubmissionEvidence(domain),
+    memory: rt.memory.adapter,
+    store: rt.store,
+  });
+}
+
+export async function getSafeguardRecords(limit = 100): Promise<SafeguardRecord[]> {
+  return runtime().store.listSafeguardRecords(limit);
+}
+
+export async function getSafeguardRecord(
+  recordId: string,
+): Promise<SafeguardRecord | null> {
+  return runtime().store.getSafeguardRecord(recordId);
+}
+
+export async function countSafeguardRecords(): Promise<number> {
+  return runtime().store.countSafeguardRecords();
 }
 
 export type { IncidentInputDraft };

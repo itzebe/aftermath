@@ -9,7 +9,7 @@ import type {
 } from "@/lib/db/audit-store";
 import { computeCounts } from "@/lib/db/audit-store";
 import type { MemoryWriteReceipt } from "@/lib/adapters/memory";
-import type { SafeguardDecision, SafeguardRule } from "@/lib/schemas";
+import type { SafeguardDecision, SafeguardRecord, SafeguardRule } from "@/lib/schemas";
 
 /**
  * SQLite-backed audit index.
@@ -94,8 +94,18 @@ export class SqliteAuditStore implements AuditStore {
         ran_at TEXT NOT NULL,
         payload TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS safeguard_records (
+        record_id TEXT PRIMARY KEY,
+        incident_id TEXT NOT NULL,
+        domain TEXT NOT NULL,
+        verification_state TEXT NOT NULL,
+        provenance TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        payload TEXT NOT NULL
+      );
       CREATE INDEX IF NOT EXISTS idx_incidents_domain ON incidents(domain);
       CREATE INDEX IF NOT EXISTS idx_writes_backend ON memory_writes(backend, state);
+      CREATE INDEX IF NOT EXISTS idx_records_created ON safeguard_records(created_at);
     `);
   }
 
@@ -241,6 +251,48 @@ export class SqliteAuditStore implements AuditStore {
     return rows.map((r) => JSON.parse(r.payload) as MemoryWriteReceipt);
   }
 
+  async saveSafeguardRecord(record: SafeguardRecord): Promise<void> {
+    this.db
+      .prepare(
+        `INSERT INTO safeguard_records
+          (record_id, incident_id, domain, verification_state, provenance, created_at, payload)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(record_id) DO UPDATE SET payload = excluded.payload`,
+      )
+      .run(
+        record.recordId,
+        record.incidentId,
+        record.investigation.domain,
+        record.verification.state,
+        record.provenance,
+        record.createdAt,
+        JSON.stringify(record),
+      );
+  }
+
+  async listSafeguardRecords(limit = 100): Promise<SafeguardRecord[]> {
+    const rows = this.db
+      .prepare(
+        `SELECT payload FROM safeguard_records ORDER BY created_at DESC LIMIT ?`,
+      )
+      .all(limit) as Array<{ payload: string }>;
+    return rows.map((r) => JSON.parse(r.payload) as SafeguardRecord);
+  }
+
+  async getSafeguardRecord(recordId: string): Promise<SafeguardRecord | null> {
+    const row = this.db
+      .prepare(`SELECT payload FROM safeguard_records WHERE record_id = ?`)
+      .get(recordId) as { payload: string } | undefined;
+    return row ? (JSON.parse(row.payload) as SafeguardRecord) : null;
+  }
+
+  async countSafeguardRecords(): Promise<number> {
+    const row = this.db
+      .prepare(`SELECT COUNT(*) AS n FROM safeguard_records`)
+      .get() as { n: number };
+    return Number(row.n);
+  }
+
   async listDecisions(limit = 200): Promise<SafeguardDecision[]> {
     const rows = this.db
       .prepare(`SELECT payload FROM decisions ORDER BY decided_at DESC LIMIT ?`)
@@ -261,12 +313,17 @@ export class SqliteAuditStore implements AuditStore {
     const incidents = await this.listIncidents(100_000);
     const writes = await this.listMemoryWrites(100_000);
     const activeRules = await this.listActiveRules();
-    return computeCounts({ incidents, writes, activeRules });
+    return computeCounts({
+      incidents,
+      writes,
+      activeRules,
+      records: await this.countSafeguardRecords(),
+    });
   }
 
   async reset(): Promise<void> {
     this.db.exec(
-      `DELETE FROM incidents; DELETE FROM rules; DELETE FROM decisions; DELETE FROM memory_writes; DELETE FROM scenario_runs;`,
+      `DELETE FROM incidents; DELETE FROM rules; DELETE FROM decisions; DELETE FROM memory_writes; DELETE FROM scenario_runs; DELETE FROM safeguard_records;`,
     );
   }
 
@@ -278,6 +335,10 @@ export class SqliteAuditStore implements AuditStore {
    * entry would not un-write it, but it would hide it from the count the
    * submission is judged on. So simulated writes are cleared (a re-run must be
    * reproducible) and live writes are kept (the ledger must stay truthful).
+   *
+   * User-submitted Safeguard Records are deliberately NOT cleared here: they
+   * are a person's own work, not scenario output, and a demonstration run must
+   * never delete them.
    */
   async resetSimulated(): Promise<void> {
     this.db.exec(

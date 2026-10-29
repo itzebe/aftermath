@@ -56,10 +56,11 @@ export default function EvaluationPage() {
       <div className="space-y-5">
         <SectionTitle
           title="Learning Evaluation"
+          as="h1"
           hint="Did the activated safeguards actually change the outcome? These figures are measured over the controlled scenarios in the last run. They are scenario measurements, not claims about production reliability."
         />
         <EmptyState title="No scenario run recorded yet">
-          Run the demonstrations from the Overview page. Every metric on this
+          Run the demonstrations from the Evaluation Lab. Every metric on this
           page is derived from that run and nothing else.
         </EmptyState>
       </div>
@@ -77,7 +78,7 @@ export default function EvaluationPage() {
 
       {m.scenarios === 0 ? (
         <EmptyState title="No scenario run recorded yet">
-          Run the demonstrations from the Overview page. Every metric on this
+          Run the demonstrations from the Evaluation Lab. Every metric on this
           page is derived from that run and nothing else.
         </EmptyState>
       ) : (
@@ -179,7 +180,12 @@ export default function EvaluationPage() {
             title="Per-scenario outcomes"
             hint="Each row is one controlled scenario. Ground truth is set when the scenario is defined, never inferred from the engine's decision."
           >
-            <div className="scroll-x">
+            <div
+              className="scroll-x"
+              role="region"
+              aria-label="Per-scenario outcomes"
+              tabIndex={0}
+            >
               <table className="data">
                 <thead>
                   <tr>

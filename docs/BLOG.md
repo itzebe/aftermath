@@ -106,6 +106,111 @@ unavailability, and memory retrieval relevance. The framing is deliberately
 narrow. "Baseline" means first-occurrence scenarios, where no safeguard could
 exist yet. "Prevention" means repeat scenarios, where one did.
 
+## The product surface: submit an incident, get a safeguard
+
+The seven stages above describe the mechanism. The mechanism is only worth
+anything if a person can use it on a *real* failure, so AFTERMATH's front door
+is a submission form, not a dashboard. The landing page asks for the incident
+material — an error, a stack trace, a log excerpt, a failed request — and returns
+a **Safeguard Record**: one connected artifact that runs from the incident to
+the safeguard and states, at every link, exactly how much is known.
+
+The record is a single causal chain, not a stack of cards:
+
+```
+Incident -> Evidence -> Hypothesis -> Safeguard -> Verification -> Memory
+```
+
+Each link is labelled with its honest state, and no claim is upgraded as it
+moves down the chain.
+
+**Incident.** The submitted text is treated strictly as data. It is parsed with
+regular expressions and pure string operations; it is never executed, never
+evaluated as code or SQL, and never interpolated into a command. Credential-
+shaped strings are redacted before anything is stored, displayed, or written to
+memory, because a pasted log frequently contains a token by accident.
+
+**Evidence.** The parse separates five things that are usually blurred
+together: what the material *shows* (observed, each with the verbatim span it
+came from), what a connected source *confirms*, what is merely *hypothesised*,
+what is still *unknown*, and what check would resolve the difference. A
+hypothesis is never promoted to a fact. When the material names a source the
+application can actually consult — a Sui transaction digest, looked up
+read-only through Tatum — that lookup result is folded in and labelled with
+whether it was attempted and whether it was verified. When no such source is
+named, the assessment says so and returns `UNKNOWN`: a submission is material,
+not proof, and inventing a verdict from prose is the exact failure the product
+exists to prevent.
+
+There is **no language model in this path**. That is a deliberate, disclosed
+choice: the claim is evidence-grounded investigation, not autonomous reasoning,
+and a model here would make the output unauditable. The record states its
+`extractionMethod` as `rule-based` so a reader knows precisely what produced it.
+
+**Hypothesis.** The extracted signals map onto the same failure-pattern
+vocabulary the controlled scenarios use, producing a deterministic diagnosis
+with a confidence and an applicability — a hypothesis, exactly as in the
+scenario engine, never a verdict. The single most important classification the
+product makes lives here: a rate limit or a timeout is classified as
+`evidence_unavailable`, not as a failure. The dependency did not answer; the
+operation's true outcome is unknown; recording it as a failure would convert
+missing evidence into a verdict.
+
+**Safeguard.** The diagnosis yields a specific, testable recommendation: a rule
+statement, the failure mode it addresses, why the evidence supports it, the
+assumptions it rests on, a test plan, and success criteria. It is validated
+through the same rule engine the scenarios use. A single submission persists its
+rule as **proposed**, never **active** — one incident cannot justify a standing
+rule, and the record says so.
+
+**Verification.** This is where the product refuses to flatter itself. The
+recommendation is verified by *actually executing* the decision engine twice for
+the reported action — once with no safeguard, once with the rule applied — and
+recording both decisions. The state is `test_executed`, never `verified`: a
+single incident cannot demonstrate that a *repeat* was prevented, and claiming
+otherwise would overstate the result. If the rule does not change the decision,
+the record says `inconclusive` and states that the rule needs revision. If the
+rule makes the outcome less protective, it says `failed`. The test is genuine —
+the decisions are produced by the same engine that governs the scenarios — and
+the label is honest about how much a genuine test of one incident can establish.
+
+**Memory.** The incident and the corrective lesson are written through the same
+Walrus Memory adapter the scenarios use, with content-hash idempotency keys, and
+recall is reported separately from storage. Recalled prior records are labelled
+by *how* they relate: a lesson whose failure pattern matches exactly is a
+**confirmed recurrence**; a looser match is a **possible similarity**; a first
+occurrence recalls nothing and says so. When the memory backend is simulated,
+the record is stamped `simulated` and says that these writes were not stored on
+Walrus Mainnet.
+
+### Idempotency, again
+
+A submission's record id is the SHA-256 of its normalised content (or of a
+caller-supplied key). The same material therefore always produces the same
+record id, incident id, and memory idempotency keys, so a retried request
+upserts the same record instead of duplicating it, and the relayer dedupes on
+the same keys. This is the same rule the demonstration learned the hard way:
+idempotency only works when the payload is a function of the incident, not of
+the clock.
+
+### The same failure, applied to the submission path
+
+The submission route classifies its own dependency errors with the same
+transient classifier the demonstration uses. If the memory relayer or Tatum is
+transiently unavailable, the route returns a retryable condition with the wait
+the dependency asked for — and **records no verdict about the incident**. A
+transport problem on the way to an investigation is not a result of the
+investigation. The form says as much, and a retry is safe because the record id
+is deterministic.
+
+### Where the reliability console lives
+
+The controlled scenarios still run, and they still matter — they are the
+*evidence for the mechanism*. They now live one link away, in the **Evaluation
+Lab**, so the front door can be the act that produces a safeguard rather than a
+dashboard that describes one. Every figure in the Lab is read from the running
+system; nothing is illustrative.
+
 ## The integrations
 
 ### Walrus Memory
@@ -560,11 +665,17 @@ cp .env.example .env.local   # add credentials
 npm run dev                  # http://localhost:12000
 ```
 
-Open the Overview, press **Run from scratch**, and read the Incident Explorer.
-Every incident shows the claim, the evidence, the diagnosis, and the decision —
-in that order, because that is the order in which the truth becomes available.
-The run advances in bounded batches, since every scenario waits on real Walrus
-Mainnet writes; the page shows progress and the job resumes if interrupted.
+Open the front door, paste an incident, and read the **Safeguard Record** it
+returns: the evidence with its spans, the hypotheses, the unknowns, the proposed
+safeguard, and exactly how far it has been verified. Every record connects an
+incident to a safeguard and states what is known, what is only suspected, and
+what is still unknown — in that order, because that is the order in which the
+truth becomes available.
+
+The controlled scenarios live in the **Evaluation Lab** (`/lab`). Press **Run
+from scratch**, and read the Incident Explorer. The run advances in bounded
+batches, since every scenario waits on real Walrus Mainnet writes; the page shows
+progress and the job resumes if interrupted.
 
 ---
 

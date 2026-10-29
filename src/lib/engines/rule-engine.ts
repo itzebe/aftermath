@@ -8,7 +8,7 @@ import {
   type Severity,
 } from "@/lib/schemas";
 
-const PATTERN_SEVERITY: Record<FailurePattern, Severity> = {
+export const PATTERN_SEVERITY: Record<FailurePattern, Severity> = {
   unsupported_completion_claim: "high",
   missing_prerequisite: "medium",
   repeated_failed_operation: "high",
@@ -19,7 +19,7 @@ const PATTERN_SEVERITY: Record<FailurePattern, Severity> = {
   conflicting_evidence: "high",
 };
 
-const PATTERN_ACTION: Record<FailurePattern, "BLOCK" | "REQUIRE_VERIFICATION"> = {
+export const PATTERN_ACTION: Record<FailurePattern, "BLOCK" | "REQUIRE_VERIFICATION"> = {
   unsupported_completion_claim: "BLOCK",
   missing_prerequisite: "REQUIRE_VERIFICATION",
   repeated_failed_operation: "BLOCK",

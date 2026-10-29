@@ -84,12 +84,13 @@ export default function IncidentsPage() {
     <div className="space-y-5">
       <SectionTitle
         title="Incident Explorer"
+        as="h1"
         hint="Every attempted action the engine has evaluated, with the evidence it read, the diagnosis it formed, and the decision it reached. Evidence is recorded before any conclusion."
       />
 
       {data.incidents.length === 0 ? (
         <EmptyState title="No incidents recorded yet">
-          Run the demonstrations from the Overview page to populate the
+          Run the demonstrations from the Evaluation Lab to populate the
           incident timeline.
         </EmptyState>
       ) : (

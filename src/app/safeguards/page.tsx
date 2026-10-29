@@ -65,6 +65,7 @@ export default function SafeguardsPage() {
     <div className="space-y-5">
       <SectionTitle
         title="Safeguards"
+        as="h1"
         hint="Corrective rules derived from verified incidents. A rule is proposed first and only enforced once validation passes; proposed rules never block anything."
         right={
           <div className="flex gap-2">

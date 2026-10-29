@@ -9,10 +9,10 @@ import { expect, test } from "@playwright/test";
  */
 
 test("overview renders and labels the memory backend honestly", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/lab");
   await expect(page.getByText("AFTERMATH").first()).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Overview" }),
+    page.getByRole("heading", { name: "Evaluation Lab" }),
   ).toBeVisible();
 
   // With no credentials configured the app must say so rather than implying
@@ -24,7 +24,7 @@ test("overview renders and labels the memory backend honestly", async ({ page })
 });
 
 test("running the demonstrations populates the scenario table", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/lab");
   const runButton = page.getByRole("button", { name: /Run from scratch/i });
   await runButton.click();
   // The run advances in bounded batches against real Mainnet writes, so it can
@@ -35,6 +35,42 @@ test("running the demonstrations populates the scenario table", async ({ page })
   await expect(table).toBeVisible();
   await expect(table.getByText("coding-tests-fail")).toBeVisible();
   await expect(table.getByText("workflow-repeat-refused")).toBeVisible();
+});
+
+test("submitting an incident produces a connected Safeguard Record", async ({ page }) => {
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: /Every failure should leave a safeguard/i }),
+  ).toBeVisible();
+
+  await page
+    .getByLabel(/Incident material/i)
+    .fill(
+      "2026-03-01T10:00:00Z ERROR checkout-service POST /v1/charge returned 503 Service Unavailable after retry",
+    );
+  await page.getByRole("button", { name: /Investigate incident/i }).click();
+
+  // The record is a chain, so every link must be present, and the verification
+  // state must be the honest one: executed, but not a claimed repeat prevention.
+  const chain = page.locator("ol.chain");
+  await expect(chain).toBeVisible({ timeout: 30_000 });
+  await expect(
+    page.locator("article header .label", { hasText: "Safeguard record" }),
+  ).toBeVisible();
+  for (const link of [
+    "Incident",
+    "Evidence",
+    "Hypothesis",
+    "Safeguard",
+    "Verification",
+    "Memory",
+  ]) {
+    await expect(chain.getByRole("heading", { name: link })).toBeVisible();
+  }
+  await expect(
+    page.getByText(/effect shown, recurrence not proven/i),
+  ).toBeVisible();
+  await expect(page.getByText("memory simulated").first()).toBeVisible();
 });
 
 test("incident explorer shows evidence, diagnosis, and decision", async ({ page }) => {

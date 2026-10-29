@@ -2,6 +2,7 @@ import type {
   EvidenceAssessment,
   Incident,
   SafeguardDecision,
+  SafeguardRecord,
   SafeguardRule,
 } from "@/lib/schemas";
 import type { MemoryWriteReceipt } from "@/lib/adapters/memory";
@@ -29,6 +30,8 @@ export interface AuditCounts {
   recallVerifiedWrites: number;
   simulatedWrites: number;
   totalWrites: number;
+  /** User-submitted Safeguard Records. Counted separately from scenarios. */
+  records: number;
 }
 
 /** Which storage engine actually backs the audit index. Surfaced in the UI. */
@@ -70,6 +73,19 @@ export interface AuditStore {
     refs?: { incidentId?: string; ruleId?: string },
   ): Promise<void>;
 
+  /**
+   * Persist a Safeguard Record — the artifact a user submission produces.
+   *
+   * Keyed on `recordId`, which is derived deterministically from the submission
+   * content, so a retried submission upserts the same row instead of appending
+   * a duplicate.
+   */
+  saveSafeguardRecord(record: SafeguardRecord): Promise<void>;
+  listSafeguardRecords(limit?: number): Promise<SafeguardRecord[]>;
+  getSafeguardRecord(recordId: string): Promise<SafeguardRecord | null>;
+  /** Count of user-submitted records, for the landing page and nav badge. */
+  countSafeguardRecords(): Promise<number>;
+
   listIncidents(limit?: number): Promise<IncidentRecord[]>;
   getIncident(incidentId: string): Promise<IncidentRecord | null>;
   listRules(): Promise<SafeguardRule[]>;
@@ -105,6 +121,7 @@ export function computeCounts(input: {
   incidents: IncidentRecord[];
   writes: MemoryWriteReceipt[];
   activeRules: SafeguardRule[];
+  records?: number;
 }): AuditCounts {
   const { incidents, writes, activeRules } = input;
   return {
@@ -126,5 +143,6 @@ export function computeCounts(input: {
     ).length,
     simulatedWrites: writes.filter((w) => w.backend === "simulated").length,
     totalWrites: writes.length,
+    records: input.records ?? 0,
   };
 }

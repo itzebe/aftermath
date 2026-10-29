@@ -1,367 +1,140 @@
-import { getOverview, getLastRun } from "@/lib/service";
-import { EvidencePill, DecisionPill, Metric, Notice, Pill, ProvenancePill, SectionTitle } from "@/components/ui";
-import { RunScenariosButton } from "@/components/run-scenarios";
+import Link from "next/link";
+import { getOverview } from "@/lib/service";
+import { SubmitIncidentForm } from "@/components/submit-incident-form";
+import { Metric, Pill } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
-export default async function OverviewPage() {
-  const [overview, lastRun] = await Promise.all([
-    getOverview().catch((err) => ({ error: (err as Error).message })),
-    // The last-run table is a convenience view over the audit index. If the
-    // store cannot be read, the page must still render the overview and the
-    // reason, not throw a server exception.
-    Promise.resolve()
-      .then(() => getLastRun())
-      .catch(() => null),
-  ]);
+const SAMPLE = `2026-03-01T10:00:00Z ERROR checkout-service
+POST /v1/charge returned 503 Service Unavailable
+retrying (attempt 2/3)...
+2026-03-01T10:00:07Z WARN checkout-service charge status: unknown
+2026-03-01T10:00:08Z INFO agent "the charge completed successfully"`;
 
-  if ("error" in overview) {
-    return (
-      <Notice tone="bad" title="Overview unavailable">
-        {overview.error}
-      </Notice>
-    );
-  }
-
-  const { counts, configuration, tatumHealth, memoryHealth, memoryStatus, mainnetRequirement, evaluation } =
-    overview;
+/**
+ * The incident-first landing page.
+ *
+ * AFTERMATH's promise is that every failure should leave a safeguard, so the
+ * front door is the act that produces one: submitting a real incident. The
+ * reliability console (the controlled-scenario Evaluation Lab) is deliberately
+ * one link away, because it is evidence *for* the mechanism, not the product's
+ * purpose.
+ */
+export default async function HomePage() {
+  const overview = await getOverview().catch(() => null);
+  const configured = overview && !("error" in overview) ? overview : null;
 
   return (
-    <div className="space-y-8">
-      <section>
-        <SectionTitle
-          title="Overview"
-          hint="Live application state. Every figure below is read from the running system; nothing is illustrative."
-          right={<RunScenariosButton />}
-        />
-
-        {memoryStatus.state === "MAINNET_AUTH_FAILED" ? (
-          <div className="mb-4">
-            <Notice tone="bad" title="Walrus Memory credentials rejected">
-              The relayer is reachable but refused the delegate credentials, so
-              no Mainnet write can be claimed. {memoryStatus.detail}
-            </Notice>
+    <div className="space-y-10">
+      <section className="hero-grid -mx-5 -mt-6 border-b hairline px-5 pb-8 pt-10 md:-mx-8 md:px-8">
+        <div className="max-w-3xl">
+          <div className="label">Evidence-first failure prevention</div>
+          <h1 className="mt-2 text-[1.75rem] font-semibold leading-tight tracking-tight md:text-[2.35rem]">
+            Every failure should leave a safeguard.
+          </h1>
+          <p className="mt-3 max-w-2xl text-[0.9375rem] leading-relaxed text-paper-300">
+            Submit real incident evidence. AFTERMATH returns a structured,
+            evidence-grounded investigation: what the material shows, what is
+            confirmed, what is merely hypothesised, what is still unknown — and a
+            specific safeguard with a concrete path to verify it.
+          </p>
+          <p className="mt-2 max-w-2xl text-[0.8125rem] leading-relaxed text-paper-500">
+            The investigation is rule-based and deterministic. There is no
+            language model in the path, and nothing is asserted without an
+            evidence span behind it. A rate limit or timeout is never recorded as
+            a failure — missing evidence is stated as missing.
+          </p>
+          <div className="mt-5 flex flex-wrap items-center gap-2">
+            <Pill tone="ok">rule-based extraction</Pill>
+            <Pill tone="info">evidence spans on every fact</Pill>
+            <Pill tone="neutral">simulated state labelled simulated</Pill>
+            <Link
+              href="/lab"
+              className="mono text-[0.6875rem] text-signal-info underline-offset-2 hover:underline"
+            >
+              See the mechanism tested in the Evaluation Lab →
+            </Link>
           </div>
-        ) : configuration.memory.isLive && !memoryStatus.authenticated ? (
-          <div className="mb-4">
-            <Notice tone="warn" title="Walrus Memory authentication unverified">
-              The relayer is reachable but the credential check did not confirm
-              the delegate key. {memoryStatus.detail}
-            </Notice>
-          </div>
-        ) : !configuration.memory.isLive ? (
-          <div className="mb-4">
-            <Notice tone="warn" title="Simulated memory backend in use">
-              {configuration.memory.reason}
-            </Notice>
-          </div>
-        ) : null}
-
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <Metric label="Total incidents" value={counts.incidents} />
-          <Metric
-            label="Verified failures"
-            value={counts.verifiedFailures}
-            tone={counts.verifiedFailures > 0 ? "bad" : "neutral"}
-            sub="Authoritative evidence proves the action failed."
-          />
-          <Metric
-            label="Active safeguards"
-            value={counts.activeRules}
-            tone={counts.activeRules > 0 ? "ok" : "neutral"}
-            sub="Validated rules currently enforced."
-          />
-          <Metric
-            label="Unresolved incidents"
-            value={counts.unresolved}
-            tone={counts.unresolved > 0 ? "warn" : "neutral"}
-            sub="Unknown or awaiting verification."
-          />
         </div>
       </section>
 
-      <section>
-        <SectionTitle
-          title="Walrus Memory"
-          hint="A write only counts once the relayer job completes and returns a blob id, and recall confirms the record is retrievable."
-        />
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-4">
-          <Metric
-            label="Completed Mainnet writes"
-            value={mainnetRequirement.completedLive}
-            tone={mainnetRequirement.satisfied ? "ok" : "warn"}
-            sub={`This instance's ledger. Requirement: ${mainnetRequirement.required}. ${
-              mainnetRequirement.satisfied
-                ? "Satisfied."
-                : `${mainnetRequirement.remaining} still required.`
-            }`}
-          />
-          <Metric
-            label="Recall-verified"
-            value={mainnetRequirement.recallVerified}
-            tone={mainnetRequirement.recallVerified > 0 ? "ok" : "neutral"}
-            sub="Writes confirmed retrievable by a recall query."
-          />
-          <Metric
-            label="Memories in namespace"
-            value={
-              typeof memoryStatus.namespaceMemoryCount === "number"
-                ? memoryStatus.namespaceMemoryCount
-                : "—"
-            }
-            tone={
-              typeof memoryStatus.namespaceMemoryCount === "number" &&
-              memoryStatus.namespaceMemoryCount >= 10
-                ? "ok"
-                : "neutral"
-            }
-            sub="Authoritative count the relayer reports for the namespace, independent of this instance's ledger."
-          />
-          <Metric
-            label="Simulated writes"
-            value={counts.simulatedWrites}
-            tone={counts.simulatedWrites > 0 ? "warn" : "neutral"}
-            sub="Excluded from the Mainnet requirement."
-          />
+      <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+        <div className="min-w-0">
+          <SubmitIncidentForm sample={SAMPLE} />
         </div>
 
-        <div className="panel mt-3 rounded p-3.5">
-          <div className="grid gap-3 md:grid-cols-2">
-            <div>
-              <div className="mono text-[0.625rem] uppercase tracking-[0.1em] text-paper-500">
-                Backend
-              </div>
-              <div className="mt-1.5 flex items-center gap-2">
-                <Pill tone={configuration.memory.isLive ? "ok" : "warn"}>
-                  {configuration.memory.backend}
-                </Pill>
-                <span className="mono text-[0.6875rem] text-paper-500">
-                  {configuration.memory.network} · {configuration.memory.relayerUrl}
-                </span>
-              </div>
-              <div className="mt-2 text-[0.75rem] leading-relaxed text-paper-300">
-                {configuration.memory.reason}
-              </div>
-            </div>
-            <div>
-              <div className="mono text-[0.625rem] uppercase tracking-[0.1em] text-paper-500">
-                Relayer health
-              </div>
-              <div className="mt-1.5 flex items-center gap-2">
-                <Pill
-                  tone={
-                    memoryStatus.state === "MAINNET_AUTH_FAILED"
-                      ? "bad"
-                      : memoryStatus.authenticated
-                        ? "ok"
-                        : "warn"
-                  }
-                >
-                  {memoryStatus.authenticated
-                    ? "credentials accepted"
-                    : memoryStatus.state === "MAINNET_AUTH_FAILED"
-                      ? "credentials rejected"
-                      : memoryStatus.reachable
-                        ? "reachable · auth unverified"
-                        : "unreachable"}
-                </Pill>
-                {memoryHealth.relayerVersion ? (
-                  <span className="mono text-[0.6875rem] text-paper-500">
-                    relayer {memoryHealth.relayerVersion}
+        <aside className="space-y-3">
+          <div className="panel rounded p-3.5">
+            <div className="label">How a record is built</div>
+            <ol className="mt-2 space-y-2 text-[0.75rem] leading-relaxed text-paper-300">
+              {[
+                ["Incident", "the material, treated as data"],
+                ["Evidence", "observed vs. confirmed, with spans"],
+                ["Hypothesis", "candidate mechanisms, with confidence"],
+                ["Safeguard", "a specific, testable rule"],
+                ["Verification", "executed, not merely asserted"],
+                ["Memory", "preserved for the next occurrence"],
+              ].map(([t, d], i) => (
+                <li key={t} className="flex gap-2.5">
+                  <span className="mono mt-0.5 text-[0.625rem] text-paper-500">
+                    {String(i + 1).padStart(2, "0")}
                   </span>
-                ) : null}
-              </div>
-              <div className="mt-2 text-[0.75rem] leading-relaxed text-paper-300">
-                {memoryStatus.detail}
-              </div>
-            </div>
+                  <span>
+                    <span className="font-medium text-paper-100">{t}.</span> {d}
+                  </span>
+                </li>
+              ))}
+            </ol>
           </div>
-        </div>
-      </section>
 
-      <section>
-        <SectionTitle
-          title="Tatum verification health"
-          hint="Read-only Sui Mainnet verification. No transaction is ever broadcast."
-        />
-        <div className="panel rounded p-3.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <Pill tone={tatumHealth.ok ? "ok" : "bad"}>
-              {tatumHealth.ok ? "healthy" : "unavailable"}
-            </Pill>
-            {tatumHealth.chainIdentifier ? (
-              <span className="mono text-[0.6875rem] text-paper-500">
-                chain identifier {tatumHealth.chainIdentifier}
-              </span>
-            ) : null}
-            <span className="mono text-[0.6875rem] text-paper-500">
-              {configuration.tatum.interface}
-            </span>
+          <div className="panel rounded p-3.5">
+            <div className="label">Honest by construction</div>
+            <ul className="mt-2 space-y-2 text-[0.75rem] leading-relaxed text-paper-300">
+              <li>
+                A success claim without an authoritative record is refused, not
+                accepted.
+              </li>
+              <li>
+                A safeguard is only <span className="mono">test_executed</span>{" "}
+                once a real test ran; a single incident never claims{" "}
+                <span className="mono">verified</span>.
+              </li>
+              <li>
+                A recalled lesson is labelled a possible similarity until its
+                pattern matches exactly.
+              </li>
+            </ul>
           </div>
-          <div className="mt-2 text-[0.75rem] leading-relaxed text-paper-300">
-            {tatumHealth.detail}
-          </div>
-          {!configuration.tatum.configured ? (
-            <div className="mt-3">
-              <Notice tone="warn" title="Tatum API key not configured">
-                Live on-chain verification is unavailable. Finance incidents will
-                resolve to UNKNOWN, which is the correct behaviour: a lookup that
-                cannot run establishes neither success nor failure.
-              </Notice>
+
+          {configured ? (
+            <div className="panel rounded p-3.5">
+              <div className="label">Live system state</div>
+              <div className="mt-2 space-y-2">
+                <Metric
+                  label="Safeguard records"
+                  value={configured.counts.records}
+                  sub="Investigations preserved from submissions."
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Pill tone={configured.configuration.memory.isLive ? "ok" : "warn"}>
+                    {configured.configuration.memory.isLive
+                      ? "memory live"
+                      : "memory simulated"}
+                  </Pill>
+                  <span className="mono text-[0.625rem] text-paper-500">
+                    {configured.configuration.memory.backend}
+                  </span>
+                </div>
+              </div>
+              <Link
+                href="/lab"
+                className="mono mt-3 inline-block text-[0.6875rem] text-signal-info underline-offset-2 hover:underline"
+              >
+                Full system state in the Lab →
+              </Link>
             </div>
           ) : null}
-        </div>
-      </section>
-
-      <section>
-        <SectionTitle
-          title="Audit index persistence"
-          hint="Where the incident index is stored. The index is an audit record, not an authority; Tatum and Walrus Memory remain the sources of truth."
-        />
-        <div className="panel rounded p-3.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <Pill tone={configuration.persistence.durable ? "ok" : "warn"}>
-              {configuration.persistence.backend}
-            </Pill>
-            <span className="mono text-[0.6875rem] text-paper-500">
-              {configuration.persistence.durable
-                ? "durable · shared across instances"
-                : "per-instance · not shared"}
-            </span>
-          </div>
-          <div className="mt-2 text-[0.75rem] leading-relaxed text-paper-300">
-            {configuration.persistence.detail}
-          </div>
-          {!configuration.persistence.durable ? (
-            <div className="mt-3">
-              <Notice tone="warn" title="Audit index is not durable on this host">
-                Records written by one request are not guaranteed to be visible
-                to another. Set DATABASE_URL to a PostgreSQL connection string
-                (for example a Neon database) to make the audit index durable.
-              </Notice>
-            </div>
-          ) : null}
-        </div>
-      </section>
-
-      <section>
-        <SectionTitle
-          title="Evaluation"
-          hint="Measured over the controlled scenarios in the last run. These are scenario measurements, not claims about production reliability."
-        />
-        {evaluation ? (
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <Metric
-              label="Unsupported claims caught"
-              value={`${evaluation.unsupportedClaimsCaught}/${evaluation.unsupportedClaims}`}
-              tone={
-                evaluation.unsupportedClaimsCaught === evaluation.unsupportedClaims
-                  ? "ok"
-                  : "warn"
-              }
-              sub="Claims of success made against failing or unverifiable actions."
-            />
-            <Metric
-              label="Repeat prevention"
-              value={`${(evaluation.repeatPreventionRate * 100).toFixed(0)}%`}
-              tone={
-                evaluation.repeatFailuresSlippedThrough === 0 ? "ok" : "warn"
-              }
-              sub={`${evaluation.repeatScenarios} repeat scenario(s); ${evaluation.repeatFailuresSlippedThrough} slipped through.`}
-            />
-            <Metric
-              label="Baseline failure rate"
-              value={`${(evaluation.baselineFailureRate * 100).toFixed(0)}%`}
-              tone="bad"
-              sub={`${evaluation.baselineScenarios} first-occurrence scenario(s), unguarded.`}
-            />
-            <Metric
-              label="False-block rate"
-              value={`${(evaluation.falseBlockRate * 100).toFixed(0)}%`}
-              tone={evaluation.falseBlockRate > 0 ? "warn" : "ok"}
-              sub="Valid actions blocked. Lower is better; zero means nothing valid was stopped."
-            />
-          </div>
-        ) : (
-          <Notice tone="info" title="No scenario run recorded yet">
-            Run the demonstrations to populate the evaluation metrics.
-          </Notice>
-        )}
-        {evaluation ? (
-          <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <Metric
-              label="Evidence unavailable"
-              value={`${(evaluation.evidenceVerificationFailureRate * 100).toFixed(0)}%`}
-              tone="unknown"
-              sub="Actions with no authoritative evidence. Never counted as success."
-            />
-            <Metric
-              label="Memory retrieval relevance"
-              value={`${(evaluation.memoryRetrievalRelevance * 100).toFixed(0)}%`}
-              tone={evaluation.memoryRetrievalRelevance >= 0.5 ? "ok" : "warn"}
-              sub="Scenarios with an applicable safeguard where a lesson was recalled."
-            />
-            <Metric
-              label="Total scenarios"
-              value={evaluation.scenarios}
-              sub="Controlled scenarios in the last run."
-            />
-            <Metric
-              label="Repeat failures"
-              value={evaluation.repeatFailuresSlippedThrough}
-              tone={evaluation.repeatFailuresSlippedThrough > 0 ? "bad" : "ok"}
-              sub="Repeats that were still allowed through."
-            />
-          </div>
-        ) : null}
-      </section>
-
-      <section>
-        <SectionTitle
-          title="Last scenario run"
-          hint="Each scenario shows the agent claim, the evidence, and the resulting decision."
-        />
-        {lastRun ? (
-          <div className="panel scroll-x rounded">
-            <table className="data">
-              <thead>
-                <tr>
-                  <th>Scenario</th>
-                  <th>Domain</th>
-                  <th>Evidence</th>
-                  <th>Decision</th>
-                  <th>Provenance</th>
-                </tr>
-              </thead>
-              <tbody>
-                {lastRun.scenarios.map((s) => (
-                  <tr key={s.scenarioId}>
-                    <td>
-                      <div className="font-medium">{s.title}</div>
-                      <div className="mono text-[0.6875rem] text-paper-500">
-                        {s.scenarioId}
-                      </div>
-                    </td>
-                    <td className="mono text-[0.75rem]">{s.domain}</td>
-                    <td>
-                      <EvidencePill status={s.evidenceStatus as never} />
-                    </td>
-                    <td>
-                      <DecisionPill decision={s.decision as never} />
-                    </td>
-                    <td>
-                      <ProvenancePill provenance={s.simulated ? "simulated" : "live"} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <Notice tone="info" title="No run yet">
-            Use “Run demonstrations” to execute the controlled scenarios.
-          </Notice>
-        )}
+        </aside>
       </section>
     </div>
   );

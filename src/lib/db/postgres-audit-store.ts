@@ -8,7 +8,7 @@ import type {
 } from "@/lib/db/audit-store";
 import { computeCounts } from "@/lib/db/audit-store";
 import type { MemoryWriteReceipt } from "@/lib/adapters/memory";
-import type { SafeguardDecision, SafeguardRule } from "@/lib/schemas";
+import type { SafeguardDecision, SafeguardRecord, SafeguardRule } from "@/lib/schemas";
 
 /**
  * PostgreSQL-backed audit index — the durable, cross-instance store.
@@ -125,8 +125,18 @@ export class PostgresAuditStore implements AuditStore {
         ran_at TEXT NOT NULL,
         payload JSONB NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS safeguard_records (
+        record_id TEXT PRIMARY KEY,
+        incident_id TEXT NOT NULL,
+        domain TEXT NOT NULL,
+        verification_state TEXT NOT NULL,
+        provenance TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        payload JSONB NOT NULL
+      );
       CREATE INDEX IF NOT EXISTS idx_incidents_domain ON incidents(domain);
       CREATE INDEX IF NOT EXISTS idx_writes_backend ON memory_writes(backend, state);
+      CREATE INDEX IF NOT EXISTS idx_records_created ON safeguard_records(created_at);
     `);
     } finally {
       await client.query(`SELECT pg_advisory_unlock($1)`, [MIGRATION_LOCK_KEY]);
@@ -301,6 +311,51 @@ export class PostgresAuditStore implements AuditStore {
     return rows.map((r) => r.payload as MemoryWriteReceipt);
   }
 
+  async saveSafeguardRecord(record: SafeguardRecord): Promise<void> {
+    await this.ensureReady();
+    await this.pool.query(
+      `INSERT INTO safeguard_records
+        (record_id, incident_id, domain, verification_state, provenance, created_at, payload)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (record_id) DO UPDATE SET payload = EXCLUDED.payload`,
+      [
+        record.recordId,
+        record.incidentId,
+        record.investigation.domain,
+        record.verification.state,
+        record.provenance,
+        record.createdAt,
+        JSON.stringify(record),
+      ],
+    );
+  }
+
+  async listSafeguardRecords(limit = 100): Promise<SafeguardRecord[]> {
+    await this.ensureReady();
+    const { rows } = await this.pool.query(
+      `SELECT payload FROM safeguard_records ORDER BY created_at DESC LIMIT $1`,
+      [limit],
+    );
+    return rows.map((r) => r.payload as SafeguardRecord);
+  }
+
+  async getSafeguardRecord(recordId: string): Promise<SafeguardRecord | null> {
+    await this.ensureReady();
+    const { rows } = await this.pool.query(
+      `SELECT payload FROM safeguard_records WHERE record_id = $1`,
+      [recordId],
+    );
+    return rows.length ? (rows[0].payload as SafeguardRecord) : null;
+  }
+
+  async countSafeguardRecords(): Promise<number> {
+    await this.ensureReady();
+    const { rows } = await this.pool.query(
+      `SELECT COUNT(*)::int AS n FROM safeguard_records`,
+    );
+    return Number(rows[0].n);
+  }
+
   async listDecisions(limit = 200): Promise<SafeguardDecision[]> {
     await this.ensureReady();
     const { rows } = await this.pool.query(
@@ -323,13 +378,18 @@ export class PostgresAuditStore implements AuditStore {
     const incidents = await this.listIncidents(100_000);
     const writes = await this.listMemoryWrites(100_000);
     const activeRules = await this.listActiveRules();
-    return computeCounts({ incidents, writes, activeRules });
+    return computeCounts({
+      incidents,
+      writes,
+      activeRules,
+      records: await this.countSafeguardRecords(),
+    });
   }
 
   async reset(): Promise<void> {
     await this.ensureReady();
     await this.pool.query(
-      `DELETE FROM incidents; DELETE FROM rules; DELETE FROM decisions; DELETE FROM memory_writes; DELETE FROM scenario_runs;`,
+      `DELETE FROM incidents; DELETE FROM rules; DELETE FROM decisions; DELETE FROM memory_writes; DELETE FROM scenario_runs; DELETE FROM safeguard_records;`,
     );
   }
 
