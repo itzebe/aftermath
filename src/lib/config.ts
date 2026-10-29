@@ -49,6 +49,20 @@ export interface AftermathConfig {
     apiKey: string | null;
     timeoutMs: number;
   };
+  /**
+   * AI-assisted incident analysis. Optional and off by default: the
+   * deterministic engine always runs, and this only adds a model reading when a
+   * free provider is configured. There is deliberately no paid provider path —
+   * `provider` accepts only `groq`, whose free tier serves the fixed model.
+   */
+  ai: {
+    /** `groq` when configured; `none` when no key is present. */
+    provider: "groq" | "none";
+    /** The exact model id. Fixed per provider so no paid model can be selected. */
+    model: string;
+    apiKey: string | null;
+    timeoutMs: number;
+  };
   dbPath: string;
   harnessDir: string;
   /**
@@ -59,6 +73,9 @@ export interface AftermathConfig {
    */
   databaseUrl: string | null;
 }
+
+/** The Groq model used for AI-assisted analysis. Fixed: the free-tier model. */
+export const GROQ_MODEL = "openai/gpt-oss-120b";
 
 function optional(name: string): string | null {
   const value = process.env[name];
@@ -128,6 +145,18 @@ export function loadConfig(): AftermathConfig {
       apiKey: optional("TATUM_API_KEY"),
       timeoutMs: Number(optional("TATUM_TIMEOUT_MS") ?? "12000"),
     },
+    ai: (() => {
+      // Only Groq is recognised. A key for any other provider is ignored rather
+      // than used, so the deployment cannot silently fall onto a paid model.
+      const groqKey = optional("GROQ_API_KEY");
+      const provider = groqKey ? "groq" : "none";
+      return {
+        provider,
+        model: GROQ_MODEL,
+        apiKey: groqKey,
+        timeoutMs: Number(optional("AFTERMATH_AI_TIMEOUT_MS") ?? "20000"),
+      };
+    })(),
     dbPath: path.resolve(
       optional("AFTERMATH_DB_PATH") ??
         path.join(dataBaseDir, "aftermath.db"),

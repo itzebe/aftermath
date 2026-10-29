@@ -80,8 +80,32 @@ Incident -> Evidence -> Hypothesis -> Safeguard -> Verification -> Memory
   possible similarity. The similarity distance is shown as a ranking, not a
   probability.
 
-There is **no language model in this path**. The record states its
-`extractionMethod` as `rule-based` so a reader knows what produced it.
+### AI-assisted reading (additive, free tier only)
+
+The deterministic parse is always what produces the record. Alongside it, when a
+free provider is configured, an **AI-assisted reading** is attached — clearly
+labelled and strictly additive. It reads unfamiliar material (a distributed
+request sequence, an unfamiliar stack trace) and proposes candidate mechanisms,
+missing evidence, and investigations to pursue.
+
+It cannot decide anything. The model never sets the evidence status, the
+diagnosis, the decision, or the verification state; those remain the
+deterministic engine's, and the model has no database, shell, wallet, or
+transaction capability. Every fact or measurement it proposes is **grounded
+claim-by-claim against the submitted material** before it is kept: the cited
+span must appear verbatim in the submission, and the value it names must appear
+in that span. Anything that fails grounding is listed under *rejected by
+grounding* rather than shown as evidence. Instruction-like text in the material
+(for example, "ignore previous instructions") is detected and reported, and is
+never obeyed.
+
+The record states honestly whether a model ran and, if not, why
+(`not_configured`, `unavailable`, `rate_limited`, `timeout`,
+`invalid_response`, `grounding_failed`). `extractionMethod` is `model` only when
+the model genuinely ran *and* contributed at least one grounded finding;
+otherwise it stays `rule-based`. **No paid provider or model is reachable from
+the application** — only the Groq free tier, on a fixed model
+(`openai/gpt-oss-120b`), is wired.
 
 Underneath, the same seven-stage engine the product was built on still runs:
 
@@ -256,6 +280,17 @@ cannot create the account for you.
 | `TATUM_SUI_GRAPHQL_URL` | Fallback interface. Defaults to `https://sui-mainnet.gateway.tatum.io/graphql`. |
 | `TATUM_TIMEOUT_MS` | Per-request timeout. Defaults to `12000`. |
 
+### AI-assisted reading (optional, free tier only)
+
+| Variable | Meaning |
+| --- | --- |
+| `GROQ_API_KEY` | Groq API key (free tier). Server-side only. When unset, the record runs deterministic-only and says so. |
+| `AFTERMATH_AI_TIMEOUT_MS` | Per-request ceiling for an AI reading. Defaults to `20000`. |
+
+Only the Groq free tier is recognised, on the fixed model
+`openai/gpt-oss-120b`. A key for any other provider is ignored rather than used,
+so the deployment cannot fall onto a paid model by surprise.
+
 ### Application
 
 | Variable | Meaning |
@@ -379,6 +414,22 @@ rule engine's validation gating, the decision engine's evidence-governs-memory
 property, the coding harness wiring, and the full eight-scenario pipeline end to
 end.
 
+The AI-assisted reading is tested at three levels, all hermetic (no network, no
+free-tier quota spent):
+
+- `groq-client.test.ts` — the transport boundary, with a stub `fetch`: success,
+  strict `json_schema` request shape, `429`→rate-limited with `retry-after`,
+  `5xx`→unavailable, network throw, abort→timeout, empty completion→invalid.
+- `ai-investigation.test.ts` — grounding: verbatim-span facts kept, fabricated
+  spans and fabricated numbers rejected, hypotheses kept but flagged, prompt
+  injection detected, credentials redacted before send, and every failure mode
+  mapped to an honest `availability`.
+- `ai-pipeline.test.ts` — integration: the record is identical with and without
+  a model for the deterministic fields (diagnosis, recommendation, verification,
+  categories), a **hostile** model response (claiming success, `ALLOW`, and a
+  fabricated blob id) cannot change any of them, and a missing provider falls
+  back cleanly.
+
 ### Durable-store tests
 
 Three suites cover the persistence fix. They need a real PostgreSQL database,
@@ -443,12 +494,17 @@ src/
       memory.ts           Memory adapter interface
       memwal-memory.ts    Walrus Memory (MemWal SDK)
       simulated-memory.ts Simulated backend (SDK mock, clearly labelled)
+      llm.ts              Language-model boundary (provider-agnostic)
+      groq-llm.ts         Groq free-tier client (strict JSON schema, fetch)
+      model-factory.ts    Client resolution + bounded AI-analysis cache
     engines/
       pipeline.ts         The seven-stage pipeline
       diagnosis.ts        Deterministic failure diagnosis
       rule-engine.ts      Corrective rule lifecycle
       decision-engine.ts  Safeguard decision engine
       evaluation.ts       Honest metric computation
+      investigation.ts    Rule-based incident parse (the deterministic core)
+      ai-investigation.ts Additive AI reading, grounded claim-by-claim
     db/
       audit-store.ts        Audit index interface + shared count computation
       sqlite-audit-store.ts SQLite implementation (local development, tests)
@@ -521,6 +577,13 @@ is present, and that no wrapped prose line is mistaken for a list item.
   the UI.
 - The finance demonstration cannot produce a live on-chain verdict without a
   Tatum API key. It reports `UNKNOWN` rather than guessing.
+- The AI-assisted reading is optional and free-tier-only. Without `GROQ_API_KEY`
+  every record is the deterministic parse and states that no model was
+  configured. When configured, the model is a claim generator whose output is
+  grounded claim-by-claim against the submitted material before anything is
+  kept; it cannot set the evidence status, diagnosis, decision, or verification.
+  Whether a model actually ran is reported per record (`aiAnalysis.ran`), never
+  inferred.
 - The evaluation metrics are measured over the eight controlled scenarios. They
   describe those scenarios; they are not claims about production reliability.
 - The workflow state store is durable: it lives in the same database as the

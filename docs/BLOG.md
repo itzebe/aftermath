@@ -142,10 +142,15 @@ named, the assessment says so and returns `UNKNOWN`: a submission is material,
 not proof, and inventing a verdict from prose is the exact failure the product
 exists to prevent.
 
-There is **no language model in this path**. That is a deliberate, disclosed
-choice: the claim is evidence-grounded investigation, not autonomous reasoning,
-and a model here would make the output unauditable. The record states its
-`extractionMethod` as `rule-based` so a reader knows precisely what produced it.
+There is **no language model *required* in this path**. That is a deliberate,
+disclosed choice: the claim is evidence-grounded investigation, not autonomous
+reasoning, and a model here would make the output unauditable. The record states
+its `extractionMethod` as `rule-based` so a reader knows precisely what produced
+it. An optional **AI-assisted reading** can be attached alongside the parse — see
+[AI-assisted reading, and why it cannot decide anything](#ai-assisted-reading-and-why-it-cannot-decide-anything)
+below — but it never feeds the evidence status, the diagnosis, the decision, or
+the verification, and the method stays `rule-based` unless the model genuinely
+ran and contributed a grounded finding.
 
 **Hypothesis.** The extracted signals map onto the same failure-pattern
 vocabulary the controlled scenarios use, producing a deterministic diagnosis
@@ -257,6 +262,77 @@ a traceable evidence reference. A same-pattern match without that anchor is a
 weaker is a `possible_similarity`. The vector distance is shown as a retrieval
 ranking, never a probability, and recalled records are deduplicated on their
 stable identity without altering what was returned.
+
+### AI-assisted reading, and why it cannot decide anything
+
+Real incidents are messy. A connection pool that starved under load, a
+distributed request that touched five services, a stack trace from a framework
+the reader has never seen — the deterministic parse extracts what it recognises,
+but it cannot *interpret* a failure it has no pattern for. The whole point of the
+product is that a failure should leave a safeguard, and that is hardest exactly
+when the failure is unfamiliar. So the parse now has a reading assistant.
+
+The design constraint came first, and it is the same constraint that runs through
+everything else: **a claim is not evidence.** A language model is a claim
+generator. It is useful precisely because it can propose a mechanism nobody wrote
+a rule for; it is dangerous for exactly the same reason. The reading assistant is
+built so that its usefulness is real and its danger is contained.
+
+**What it does.** It reads the submitted material and returns a structured
+reading: candidate failure mechanisms with evidence for *and against* each,
+observations, measurements, missing evidence, recommended investigations,
+candidate safeguards with their verification requirements, and the operations
+whose outcome the material leaves genuinely unknown. On an unfamiliar stack
+trace, or a five-service request sequence, that is a real first pass — it names
+plausible mechanisms and, more importantly, names what is still missing.
+
+**What it cannot do.** It cannot set the evidence status. It cannot set the
+diagnosis. It cannot set the decision. It cannot set the verification state. It
+has no database, shell, wallet, or transaction capability: it receives text and
+returns text. Those four fields are computed by the deterministic engine from the
+same inputs whether or not a model ran, and there is a test that asserts the
+record is byte-for-byte identical with a model attached and with none.
+
+**The gate that makes it safe: grounding.** A model's reading is not trusted. It
+is *grounded*, claim by claim, against the submitted material. A fact survives
+only if the span it cites appears verbatim in the submission; a measurement
+survives only if its value appears in that span. A model that cites a real log
+line and then invents a number for it is caught: the span is present, the number
+is not, and the claim moves to *rejected by grounding* rather than into the
+evidence. A model that invents a source reference entirely is caught the same
+way. This is the actual defence, and it is worth being precise about why: the
+usual guard against prompt injection is an instruction in the system prompt, and
+instructions can be argued with. Grounding is not an instruction. It is a check
+that runs after the model has spoken, and it cannot be talked out of its answer.
+The material is also treated as data throughout — text addressed to the assistant
+("ignore previous instructions…") is *detected and reported as a property of the
+incident*, and never obeyed — but the detection is a nicety; the grounding is the
+guarantee.
+
+**Honest about itself.** A model is not always available, and the record says so
+rather than pretending. It reports exactly one of: `ran`, `not_configured`,
+`unavailable`, `rate_limited`, `timeout`, `invalid_response`, or
+`grounding_failed`. `extractionMethod` is `model` only when the model genuinely
+ran *and* contributed at least one grounded finding; in every other case the
+record is the deterministic parse and the AI section states the reason. A rate
+limit or a timeout is a transport condition, not a result — the same rule the
+rest of the product enforces, applied to the model too.
+
+**Free, and only free.** The provider is Groq's free tier, on a fixed model
+(`openai/gpt-oss-120b`, 131k context, strict JSON-schema constrained decoding).
+Constrained decoding matters here: the response is machine-read, so a
+schema-violating answer is worse than no answer, and the provider is asked to
+guarantee the schema. The client is a plain `fetch` against the
+OpenAI-compatible endpoint — no SDK added, nothing to audit — and the model id is
+fixed in configuration. Only the Groq provider is recognised; a key for any other
+provider is ignored rather than used, so the deployment cannot fall onto a paid
+model by surprise. This is a hard constraint of the work, and the code enforces
+it rather than describing it.
+
+The reading is additive by construction, and it is labelled as such in the
+record: *"The AI reading is additive. It did not set the evidence status, the
+diagnosis, the decision, or the verification above — those remain the
+deterministic engine's."* That sentence is the whole design in one line.
 
 ### Where the reliability console lives
 
@@ -510,7 +586,7 @@ append-only, and it keeps counting everything that happened before the fix. I am
 not rewriting it, and I am not hiding it. Three distinctions matter:
 
 - **Completed writes and recall-verified writes are different numbers.** The
-  live instance reports **83 completed** Mainnet writes and **82
+  live instance reports **87 completed** Mainnet writes and **86
   recall-verified**. The gap is one write that reached a blob id and was
   recorded as completed, but whose *follow-up recall query* was itself
   rate-limited — so it is completed-but-not-recall-verified. It is counted once,
@@ -534,7 +610,7 @@ not rewriting it, and I am not hiding it. Three distinctions matter:
   observed it.
 
 None of this changes the headline the brief cares about: the requirement is ten
-genuine, completed Mainnet memories, and the instance has 83 completed and 82
+genuine, completed Mainnet memories, and the instance has 87 completed and 86
 recall-verified, all written through the real SDK against Mainnet.
 
 ## What I measured
@@ -562,7 +638,7 @@ The suites behind those figures, as last run:
 | --- | --- | --- |
 | Type check | `npm run typecheck` | clean |
 | Lint | `npm run lint` | clean |
-| Unit + integration (hermetic) | `npm test` | 237 passed, 11 skipped |
+| Unit + integration (hermetic) | `npm test` | 314 passed, 21 skipped |
 | Live smoke (real relayer + gateway) | `npm run test:live` | 11 passed |
 | Browser (simulated backend) | `npm run test:e2e` | 7 passed |
 
@@ -637,8 +713,8 @@ conflating them would be dishonest in one direction or the other:
 A single counter cannot be honest about both "what did this process do" and
 "what is actually on chain". So there are two.
 
-As of this submission, the operator's own instance reports **83 completed
-Mainnet writes and 82 recall-verified writes**, with zero simulated writes in
+As of this submission, the operator's own instance reports **87 completed
+Mainnet writes and 86 recall-verified writes**, with zero simulated writes in
 that total — read straight from `GET /api/overview` on the running application,
 not asserted from memory. The two numbers are deliberately different and are
 never presented as equivalent: one write reached a blob id and was recorded as
@@ -662,7 +738,7 @@ exist, and never counts a simulated write toward the total.
 
 ## What I learned building it
 
-Three things, in order of how much they changed the design.
+Four things, in order of how much they changed the design.
 
 **1. The distinction between "the operation failed" and "I could not check"
 is the whole product.** My first instinct was a boolean: did it work? Building
@@ -686,6 +762,19 @@ implemented it. Then it became the thing that stops the system from learning a
 broad rule from one unrelated incident. A lesson is written to memory the moment
 it is diagnosed; a rule is enforced only after validation.
 
+**4. A model belongs beside the evidence engine, not inside it.** I resisted
+adding a language model for a long time, because the product's whole claim is
+that it does not guess. What changed my mind was the recognition that the
+*parse* and the *decision* are different jobs. A model is genuinely good at the
+first — reading unfamiliar material and proposing what might be going on — and
+genuinely unsuitable for the second, because a decision must be reproducible and
+auditable. So the model reads, and the deterministic engine decides, and the
+boundary between them is enforced in code rather than in prose. The grounding
+check is what makes it safe: the model's reading is not trusted, it is verified
+claim-by-claim against the material, and a claim whose cited span is not in the
+material is rejected rather than shown. That is the same discipline the product
+applies to an agent's success claim, applied one level up.
+
 ## What is not finished
 
 - The live finance cases require a Tatum API key. With one configured they read
@@ -693,6 +782,13 @@ it is diagnosed; a rule is enforced only after validation.
   evidence cases; without one, the finance demonstration resolves to `UNKNOWN`,
   which is the honest answer. The adapter is wired and its transport is verified
   against the gateway.
+- The AI-assisted reading requires a free Groq key (`GROQ_API_KEY`). With one
+  configured it runs against `openai/gpt-oss-120b`; without one the record is the
+  deterministic parse and says `AI not configured · deterministic parse only`. I
+  did not spend free-tier quota generating this write-up's figures, and I did not
+  claim a model ran anywhere it did not: the per-record `aiAnalysis.ran` flag is
+  the only source of truth for that, and it is `false` on any record produced
+  without a configured provider.
 - The coding and workflow harnesses are controlled demonstrations, not
   general-purpose platforms. That is by design — the brief's non-goals are
   explicit about it.

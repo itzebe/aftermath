@@ -4,7 +4,10 @@ import { maskSecret } from "@/lib/util/redact";
 import { runAllScenarios, type DemoRunResult } from "@/lib/demos/runner";
 import { runDemoBatch, type BatchResult } from "@/lib/demos/resumable-runner";
 import { evaluate, type EvaluationMetrics, type ScenarioOutcome } from "@/lib/engines/evaluation";
-import { runSubmissionPipeline } from "@/lib/engines/submission-pipeline";
+import { runSubmissionPipeline, submissionId } from "@/lib/engines/submission-pipeline";
+import { runAiInvestigation } from "@/lib/engines/ai-investigation";
+import { resolveModelClient, AiAnalysisCache } from "@/lib/adapters/model-factory";
+import type { AiAnalysis } from "@/lib/schemas";
 import type {
   IncidentInputDraft,
   IncidentSubmission,
@@ -28,6 +31,19 @@ export interface ConfigurationStatus {
     interface: string;
     apiKey: string;
     configured: boolean;
+  };
+  /**
+   * AI-assisted analysis availability. `configured` reflects whether a free
+   * provider key is present; it says nothing about whether a model actually ran
+   * for any given record — that is recorded per-record in `aiAnalysis.ran`.
+   */
+  ai: {
+    provider: string;
+    model: string;
+    configured: boolean;
+    apiKey: string;
+    /** Fixed statement of the cost posture, so the UI can state it plainly. */
+    costNote: string;
   };
   persistence: {
     backend: "sqlite" | "postgres";
@@ -57,6 +73,15 @@ export function configurationStatus(): ConfigurationStatus {
       interface: rt.suiVerifier.sourceName,
       apiKey: maskSecret(config.tatum.apiKey),
       configured: Boolean(config.tatum.apiKey),
+    },
+    ai: {
+      provider: config.ai.provider,
+      model: config.ai.model,
+      configured: config.ai.provider !== "none" && Boolean(config.ai.apiKey),
+      apiKey: maskSecret(config.ai.apiKey),
+      costNote:
+        "Free tier only. Groq serves openai/gpt-oss-120b at no charge; no paid " +
+        "provider or model is reachable from this application.",
     },
     persistence: {
       backend: rt.store.backend,
@@ -284,11 +309,21 @@ export async function resetAll(): Promise<void> {
  * ------------------------------------------------------------------ */
 
 /**
+ * In-process cache of AI readings, keyed by submission content id. Bounded and
+ * best-effort: it avoids a second inference call on a duplicate submission but
+ * a miss simply re-runs the analysis.
+ */
+const aiCache = new AiAnalysisCache<AiAnalysis>(64, 10 * 60_000);
+
+/**
  * Investigate a submitted incident end to end and persist the Safeguard Record.
  *
  * The submission is validated by the route before it reaches here. Nothing in
  * this path executes the submitted material; it is parsed, assessed, matched
- * against memory, and turned into a safeguard recommendation.
+ * against memory, and turned into a safeguard recommendation. When a free model
+ * is configured, an additive AI reading is attached — it can enrich the record
+ * but can never change the evidence status, diagnosis, decision, or
+ * verification, all of which the deterministic engine owns.
  */
 export async function submitIncident(
   submission: IncidentSubmission,
@@ -297,10 +332,29 @@ export async function submitIncident(
   // Ensure the durable tables exist before the first write, so a fresh
   // deployment does not fail on the very first submission.
   await rt.durable.migrate();
+  const config = loadConfig();
+  const recordId = submissionId(submission);
   return runSubmissionPipeline(submission, {
     resolveEvidence: (domain) => rt.resolveSubmissionEvidence(domain),
     memory: rt.memory.adapter,
     store: rt.store,
+    analyze: async (s) => {
+      // A duplicate submission within the cache window reuses its reading,
+      // spending no additional free-tier quota.
+      const cached = aiCache.get(recordId);
+      if (cached) return cached;
+      const analysis = await runAiInvestigation({
+        client: resolveModelClient(config),
+        text: s.text,
+        ...(s.service ? { service: s.service } : {}),
+        ...(s.expectedBehavior ? { expectedBehavior: s.expectedBehavior } : {}),
+        ...(s.actualBehavior ? { actualBehavior: s.actualBehavior } : {}),
+      });
+      // Only cache a reading that actually ran; a transient failure should be
+      // retried on the next submission, not pinned for ten minutes.
+      if (analysis.ran) aiCache.set(recordId, analysis);
+      return analysis;
+    },
   });
 }
 

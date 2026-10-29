@@ -33,3 +33,56 @@ Health check failed: database connection unavailable`;
 export const REAL_ERROR_CODE_INCIDENT =
   "2026-03-01T10:00:00Z checkout-service POST /v1/charge " +
   "returned 503 Service Unavailable (error_code: E5031)";
+
+/**
+ * Payment regression scenario 1 — connection-pool exhaustion.
+ *
+ * Carries, in one report: HTTP 500 responses, connection-acquisition timeouts,
+ * saturation metrics, elevated latency, retries, and a failed readiness check.
+ * The engine must extract the measurements, describe saturation as observed,
+ * keep a connection *leak* as an unproven hypothesis, and leave the specific
+ * request's outcome unknown.
+ */
+export const POOL_EXHAUSTION_TIMELINE = `2026-03-01T10:00:00Z payment-api POST /v1/charge
+HTTP 500 Internal Server Error
+ENVIRONMENT: production
+EXPECTED: charge completes within 1000ms
+ACTUAL: request failed
+SEVERITY: critical
+ERROR: Connection pool exhausted
+Active connections: 50
+idle connections: 0
+max pool size: 50
+Database pool utilization reached 100%
+Database connection acquisition timed out after 5000ms
+Request duration exceeded threshold: 10042ms
+Retrying request (attempt 2/3) after 500ms
+Retrying request (attempt 3/3) after 1000ms
+Health check failed: database connection unavailable`;
+
+/**
+ * Payment regression scenario 2 — a longer timeline.
+ *
+ * Adds, on top of saturation: long-held connections, a service restart, a
+ * recovery, and an unrelated successful request. The engine must (a) keep the
+ * connection *leak* a hypothesis, not a finding, (b) not treat the unrelated
+ * 200 as evidence about the failed charge, and (c) preserve the unknown outcome
+ * of the request that timed out.
+ */
+export const POOL_EXHAUSTION_LONG_TIMELINE = `2026-03-01T10:00:00Z payment-api POST /v1/charge
+HTTP 500 Internal Server Error
+ENVIRONMENT: production
+ERROR: Connection pool exhausted
+Active connections: 50
+idle connections: 0
+max pool size: 50
+Database pool utilization reached 100%
+Database connection acquisition timed out after 5000ms
+Long-held connection detected: connection held for 65000ms
+Request duration exceeded threshold: 10042ms
+Retrying request (attempt 2/3) after 500ms
+Health check failed: database connection unavailable
+2026-03-01T10:02:00Z payment-api service restart initiated
+2026-03-01T10:03:00Z payment-api readiness check passed
+2026-03-01T10:03:05Z payment-api GET /v1/health returned 200 OK
+2026-03-01T10:04:00Z payment-api GET /v1/charges/ch_123 returned 200 OK`;

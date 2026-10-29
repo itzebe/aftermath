@@ -313,9 +313,122 @@ export type EvidenceAssessmentCategories = z.infer<
   typeof EvidenceAssessmentCategoriesSchema
 >;
 
-/** How the submission was parsed. Stated honestly; there is no LLM in the path. */
+/**
+ * How the submission was parsed. `rule-based` is the deterministic parser;
+ * `model` is used only when a language model genuinely ran *and* at least one
+ * of its findings survived grounding against the submitted material. If the
+ * model was unavailable, failed, or produced nothing verifiable, the method
+ * stays `rule-based` and the AI section records what actually happened.
+ */
 export const ExtractionMethodSchema = z.enum(["rule-based", "model"]);
 export type ExtractionMethod = z.infer<typeof ExtractionMethodSchema>;
+
+/**
+ * Why AI-assisted analysis is, or is not, part of a record.
+ *
+ * `ran` is the only field a reader should trust to decide whether a model
+ * produced anything. It is false when no provider is configured, when the
+ * provider was unreachable or rate-limited, or when the response could not be
+ * validated — in every one of those cases the deterministic engine alone
+ * produced the record, and this says so.
+ */
+export const AiAvailabilitySchema = z.enum([
+  "not_configured",
+  "ran",
+  "unavailable",
+  "rate_limited",
+  "timeout",
+  "invalid_response",
+  "grounding_failed",
+  "injection_detected",
+]);
+export type AiAvailability = z.infer<typeof AiAvailabilitySchema>;
+
+/**
+ * A measurement the model extracted, always tied to the span it came from.
+ *
+ * `grounded` is set by AFTERMATH, never by the model: it is true only when the
+ * `source` span appears verbatim in the submitted material and the numeric
+ * value it names appears in that span. A model-proposed measurement that fails
+ * this check is moved to `rejectedClaims`, not shown as evidence.
+ */
+export const AiMeasurementSchema = z.object({
+  label: z.string().min(1).max(200),
+  value: z.string().min(1).max(200),
+  unit: z.string().max(40).optional(),
+  /** The verbatim span from the submission that supports this measurement. */
+  source: z.string().min(1).max(SUBMISSION_LIMITS.text),
+  grounded: z.boolean(),
+});
+export type AiMeasurement = z.infer<typeof AiMeasurementSchema>;
+
+/**
+ * A candidate failure mechanism the model proposed, kept as a hypothesis.
+ *
+ * The model supplies evidence *for* and *against* each candidate, which is what
+ * keeps this a hypothesis and not a verdict: a candidate with contradicting
+ * evidence is still a candidate. AFTERMATH never promotes any of these to the
+ * deterministic diagnosis.
+ */
+export const AiHypothesisSchema = z.object({
+  mechanism: z.string().min(1).max(400),
+  supportingEvidence: z.array(z.string().min(1).max(600)).max(12),
+  contradictingEvidence: z.array(z.string().min(1).max(600)).max(12),
+  /** The model's own confidence. Recorded, never used as proof. */
+  confidence: z.number().min(0).max(1).optional(),
+});
+export type AiHypothesis = z.infer<typeof AiHypothesisSchema>;
+
+/** A proposed safeguard. Always a proposal — never an activated rule. */
+export const AiCandidateSafeguardSchema = z.object({
+  statement: z.string().min(1).max(600),
+  rationale: z.string().min(1).max(1200),
+  verificationRequirement: z.string().min(1).max(600),
+});
+export type AiCandidateSafeguard = z.infer<typeof AiCandidateSafeguardSchema>;
+
+/** A claim the model made that could not be grounded, with the reason. */
+export const RejectedAiClaimSchema = z.object({
+  claim: z.string().min(1).max(600),
+  reason: z.string().min(1).max(600),
+});
+export type RejectedAiClaim = z.infer<typeof RejectedAiClaimSchema>;
+
+/**
+ * The AI-assisted reading of one submission.
+ *
+ * This is deliberately *additive*. It contributes candidate hypotheses, missing
+ * evidence, and investigations to pursue; it never sets the evidence status, the
+ * diagnosis, the decision, or the verification state, all of which remain the
+ * deterministic engine's to decide. Every model-supplied fact that survives
+ * grounding is labelled; everything else is recorded in `rejectedClaims` so the
+ * record shows what the model tried to assert and why it did not stand.
+ */
+export const AiAnalysisSchema = z.object({
+  /** What actually happened, stated honestly. */
+  availability: AiAvailabilitySchema,
+  /** True only when a model ran and its output was validated. */
+  ran: z.boolean(),
+  provider: z.string().min(1).max(80),
+  model: z.string().min(1).max(120),
+  /** The model's one-paragraph reading, grounded prose (not a fact). */
+  interpretation: z.string().max(4000),
+  observedFacts: z.array(ExtractedFactSchema).max(40),
+  measurements: z.array(AiMeasurementSchema).max(40),
+  hypotheses: z.array(AiHypothesisSchema).max(12),
+  missingEvidence: z.array(z.string().min(1).max(600)).max(20),
+  recommendedInvestigations: z.array(z.string().min(1).max(600)).max(20),
+  candidateSafeguards: z.array(AiCandidateSafeguardSchema).max(12),
+  verificationRequirements: z.array(z.string().min(1).max(600)).max(12),
+  /** Operations whose outcome the material leaves genuinely unknown. */
+  unknownOutcomes: z.array(z.string().min(1).max(600)).max(20),
+  rejectedClaims: z.array(RejectedAiClaimSchema).max(40),
+  /** True when the material appeared to contain instructions to the model. */
+  injectionDetected: z.boolean(),
+  /** Populated when availability is not `ran`. Empty otherwise. */
+  error: z.string().max(600).optional(),
+});
+export type AiAnalysis = z.infer<typeof AiAnalysisSchema>;
 
 /** Whether a connected authoritative source was actually consulted. */
 export const AuthoritativeLookupSchema = z.object({
@@ -342,6 +455,12 @@ export const InvestigationSchema = z.object({
   authoritativeLookup: AuthoritativeLookupSchema,
   /** The deterministic diagnosis hypothesis derived from the above. */
   diagnosis: DiagnosisSchema,
+  /**
+   * The AI-assisted reading, when one ran. Optional so records written before
+   * this field existed still validate; `null` means no model was involved.
+   * This is additive: it never feeds the deterministic diagnosis or decision.
+   */
+  aiAnalysis: AiAnalysisSchema.nullable().optional(),
 });
 export type Investigation = z.infer<typeof InvestigationSchema>;
 

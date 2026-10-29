@@ -17,6 +17,7 @@ import { createHash } from "node:crypto";
 import { randomUUID } from "node:crypto";
 import {
   SafeguardRecordSchema,
+  type AiAnalysis,
   type EvidenceAssessment,
   type IncidentSubmission,
   type RecalledMemory,
@@ -46,6 +47,14 @@ export interface InvestigationDeps {
   resolveEvidence: (domain: "finance" | "incident") => EvidenceAdapter;
   memory: MemoryAdapter;
   store: AuditStore;
+  /**
+   * Optional AI-assisted reading. When provided it runs concurrently with the
+   * evidence lookup and its result is attached to the investigation. It is
+   * additive: the deterministic diagnosis, rule, decision, and verification are
+   * computed from the same inputs whether or not this is supplied, and this
+   * function cannot influence them. Absent in tests that do not exercise AI.
+   */
+  analyze?: (submission: IncidentSubmission) => Promise<AiAnalysis>;
 }
 
 /**
@@ -118,9 +127,19 @@ export async function runSubmissionPipeline(
     currentStatus: "open",
   });
 
-  const assessment: EvidenceAssessment = await evidence.verifyEvidence(incident);
+  // Run the AI reading concurrently with the authoritative lookup: they are
+  // independent, and awaiting them in series would double the latency of every
+  // submission. The AI result is additive and cannot affect the assessment.
+  const aiPromise: Promise<AiAnalysis | null> = deps.analyze
+    ? deps.analyze(submission).catch(() => null)
+    : Promise.resolve(null);
 
-  // Re-run the investigation with the real lookup result folded in.
+  const assessment: EvidenceAssessment = await evidence.verifyEvidence(incident);
+  const aiAnalysis = await aiPromise;
+
+  // Re-run the investigation with the real lookup result folded in, and attach
+  // the AI reading. The diagnosis is computed from the same inputs as before;
+  // the AI reading does not enter it.
   const investigation = investigateSubmission({
     submission,
     authoritativeLookup: {
@@ -131,6 +150,7 @@ export async function runSubmissionPipeline(
       evidenceReference: assessment.evidenceReference,
       source: evidence.sourceName,
     },
+    aiAnalysis,
   });
 
   // Stage C: retrieve relevant prior lessons. Memory informs; it never governs.

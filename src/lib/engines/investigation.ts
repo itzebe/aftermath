@@ -6,10 +6,14 @@
  * executes, evaluates, or interpolates the submitted text into a command, a
  * query, or a template that runs. A stack trace is read as text, not run.
  *
- * There is no language model in this path. That is a deliberate, disclosed
- * choice: the product's claim is evidence-grounded investigation, not
- * autonomous reasoning, and inventing a model here would make the output
- * unauditable. `extractionMethod` is therefore always "rule-based".
+ * There is no language model *required* in this path. That is a deliberate,
+ * disclosed choice: the product's claim is evidence-grounded investigation, and
+ * the deterministic parse is always what produces the diagnosis. An optional
+ * AI-assisted reading (see `engines/ai-investigation.ts`) may be attached
+ * alongside it — clearly labelled, additive, and grounded claim-by-claim
+ * against this same material — but it never feeds the diagnosis, the decision,
+ * or any state transition. `extractionMethod` is `model` only when such a
+ * reading genuinely ran and contributed at least one grounded finding.
  *
  * The output separates what the material *shows* (observed), what a connected
  * authoritative source *confirms*, what is merely *hypothesised*, what is still
@@ -19,6 +23,7 @@
 
 import {
   InvestigationSchema,
+  type AiAnalysis,
   type Diagnosis,
   type EvidenceAssessment,
   type ExtractedFact,
@@ -933,6 +938,14 @@ export function investigateSubmission(input: {
     evidenceReference: string;
     source: string;
   };
+  /**
+   * The AI-assisted reading, when one was produced. It is attached verbatim and
+   * never merged into `categories` or `diagnosis`, so the deterministic
+   * engine's inputs are byte-for-byte the same whether or not a model ran. It
+   * only changes `extractionMethod` — and only when the model genuinely
+   * contributed grounded findings (`aiAnalysis.ran`).
+   */
+  aiAnalysis?: AiAnalysis | null;
 }): Investigation {
   const { submission } = input;
   // Redact anything credential-shaped before it is stored, displayed, or sent
@@ -956,8 +969,13 @@ export function investigateSubmission(input: {
     hasActual,
   });
 
+  const aiAnalysis = input.aiAnalysis ?? null;
+
   return InvestigationSchema.parse({
-    extractionMethod: "rule-based",
+    // The method reflects reality: `model` only when a model actually ran and
+    // produced at least one grounded finding. Otherwise the record is the
+    // deterministic parse, and the AI section says why.
+    extractionMethod: aiAnalysis?.ran ? "model" : "rule-based",
     domain: inference.domain,
     domainReason: inference.reason,
     actionType,
@@ -987,6 +1005,7 @@ export function investigateSubmission(input: {
       evidenceReference: input.authoritativeLookup.evidenceReference,
     },
     diagnosis,
+    aiAnalysis,
   });
 }
 

@@ -1,4 +1,5 @@
 import type {
+  AiAnalysis,
   ExtractedFact,
   MemoryRelation,
   SafeguardRecord,
@@ -129,6 +130,231 @@ function Bullets({ items }: { items: string[] }) {
     </ul>
   );
 }
+
+const AI_AVAILABILITY_LABEL: Record<AiAnalysis["availability"], string> = {
+  not_configured: "AI not configured · deterministic parse only",
+  ran: "AI reading ran",
+  unavailable: "AI provider unavailable · deterministic parse only",
+  rate_limited: "AI free-tier limit reached · deterministic parse only",
+  timeout: "AI request timed out · deterministic parse only",
+  invalid_response: "AI response invalid · rejected",
+  grounding_failed: "AI produced no grounded finding · rejected",
+  injection_detected: "instruction-like text detected in the material",
+};
+
+const AI_AVAILABILITY_TONE: Record<AiAnalysis["availability"], Tone> = {
+  not_configured: "unknown",
+  ran: "info",
+  unavailable: "unknown",
+  rate_limited: "warn",
+  timeout: "warn",
+  invalid_response: "bad",
+  grounding_failed: "warn",
+  injection_detected: "warn",
+};
+
+/**
+ * The AI-assisted reading, rendered as an explicitly additive panel.
+ *
+ * It is labelled with what actually happened (ran, or why not), keeps
+ * observations and hypotheses visibly apart, shows the span behind every
+ * grounded fact, and lists any claim the model made that could not be grounded.
+ * It is never presented as the decision or the diagnosis.
+ */
+function AiReading({ ai }: { ai: AiAnalysis }) {
+  const tone = AI_AVAILABILITY_TONE[ai.availability];
+  return (
+    <div className="rounded-md border hairline bg-[#0a0d12] px-3 py-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="label">AI-assisted reading</span>
+        <Pill tone={tone}>{AI_AVAILABILITY_LABEL[ai.availability]}</Pill>
+        {ai.ran ? (
+          <span className="mono text-[0.6875rem] text-paper-500">
+            {ai.provider} · {ai.model}
+          </span>
+        ) : null}
+      </div>
+
+      {!ai.ran ? (
+        <p className="mt-2 text-[0.75rem] leading-relaxed text-paper-400">
+          {ai.error ?? "No model reading is available for this record."} The
+          evidence, hypotheses, safeguard, and verification above were produced
+          entirely by the deterministic engine and are unaffected.
+        </p>
+      ) : (
+        <div className="mt-2 space-y-3">
+          {ai.interpretation ? (
+            <p className="text-[0.8125rem] leading-relaxed text-paper-300">
+              {ai.interpretation}
+            </p>
+          ) : null}
+
+          {ai.observedFacts.length > 0 ? (
+            <div>
+              <div className="label mb-1">
+                Facts grounded in the material ({ai.observedFacts.length})
+              </div>
+              <FactList facts={ai.observedFacts} tone="info" />
+            </div>
+          ) : null}
+
+          {ai.measurements.length > 0 ? (
+            <div>
+              <div className="label mb-1">
+                Measurements preserved from the material ({ai.measurements.length})
+              </div>
+              <ul className="space-y-2">
+                {ai.measurements.map((m, i) => (
+                  <li
+                    key={`${m.label}-${i}`}
+                    className="rounded border hairline bg-[#090c11] px-3 py-2"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Pill tone="neutral">{m.label}</Pill>
+                      <span className="mono text-[0.75rem]">
+                        {m.value}
+                        {m.unit ? ` ${m.unit}` : ""}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 border-l-2 border-[#252d39] pl-2.5 text-[0.75rem] leading-snug text-paper-500">
+                      <span className="mono text-paper-600">span:</span> {m.source}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {ai.hypotheses.length > 0 ? (
+            <div>
+              <div className="label mb-1">
+                Candidate mechanisms (hypotheses, never verdicts)
+              </div>
+              <ul className="space-y-2">
+                {ai.hypotheses.map((h, i) => (
+                  <li
+                    key={`${h.mechanism}-${i}`}
+                    className="rounded border hairline bg-[#090c11] px-3 py-2"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[0.8125rem] font-medium text-paper-200">
+                        {h.mechanism}
+                      </span>
+                      {h.confidence !== undefined ? (
+                        <span className="mono text-[0.6875rem] text-paper-500">
+                          {Math.round(h.confidence * 100)}% (model confidence, not proof)
+                        </span>
+                      ) : null}
+                    </div>
+                    {h.supportingEvidence.length > 0 ? (
+                      <div className="mt-1.5">
+                        <div className="label mb-0.5">Supporting</div>
+                        <Bullets items={h.supportingEvidence} />
+                      </div>
+                    ) : null}
+                    {h.contradictingEvidence.length > 0 ? (
+                      <div className="mt-1.5">
+                        <div className="label mb-0.5">Contradicting</div>
+                        <Bullets items={h.contradictingEvidence} />
+                      </div>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {ai.unknownOutcomes.length > 0 ? (
+            <div>
+              <div className="label mb-1">Outcomes left unknown by the material</div>
+              <Bullets items={ai.unknownOutcomes} />
+            </div>
+          ) : null}
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            {ai.missingEvidence.length > 0 ? (
+              <div>
+                <div className="label mb-1">Missing evidence</div>
+                <Bullets items={ai.missingEvidence} />
+              </div>
+            ) : null}
+            {ai.recommendedInvestigations.length > 0 ? (
+              <div>
+                <div className="label mb-1">Recommended investigations</div>
+                <Bullets items={ai.recommendedInvestigations} />
+              </div>
+            ) : null}
+          </div>
+
+          {ai.candidateSafeguards.length > 0 ? (
+            <div>
+              <div className="label mb-1">
+                Candidate safeguards (proposals, not activated rules)
+              </div>
+              <ul className="space-y-2">
+                {ai.candidateSafeguards.map((s, i) => (
+                  <li
+                    key={`${s.statement}-${i}`}
+                    className="rounded border hairline bg-[#090c11] px-3 py-2"
+                  >
+                    <div className="text-[0.8125rem] font-medium text-paper-200">
+                      {s.statement}
+                    </div>
+                    <div className="mt-1 text-[0.75rem] leading-relaxed text-paper-400">
+                      {s.rationale}
+                    </div>
+                    <div className="mt-1 text-[0.6875rem] leading-relaxed text-paper-500">
+                      <span className="mono text-paper-600">verification required:</span>{" "}
+                      {s.verificationRequirement}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {ai.injectionDetected ? (
+            <p className="text-[0.75rem] leading-relaxed text-signal-warn">
+              The material contained text addressed to an assistant (for example,
+              instructions to ignore prior rules). It was treated as data and not
+              obeyed; it is shown here only as a property of the incident.
+            </p>
+          ) : null}
+
+          {ai.rejectedClaims.length > 0 ? (
+            <div>
+              <div className="label mb-1">
+                Model claims rejected by grounding ({ai.rejectedClaims.length})
+              </div>
+              <ul className="space-y-1.5">
+                {ai.rejectedClaims.map((r, i) => (
+                  <li
+                    key={`${r.claim}-${i}`}
+                    className="rounded border border-signal-bad/30 bg-signal-bad/[0.05] px-3 py-1.5"
+                  >
+                    <div className="text-[0.75rem] text-paper-300">{r.claim}</div>
+                    <div className="text-[0.6875rem] text-paper-500">
+                      rejected: {r.reason}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          <p className="text-[0.6875rem] leading-relaxed text-paper-600">
+            The AI reading is additive. It did not set the evidence status, the
+            diagnosis, the decision, or the verification above — those remain the
+            deterministic engine&apos;s. Every fact shown was grounded against the
+            submitted material; ungrounded claims are listed under “rejected by
+            grounding”.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 export function SafeguardRecordView({ record }: { record: SafeguardRecord }) {
   const { investigation, recommendation, verification, memory } = record;
@@ -271,6 +497,9 @@ export function SafeguardRecordView({ record }: { record: SafeguardRecord }) {
                 <Bullets items={c.nextChecks} />
               </div>
             </div>
+            {investigation.aiAnalysis ? (
+              <AiReading ai={investigation.aiAnalysis} />
+            ) : null}
           </ChainNode>
 
           <ChainNode

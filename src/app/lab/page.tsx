@@ -220,6 +220,41 @@ export default async function LabPage() {
       </Section>
 
       <Section
+        eyebrow="Interpretation"
+        title="AI-assisted reading"
+        lead="An additive reading of unfamiliar incident material. It proposes candidate mechanisms, missing evidence, and investigations; it never sets the evidence status, diagnosis, decision, or verification."
+      >
+        <div className="panel p-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <Pill tone={configuration.ai.configured ? "ok" : "warn"}>
+              {configuration.ai.configured ? "configured" : "not configured"}
+            </Pill>
+            <span className="mono text-[0.6875rem] text-paper-500">
+              {configuration.ai.provider} · {configuration.ai.model}
+            </span>
+          </div>
+          <div className="mt-2 break-words text-[0.75rem] leading-relaxed text-paper-300">
+            {configuration.ai.costNote}
+          </div>
+          {!configuration.ai.configured ? (
+            <div className="mt-3">
+              <Notice tone="warn" title="AI-assisted reading not configured">
+                Every record is produced by the deterministic engine and says so.
+                Set a free GROQ_API_KEY to attach an additive model reading; each
+                record reports per-record whether a model actually ran.
+              </Notice>
+            </div>
+          ) : (
+            <div className="mt-3 text-[0.75rem] leading-relaxed text-paper-400">
+              Every model finding is grounded claim-by-claim against the submitted
+              material before it is kept; a claim whose cited span is not in the
+              material is listed as rejected, not shown as evidence.
+            </div>
+          )}
+        </div>
+      </Section>
+
+      <Section
         eyebrow="Persistence"
         title="Audit index"
         lead="Where the incident index is stored. The index is an audit record, not an authority; Tatum and Walrus Memory remain the sources of truth."

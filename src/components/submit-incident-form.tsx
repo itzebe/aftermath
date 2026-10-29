@@ -19,6 +19,7 @@ import { Notice } from "@/components/ui";
 const STAGES = [
   "Validating the submission",
   "Parsing the material (rule-based)",
+  "Reading the material (AI-assisted, if configured)",
   "Consulting connected sources",
   "Assembling the evidence assessment",
   "Retrieving related memories",
