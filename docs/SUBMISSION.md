@@ -33,8 +33,8 @@ fail the same way twice.
 | # | Requirement | Status | Evidence |
 | --- | --- | --- | --- |
 | 01 | Walrus Memory integrated and writing on Mainnet | ✅ | Real SDK writes to `https://relayer.memory.walrus.xyz`, namespace `aftermath`. Each write is awaited to a blob id and confirmed by a recall query. See [`src/lib/adapters/memwal-memory.ts`](../src/lib/adapters/memwal-memory.ts) and the live counts on `/memory`. |
-| 02 | Tatum RPC used for onchain data where relevant | ✅ | Read-only Sui adapter on the documented gRPC primary with a GraphQL fallback, server-side API key. Real Mainnet transactions (successful **and** unsuccessful) back the finance evidence cases. No transaction is ever broadcast. See [`src/lib/adapters/tatum-sui.ts`](../src/lib/adapters/tatum-sui.ts). |
-| 03 | At least 10 memories stored on Mainnet | ✅ | The live ledger reports **88 completed** and **87 recall-verified** Mainnet writes — see `GET /api/overview` (`completedLiveWrites`, `recallVerifiedWrites`). `mainnetRequirement` returns `{required: 10, completedLive: 88, recallVerified: 87, remaining: 0, satisfied: true}`. `simulatedWrites` is **0**; every write carries `backend: memwal-mainnet`, `provenance: live`. The relayer reports **243** memories in the `aftermath` namespace. Simulated writes are tracked separately and excluded. |
+| 02 | Tatum RPC used for onchain data where relevant | ✅ | Read-only Sui verifier on Tatum's documented gRPC primary (`LedgerService/GetTransaction`) with a GraphQL fallback, server-side API key. It is the authoritative evidence source for the **finance** case: a Sui transaction digest in the submitted material is looked up and classified `VERIFIED_SUCCESS` / `VERIFIED_FAILURE` / `UNKNOWN`. Digests are discovered from the live ledger at runtime, never hardcoded. No transaction is ever broadcast. See [`src/lib/adapters/tatum-sui-grpc.ts`](../src/lib/adapters/tatum-sui-grpc.ts). |
+| 03 | At least 10 memories stored on Mainnet | ✅ | The live ledger reports **155 completed** and **154 recall-verified** Mainnet writes — see `GET /api/overview` (`completedLiveWrites`, `recallVerifiedWrites`). `mainnetRequirement` returns `{required: 10, completedLive: 155, recallVerified: 154, remaining: 0, satisfied: true}`. `simulatedWrites` is **0**; every write carries `backend: memwal-mainnet`, `provenance: live`. The relayer reports **310** memories in the `aftermath` namespace. Simulated writes are tracked separately and excluded. |
 | 04 | Published blog post (what it does, how it uses Tatum + Walrus, how it learned) | ✅ | [`BLOG.md`](BLOG.md), published on Medium and mirrored on GitHub Pages. Covers the pipeline, both integrations, the transient-failure/deferral fix, and measured results. |
 | 05 | Working demo and public repo | ✅ | Demo: <https://aftermath-7tij.vercel.app/>. Repo: <https://github.com/itzebe/aftermath> (public). |
 | 06 | Optional: build with Tatum AI Builder (ai.tatum.io) — $500 bonus | ⛔ Not pursued | AFTERMATH was built as an indie project. The dedicated AI-Builder award is out of scope; the app still uses Tatum RPC/Data APIs directly. |
@@ -93,12 +93,18 @@ and recall-verified writes are tracked separately from simulated ones, and the
 namespace total is read from the relayer's own signed `listNamespaces` call.
 
 **Tatum integration (specific).** A read-only Sui verifier on Tatum's documented
-**gRPC** endpoint (`sui-mainnet-grpc.gateway.tatum.io`) with a **GraphQL**
+**gRPC** endpoint (`sui-mainnet-grpc.gateway.tatum.io`), using
+`LedgerService/GetTransaction` for transaction verification, with a **GraphQL**
 fallback (`sui-mainnet.gateway.tatum.io/graphql`), authenticated with a
-server-side API key. It reads genuine Mainnet transaction execution status —
-successful **and** unsuccessful — to decide the finance evidence case. **No
-transaction is ever broadcast and no wallet key is ever requested.** When the
-gateway cannot answer, the case resolves to `UNKNOWN`, never to a guess.
+server-side API key. It is the authoritative evidence source for the **finance**
+case only — it reads genuine Mainnet transaction execution status and classifies
+it as `VERIFIED_SUCCESS`, `VERIFIED_FAILURE`, or `UNKNOWN`. Transaction digests
+are retrieved dynamically from the live ledger, never hardcoded. **No transaction
+is ever broadcast and no wallet key is ever requested.** Transport, authentication,
+and missing-data failures are always reported as `UNKNOWN` and are never
+misrepresented as a transaction failure. **Verified in production:** one live
+successful Mainnet transaction was verified this way; the failure branch
+(`VERIFIED_FAILURE`) is covered by unit tests, not by a production demonstration.
 
 **AI investigation and safeguards.** An optional, additive Groq reading
 (`openai/gpt-oss-120b`, free tier) proposes, but cannot decide: every fact it
@@ -114,11 +120,15 @@ a dependency being briefly unavailable is never mistaken for a verified failure.
 (`GET /api/overview`, `GET /api/memory`):
 
 - Walrus Memory is **live** (`backend: memwal-mainnet`, `isLive: true`,
-  `MAINNET_AUTH_CONFIRMED`); the live ledger reports **88 completed** and **87
-  recall-verified** Mainnet writes (`simulatedWrites: 0`), and the namespace
-  holds **243 memories**.
-- Tatum Sui adapter configured; gateway health check passes; finance cases read
-  genuine Mainnet transactions.
+  `MAINNET_AUTH_CONFIRMED`); the live ledger reports **155 completed** Mainnet
+  writes, of which **154** were confirmed by a recall query, with
+  `simulatedWrites: 0`. The relayer reports **310** memories in the `aftermath`
+  namespace. Completed and recall-verified counts are reported separately and
+  never merged — the 155 writes are **not** all recall-verified.
+- Tatum Sui gRPC gateway configured and healthy (authenticated, chain
+  identifier matching Sui Mainnet). The finance case has verified **one** live
+  Mainnet transaction as `VERIFIED_SUCCESS`; the `UNKNOWN` path is also present
+  in production. `VERIFIED_FAILURE` is covered by unit tests only.
 - On the controlled scenarios (figures from the last verified run; see
   [`BLOG.md`](BLOG.md)): **4/4** unsupported claims caught, **0** allowed to
   stand, **100%** repeat-prevention, **0%** false-block, **100%**
@@ -186,26 +196,28 @@ the account owner and must not be guessed.
 
 Requirement 03 (≥ 10 genuine memories on Walrus Memory Mainnet) is verified from
 read-only production endpoints. No write was made to produce this evidence.
+Figures verified **30 October 2026 (UTC)**.
 
 | Check | Command / source | Result |
 | --- | --- | --- |
-| Genuine Mainnet writes completed | `GET /api/overview` → `counts.completedLiveWrites` | **88** |
-| Writes confirmed retrievable by recall | `GET /api/overview` → `counts.recallVerifiedWrites` | **87** |
+| Genuine Mainnet writes completed | `GET /api/overview` → `counts.completedLiveWrites` | **155** |
+| Writes confirmed retrievable by recall | `GET /api/overview` → `counts.recallVerifiedWrites` | **154** |
 | Simulated writes (excluded) | `GET /api/overview` → `counts.simulatedWrites` | **0** |
-| Requirement eval | `GET /api/overview` → `mainnetRequirement` | `{required: 10, completedLive: 88, recallVerified: 87, remaining: 0, satisfied: true}` |
-| Namespace memories (relayer-reported, authoritative) | `GET /api/overview` → `memoryStatus.namespaceMemoryCount` | **243** |
+| Requirement eval | `GET /api/overview` → `mainnetRequirement` | `{required: 10, completedLive: 155, recallVerified: 154, remaining: 0, satisfied: true}` |
+| Namespace memories (relayer-reported, authoritative) | `GET /api/overview` → `memoryStatus.namespaceMemoryCount` | **310** |
 | Backend is genuinely Mainnet | `GET /api/config` / `/api/overview` | `backend: memwal-mainnet`, `isLive: true`, `network: mainnet` |
-| Every ledger row | `GET /api/memory` → `writes[]` | 121 rows, **all** `backend: memwal-mainnet`, `provenance: live` |
+| Every ledger row | `GET /api/memory` → `writes[]` | 188 rows, **all** `backend: memwal-mainnet`, `provenance: live` |
 | Relayer auth | `GET /api/overview` → `memoryStatus` | `state: MAINNET_AUTH_CONFIRMED`, `authenticated: true` |
 
-**Interpretation.** 88 completed writes and 87 recall-verified writes means the
-instance has written at least **87 memories that a recall query returned**, more
-than eight times the required ten. Because `simulatedWrites` is `0` and every
+**Interpretation.** 155 completed writes and 154 recall-verified writes means the
+instance has written at least **154 memories that a recall query returned**, more
+than fifteen times the required ten. Because `simulatedWrites` is `0` and every
 ledger row carries `backend: memwal-mainnet` with `provenance: live`, the count
 is not inflated by fixtures: the simulated input worlds the scenarios use are
 labelled `simulated`, and none of them is counted here. Completed and
 recall-verified are reported **separately** and never merged, so a write that
-completed but whose follow-up recall was rate-limited is not silently promoted.
+completed but whose follow-up recall was rate-limited is not silently promoted —
+**the 155 completed writes are not all recall-verified.**
 
 The standalone check `npm run verify:prod` includes the memory checks and passes
 **20/20**; `verify:ai` is read-only.
