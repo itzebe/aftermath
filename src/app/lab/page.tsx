@@ -1,6 +1,6 @@
+import Link from "next/link";
 import { getOverview, getLastRun } from "@/lib/service";
 import { EvidencePill, DecisionPill, Metric, Notice, PageHeader, Pill, ProvenancePill, Section } from "@/components/ui";
-import { RunScenariosButton } from "@/components/run-scenarios";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +36,11 @@ export default async function LabPage() {
           eyebrow="System"
           title="Evaluation Lab"
           lead="The reliability console: live system state and the controlled scenarios that test the mechanism. Every figure is read from the running system; nothing is illustrative."
-          right={<RunScenariosButton />}
+          right={
+            <Link href="/admin" className="action">
+              Operator sign-in
+            </Link>
+          }
         />
 
         {memoryStatus.state === "MAINNET_AUTH_FAILED" ? (
@@ -409,7 +413,11 @@ export default async function LabPage() {
           </div>
         ) : (
           <Notice tone="info" title="No run yet">
-            Use “Run from scratch” to execute the controlled scenarios.
+            The controlled scenarios are executed by a signed-in operator from the{" "}
+            <Link href="/admin" className="link-quiet">
+              admin console
+            </Link>
+            .
           </Notice>
         )}
       </Section>

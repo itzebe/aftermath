@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { adminHeaders } from "@/lib/admin-token";
+import Link from "next/link";
 import {
   EmptyState,
   Loading,
@@ -95,8 +95,6 @@ const BACKEND_STATE_LABEL: Record<MemoryStatusPayload["state"], string> = {
 export default function MemoryPage() {
   const [data, setData] = useState<MemoryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [verifyResult, setVerifyResult] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const r = await fetch("/api/memory");
@@ -106,44 +104,6 @@ export default function MemoryPage() {
   useEffect(() => {
     load().catch((e: Error) => setError(e.message));
   }, [load]);
-
-  const runVerify = useCallback(async () => {
-    setBusy(true);
-    setVerifyResult(null);
-    try {
-      const r = await fetch("/api/memory-verify", {
-        method: "POST",
-        headers: adminHeaders({ "content-type": "application/json" }),
-        body: JSON.stringify({ query: "safeguard", limit: 10 }),
-      });
-      const d = (await r.json()) as {
-        count?: number;
-        backend?: string;
-        isLive?: boolean;
-        error?: string;
-        detail?: string;
-      };
-      if (!r.ok) {
-        setVerifyResult(
-          d.error === "unauthorized"
-            ? "Administrator token required. Enter it in the header (the Admin control), then retry."
-            : d.error === "admin_disabled"
-              ? "Memory verification is disabled: the server has no AFTERMATH_ADMIN_TOKEN configured."
-              : `Verification failed: ${d.detail ?? d.error ?? `HTTP ${r.status}`}`,
-        );
-        return;
-      }
-      setVerifyResult(
-        `Recall returned ${d.count ?? 0} stored lesson(s) from ${d.backend} (live=${d.isLive}).`,
-      );
-      await load();
-    } catch (e) {
-      setVerifyResult(`Verification failed: ${(e as Error).message}`);
-    } finally {
-      setBusy(false);
-    }
-  }, [load]);
-
   if (error) {
     return (
       <div>
@@ -168,14 +128,9 @@ export default function MemoryPage() {
         title="Memory Ledger"
         lead="Every write this application attempted against the memory backend, with its true lifecycle. A write is only counted as complete once the relayer returned a blob id, and only counted as verified once a recall query returned the record."
         right={
-          <button
-            type="button"
-            className="action"
-            onClick={runVerify}
-            disabled={busy}
-          >
-            {busy ? "Re-verifying…" : "Re-verify recall"}
-          </button>
+          <Link href="/admin" className="action">
+            Re-verify in admin console
+          </Link>
         }
       />
 
@@ -202,12 +157,6 @@ export default function MemoryPage() {
           {data.health.detail}
         </Notice>
       )}
-
-      {verifyResult ? (
-        <Notice tone="info" title="Recall re-verification">
-          {verifyResult}
-        </Notice>
-      ) : null}
 
       <Panel
         title="Backend state"
