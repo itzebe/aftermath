@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { SafeguardRecord } from "@/lib/schemas";
 import { SafeguardRecordView } from "@/components/safeguard-record";
 import { Notice } from "@/components/ui";
+import { adminHeaders } from "@/lib/admin-token";
 
 /**
  * The incident submission form — the product's front door.
@@ -67,7 +68,7 @@ export function SubmitIncidentForm({ sample }: { sample?: string }) {
       try {
         const res = await fetch("/api/incidents/submit", {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: adminHeaders({ "content-type": "application/json" }),
           body: JSON.stringify({
             text,
             ...(service ? { service } : {}),
@@ -242,10 +243,32 @@ export function SubmitIncidentForm({ sample }: { sample?: string }) {
                   ? "A dependency was transiently unavailable"
                   : error.error === "invalid_submission"
                     ? "The submission was rejected"
-                    : "The investigation did not complete"
+                    : error.error === "unauthorized"
+                      ? "Administrator token required"
+                      : error.error === "admin_disabled"
+                        ? "Submission is disabled"
+                        : error.error === "rate_limited"
+                          ? "Too many requests"
+                          : error.error === "payload_too_large"
+                            ? "The submission was too large"
+                            : "The investigation did not complete"
               }
             >
               {error.detail ?? "Unknown error."}
+              {error.error === "unauthorized" ? (
+                <>
+                  {" "}
+                  Enter the administrator token in the header (the{" "}
+                  <span className="mono">Admin</span> control) and try again.
+                </>
+              ) : null}
+              {error.error === "admin_disabled" ? (
+                <>
+                  {" "}
+                  The server has no <span className="mono">AFTERMATH_ADMIN_TOKEN</span>{" "}
+                  configured, so incident submission is switched off.
+                </>
+              ) : null}
               {error.retryable ? (
                 <>
                   {" "}

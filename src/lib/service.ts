@@ -120,7 +120,23 @@ export interface OverviewPayload {
   lastRunAt: string | null;
 }
 
-export async function getOverview(): Promise<OverviewPayload> {
+/**
+ * How long a successful overview is reused. The overview makes three external
+ * calls (Tatum, the Walrus relayer) and several aggregate queries, so a short
+ * cache turns a homepage refresh loop into one set of calls per window instead
+ * of one per visitor. Ten seconds is short enough that a state change is
+ * visible almost immediately, and the UI always re-reads on the next window.
+ */
+const OVERVIEW_TTL_MS = 10_000;
+
+let overviewCache: { at: number; payload: OverviewPayload } | null = null;
+
+/** Drop the cached overview. Exported for tests and after a reset. */
+export function resetOverviewCache(): void {
+  overviewCache = null;
+}
+
+async function buildOverview(): Promise<OverviewPayload> {
   const rt = runtime();
   const counts = await rt.store.counts();
   const [tatumHealth, memoryHealth, memoryStatus] = await Promise.all([
@@ -156,6 +172,28 @@ export async function getOverview(): Promise<OverviewPayload> {
     evaluation,
     lastRunAt: lastRun?.ranAt ?? null,
   };
+}
+
+/**
+ * The overview payload, memoised for {@link OVERVIEW_TTL_MS}.
+ *
+ * Only a *successful* build is cached. A failure clears the cache and rethrows,
+ * so a dependency going down is never masked by a stale success — the caller
+ * still sees the error and the next request retries immediately.
+ */
+export async function getOverview(): Promise<OverviewPayload> {
+  const now = Date.now();
+  if (overviewCache && now - overviewCache.at < OVERVIEW_TTL_MS) {
+    return overviewCache.payload;
+  }
+  try {
+    const payload = await buildOverview();
+    overviewCache = { at: Date.now(), payload };
+    return payload;
+  } catch (err) {
+    overviewCache = null;
+    throw err;
+  }
 }
 
 export async function runScenarios(): Promise<DemoRunResult> {
@@ -302,6 +340,9 @@ export async function getLastRun(): Promise<DemoRunResult | null> {
 
 export async function resetAll(): Promise<void> {
   await runtime().store.reset();
+  // The overview aggregates the tables just cleared; drop the cache so the next
+  // read reflects the reset immediately rather than after the TTL.
+  resetOverviewCache();
 }
 
 /* ------------------------------------------------------------------ *

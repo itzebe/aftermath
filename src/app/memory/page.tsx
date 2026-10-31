@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { adminHeaders } from "@/lib/admin-token";
 import {
   EmptyState,
   Loading,
@@ -110,15 +111,30 @@ export default function MemoryPage() {
     setBusy(true);
     setVerifyResult(null);
     try {
-      const r = await fetch("/api/memory-verify", { method: "POST" });
+      const r = await fetch("/api/memory-verify", {
+        method: "POST",
+        headers: adminHeaders({ "content-type": "application/json" }),
+        body: JSON.stringify({ query: "safeguard", limit: 10 }),
+      });
       const d = (await r.json()) as {
-        checked: number;
-        stillVerified: number;
-        failed: number;
-        backend: string;
+        count?: number;
+        backend?: string;
+        isLive?: boolean;
+        error?: string;
+        detail?: string;
       };
+      if (!r.ok) {
+        setVerifyResult(
+          d.error === "unauthorized"
+            ? "Administrator token required. Enter it in the header (the Admin control), then retry."
+            : d.error === "admin_disabled"
+              ? "Memory verification is disabled: the server has no AFTERMATH_ADMIN_TOKEN configured."
+              : `Verification failed: ${d.detail ?? d.error ?? `HTTP ${r.status}`}`,
+        );
+        return;
+      }
       setVerifyResult(
-        `Re-checked ${d.checked} write(s): ${d.stillVerified} still retrievable, ${d.failed} failed. Backend: ${d.backend}.`,
+        `Recall returned ${d.count ?? 0} stored lesson(s) from ${d.backend} (live=${d.isLive}).`,
       );
       await load();
     } catch (e) {

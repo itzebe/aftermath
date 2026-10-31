@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { adminHeaders } from "@/lib/admin-token";
 
 interface BatchResult {
   jobId: string;
@@ -79,7 +80,7 @@ export function RunScenariosButton() {
         try {
           const res = await fetch("/api/scenarios/run", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: adminHeaders({ "Content-Type": "application/json" }),
             body: JSON.stringify({ restart: i === 0 ? restart : false }),
           });
           body = await res.json();

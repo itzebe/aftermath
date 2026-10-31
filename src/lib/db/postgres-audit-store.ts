@@ -6,7 +6,7 @@ import type {
   IncidentRecord,
   ScenarioRunRow,
 } from "@/lib/db/audit-store";
-import { computeCounts } from "@/lib/db/audit-store";
+import { countsFromRow } from "@/lib/db/audit-store";
 import type { MemoryWriteReceipt } from "@/lib/adapters/memory";
 import type { SafeguardDecision, SafeguardRecord, SafeguardRule } from "@/lib/schemas";
 
@@ -375,15 +375,29 @@ export class PostgresAuditStore implements AuditStore {
   }
 
   async counts(): Promise<AuditCounts> {
-    const incidents = await this.listIncidents(100_000);
-    const writes = await this.listMemoryWrites(100_000);
-    const activeRules = await this.listActiveRules();
-    return computeCounts({
-      incidents,
-      writes,
-      activeRules,
-      records: await this.countSafeguardRecords(),
-    });
+    await this.ensureReady();
+    // Aggregate in the database. The previous implementation read up to 100,000
+    // incidents and 100,000 memory-write payloads into Node and reduced them
+    // there, which made every homepage load a multi-megabyte transfer. Each
+    // sub-select is an index-assisted COUNT, and the classification rules match
+    // `computeCounts` exactly so the two engines cannot disagree.
+    const { rows } = await this.pool.query(
+      `SELECT
+         (SELECT COUNT(*) FROM incidents) AS incidents,
+         (SELECT COUNT(*) FROM incidents
+            WHERE payload->'assessment'->>'status' = 'VERIFIED_FAILURE') AS verified_failures,
+         (SELECT COUNT(*) FROM rules WHERE validation_status = 'active') AS active_rules,
+         (SELECT COUNT(*) FROM incidents
+            WHERE payload->'decision'->>'decision' IN ('UNKNOWN', 'REQUIRE_VERIFICATION')) AS unresolved,
+         (SELECT COUNT(*) FROM memory_writes
+            WHERE state = 'completed' AND backend <> 'simulated') AS completed_live,
+         (SELECT COUNT(*) FROM memory_writes
+            WHERE recall_verified = TRUE AND backend <> 'simulated') AS recall_verified,
+         (SELECT COUNT(*) FROM memory_writes WHERE backend = 'simulated') AS simulated,
+         (SELECT COUNT(*) FROM memory_writes) AS total_writes,
+         (SELECT COUNT(*) FROM safeguard_records) AS records`,
+    );
+    return countsFromRow(rows[0] as Record<string, unknown>);
   }
 
   async reset(): Promise<void> {

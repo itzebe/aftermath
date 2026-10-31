@@ -3,6 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import {
+  clearAdminToken,
+  getAdminToken,
+  onAdminTokenChange,
+  setAdminToken,
+} from "@/lib/admin-token";
 
 /**
  * The application frame: one authoritative primary navigation.
@@ -144,6 +150,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </nav>
 
           <div className="ml-auto flex items-center gap-2" ref={menuRef}>
+            <AdminTokenControl />
             {/* Secondary destinations — desktop */}
             <div className="relative hidden md:block">
               <button
@@ -245,6 +252,119 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </p>
         </div>
       </footer>
+    </div>
+  );
+}
+
+/**
+ * The administrator-token control.
+ *
+ * The gated endpoints require `AFTERMATH_ADMIN_TOKEN`. The operator pastes the
+ * same value here once per browser session; it is held in `sessionStorage` and
+ * attached to this app's gated requests. It is never rendered back to the page.
+ */
+function AdminTokenControl() {
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState("");
+  const [configured, setConfigured] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const sync = () => setConfigured(getAdminToken().length > 0);
+    sync();
+    return onAdminTokenChange(sync);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [open]);
+
+  const save = () => {
+    setAdminToken(value.trim());
+    setValue("");
+    setOpen(false);
+  };
+
+  const clear = () => {
+    clearAdminToken();
+    setValue("");
+  };
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        className="nav-item"
+        aria-expanded={open}
+        aria-haspopup="true"
+        aria-controls="admin-token-panel"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span
+          className={`dot ${configured ? "bg-signal-ok" : "bg-paper-600"}`}
+          aria-hidden
+        />
+        <span className="text-[0.8125rem]">Admin</span>
+        <span className="sr-only">
+          {configured ? "administrator token set" : "administrator token not set"}
+        </span>
+      </button>
+      {open ? (
+        <div
+          id="admin-token-panel"
+          className="panel absolute right-0 top-[calc(100%+0.5rem)] w-[22rem] p-3 shadow-2xl shadow-black/60"
+        >
+          <p className="text-[0.75rem] leading-snug text-paper-500">
+            Write and destructive actions need the deployment&apos;s{" "}
+            <span className="mono">AFTERMATH_ADMIN_TOKEN</span>. It is stored only
+            in this tab&apos;s session and never sent anywhere but this app.
+          </p>
+          <label
+            htmlFor="admin-token-input"
+            className="mono mt-3 block text-[0.6875rem] uppercase tracking-[0.15em] text-paper-500"
+          >
+            Administrator token
+          </label>
+          <input
+            id="admin-token-input"
+            type="password"
+            autoComplete="off"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") save();
+            }}
+            placeholder={configured ? "(set — enter to replace)" : "paste token"}
+            className="mt-1 w-full rounded border hairline bg-black/40 px-2 py-1.5 text-[0.8125rem]"
+          />
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              type="button"
+              className="nav-item"
+              onClick={save}
+              disabled={!value.trim()}
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              className="nav-item"
+              onClick={clear}
+              disabled={!configured}
+            >
+              Clear
+            </button>
+            <span className="mono ml-auto text-[0.6875rem] text-paper-500">
+              {configured ? "configured" : "not set"}
+            </span>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
