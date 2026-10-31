@@ -85,6 +85,26 @@ export interface AftermathConfig {
     maxRequests: number;
     windowMs: number;
   };
+  /**
+   * Administrator credential for the write and destructive endpoints (incident
+   * submission, scenario runs, reset, recall). `null` means those endpoints are
+   * disabled entirely — the fail-closed default. A single shared secret is
+   * appropriate here: the deployment has one operator, and the token is the
+   * gate, not a user identity.
+   */
+  adminToken: string | null;
+  /**
+   * Per-endpoint fixed-window request caps, keyed by the endpoint id the route
+   * passes to `adminLimiter`. These bound a holder of the admin token and blunt
+   * accidental client loops. They are process-local; see the note on
+   * multi-instance deployments.
+   */
+  adminRateLimit: Record<string, { maxRequests: number; windowMs: number }>;
+  /**
+   * Maximum accepted request body, in bytes. Enforced before the body is read
+   * or parsed, so an oversized payload is rejected without being buffered.
+   */
+  bodyLimitBytes: number;
   dbPath: string;
   harnessDir: string;
   /**
@@ -115,6 +135,17 @@ export const GROQ_MAX_COMPLETION_TOKENS = 65_536;
  * tier.
  */
 export const AI_DEFAULT_MAX_OUTPUT_TOKENS = 8_192;
+
+/**
+ * Default maximum accepted request body. The largest legitimate submission is a
+ * 20,000-character incident (plus optional short context fields), so 64 KiB
+ * leaves generous headroom for JSON escaping while staying far below anything
+ * that could exhaust a function's memory.
+ */
+export const DEFAULT_BODY_LIMIT_BYTES = 64 * 1024;
+
+/** Hard ceiling for `AFTERMATH_BODY_LIMIT_BYTES`; values above it are clamped. */
+export const MAX_BODY_LIMIT_BYTES = 8 * 1024 * 1024;
 
 function optional(name: string): string | null {
   const value = process.env[name];
@@ -226,6 +257,30 @@ export function loadConfig(): AftermathConfig {
       maxRequests: positiveInt("AFTERMATH_AI_VERIFY_MAX", 5),
       windowMs: positiveInt("AFTERMATH_AI_VERIFY_WINDOW_MS", 60_000),
     },
+    adminToken: optional("AFTERMATH_ADMIN_TOKEN"),
+    adminRateLimit: {
+      "incidents/submit": {
+        maxRequests: positiveInt("AFTERMATH_RL_SUBMIT_MAX", 5),
+        windowMs: positiveInt("AFTERMATH_RL_SUBMIT_WINDOW_MS", 60_000),
+      },
+      "scenarios/run": {
+        maxRequests: positiveInt("AFTERMATH_RL_SCENARIOS_MAX", 1),
+        windowMs: positiveInt("AFTERMATH_RL_SCENARIOS_WINDOW_MS", 60_000),
+      },
+      "memory-verify": {
+        maxRequests: positiveInt("AFTERMATH_RL_MEMORY_MAX", 5),
+        windowMs: positiveInt("AFTERMATH_RL_MEMORY_WINDOW_MS", 60_000),
+      },
+      reset: {
+        maxRequests: positiveInt("AFTERMATH_RL_RESET_MAX", 2),
+        windowMs: positiveInt("AFTERMATH_RL_RESET_WINDOW_MS", 60_000),
+      },
+    },
+    bodyLimitBytes: clampPositiveInt(
+      "AFTERMATH_BODY_LIMIT_BYTES",
+      DEFAULT_BODY_LIMIT_BYTES,
+      MAX_BODY_LIMIT_BYTES,
+    ),
     dbPath: path.resolve(
       optional("AFTERMATH_DB_PATH") ??
         path.join(dataBaseDir, "aftermath.db"),

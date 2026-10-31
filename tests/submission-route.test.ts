@@ -16,6 +16,8 @@ let dir: string;
 let POST: (req: Request) => Promise<Response>;
 let GET: () => Promise<Response>;
 
+const ADMIN_TOKEN = "submission-route-test-token";
+
 beforeAll(async () => {
   dir = await mkdtemp(path.join(tmpdir(), "aftermath-route-"));
   process.env.AFTERMATH_FORCE_MOCK_MEMORY = "1";
@@ -23,6 +25,8 @@ beforeAll(async () => {
   process.env.DATABASE_URL = "";
   process.env.POSTGRES_URL = "";
   process.env.AFTERMATH_DATABASE_URL = "";
+  // Submission is administrator-only; this suite authenticates every call.
+  process.env.AFTERMATH_ADMIN_TOKEN = ADMIN_TOKEN;
   // Import after the environment is set so config/runtime pick it up.
   ({ POST } = await import("@/app/api/incidents/submit/route"));
   ({ GET } = await import("@/app/api/records/route"));
@@ -34,13 +38,17 @@ afterAll(async () => {
   await rm(dir, { recursive: true, force: true });
   delete process.env.AFTERMATH_FORCE_MOCK_MEMORY;
   delete process.env.AFTERMATH_DB_PATH;
+  delete process.env.AFTERMATH_ADMIN_TOKEN;
 });
 
 function post(body: unknown): Promise<Response> {
   return POST(
     new Request("http://test/api/incidents/submit", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${ADMIN_TOKEN}`,
+      },
       body: JSON.stringify(body),
     }),
   );
@@ -70,7 +78,10 @@ describe("POST /api/incidents/submit", () => {
     const res = await POST(
       new Request("http://test/api/incidents/submit", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${ADMIN_TOKEN}`,
+        },
         body: "not json",
       }),
     );

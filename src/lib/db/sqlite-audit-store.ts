@@ -7,7 +7,7 @@ import type {
   IncidentRecord,
   ScenarioRunRow,
 } from "@/lib/db/audit-store";
-import { computeCounts } from "@/lib/db/audit-store";
+import { countsFromRow } from "@/lib/db/audit-store";
 import type { MemoryWriteReceipt } from "@/lib/adapters/memory";
 import type { SafeguardDecision, SafeguardRecord, SafeguardRule } from "@/lib/schemas";
 
@@ -310,15 +310,28 @@ export class SqliteAuditStore implements AuditStore {
   }
 
   async counts(): Promise<AuditCounts> {
-    const incidents = await this.listIncidents(100_000);
-    const writes = await this.listMemoryWrites(100_000);
-    const activeRules = await this.listActiveRules();
-    return computeCounts({
-      incidents,
-      writes,
-      activeRules,
-      records: await this.countSafeguardRecords(),
-    });
+    // Aggregate in SQL. The classification predicates mirror `computeCounts`
+    // exactly. `json_extract` reads only the two payload fields that matter, so
+    // no full payload is loaded into Node merely to count rows.
+    const row = this.db
+      .prepare(
+        `SELECT
+           (SELECT COUNT(*) FROM incidents) AS incidents,
+           (SELECT COUNT(*) FROM incidents
+              WHERE json_extract(payload, '$.assessment.status') = 'VERIFIED_FAILURE') AS verified_failures,
+           (SELECT COUNT(*) FROM rules WHERE validation_status = 'active') AS active_rules,
+           (SELECT COUNT(*) FROM incidents
+              WHERE json_extract(payload, '$.decision.decision') IN ('UNKNOWN', 'REQUIRE_VERIFICATION')) AS unresolved,
+           (SELECT COUNT(*) FROM memory_writes
+              WHERE state = 'completed' AND backend != 'simulated') AS completed_live,
+           (SELECT COUNT(*) FROM memory_writes
+              WHERE recall_verified = 1 AND backend != 'simulated') AS recall_verified,
+           (SELECT COUNT(*) FROM memory_writes WHERE backend = 'simulated') AS simulated,
+           (SELECT COUNT(*) FROM memory_writes) AS total_writes,
+           (SELECT COUNT(*) FROM safeguard_records) AS records`,
+      )
+      .get() as Record<string, unknown>;
+    return countsFromRow(row);
   }
 
   async reset(): Promise<void> {

@@ -21,6 +21,11 @@
  *   npm run verify:prod -- --run              # first trigger the scenario run
  *                                             # (opt-in; causes real Mainnet writes)
  *
+ * The scenario run and the recall query are administrator-only endpoints, so
+ * they require `AFTERMATH_ADMIN_TOKEN` to be set in this script's environment.
+ * Without it those two checks are reported as failures with an explicit reason
+ * rather than silently skipped.
+ *
  * Exit code is non-zero if any check fails, so it can gate a release.
  */
 
@@ -29,6 +34,12 @@ import { pathToFileURL } from "node:url";
 
 const DEFAULT_URL = process.env.AFTERMATH_PROD_URL ?? "https://aftermath-7tij.vercel.app";
 const REQUIRED_WRITES = 10;
+
+/** Administrator credential for the gated endpoints, if the operator set one. */
+function adminAuthHeader(): Record<string, string> {
+  const token = process.env.AFTERMATH_ADMIN_TOKEN;
+  return token ? { authorization: `Bearer ${token}` } : {};
+}
 
 export interface Check {
   name: string;
@@ -156,10 +167,14 @@ async function getJson(url: string): Promise<{ status: number; body: unknown }> 
   return { status: res.status, body };
 }
 
-async function postJson(url: string, payload: unknown): Promise<{ status: number; body: unknown }> {
+async function postJson(
+  url: string,
+  payload: unknown,
+  extraHeaders: Record<string, string> = {},
+): Promise<{ status: number; body: unknown }> {
   const res = await fetch(url, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...extraHeaders },
     body: JSON.stringify(payload),
   });
   let body: unknown = null;
@@ -207,7 +222,7 @@ async function main(): Promise<number> {
   // 1. Optionally trigger the scenario run (real Mainnet writes — opt-in only).
   if (doRun) {
     process.stdout.write("Triggering scenario run (this writes to Walrus Mainnet)… ");
-    const run = await postJson(`${base}/api/scenarios/run`, {});
+    const run = await postJson(`${base}/api/scenarios/run`, {}, adminAuthHeader());
     if (run.status !== 200) {
       checks.push({
         name: "POST /api/scenarios/run",
@@ -241,10 +256,14 @@ async function main(): Promise<number> {
 
   // 3. Recall must return something, proving the stored lessons are readable
   //    through the deployed instance (not just counted in a ledger).
-  const recall = await postJson(`${base}/api/memory-verify`, {
-    query: "require authoritative verification before reporting success",
-    limit: 5,
-  });
+  const recall = await postJson(
+    `${base}/api/memory-verify`,
+    {
+      query: "require authoritative verification before reporting success",
+      limit: 5,
+    },
+    adminAuthHeader(),
+  );
   const recallBody = recall.body as { count?: number; isLive?: boolean; backend?: string } | null;
   checks.push({
     name: "recall query returns memories",

@@ -115,7 +115,8 @@ export interface AuditStore {
  *
  * Kept as one pure function so the SQLite and Postgres stores cannot drift in
  * how they classify a record — the audit and evaluation semantics must not
- * change when the storage engine changes.
+ * change when the storage engine changes. The stores' SQL aggregates mirror
+ * these predicates exactly (see `countsFromRow`).
  */
 export function computeCounts(input: {
   incidents: IncidentRecord[];
@@ -144,5 +145,27 @@ export function computeCounts(input: {
     simulatedWrites: writes.filter((w) => w.backend === "simulated").length,
     totalWrites: writes.length,
     records: input.records ?? 0,
+  };
+}
+
+/**
+ * Build an `AuditCounts` from a database aggregate row.
+ *
+ * Shared by both stores so the SQL aliases and the numeric coercion live in one
+ * place. Postgres returns `COUNT(*)` as a string (it is `bigint`), so every
+ * field is coerced through `Number`.
+ */
+export function countsFromRow(row: Record<string, unknown>): AuditCounts {
+  const n = (key: string): number => Number(row[key] ?? 0);
+  return {
+    incidents: n("incidents"),
+    verifiedFailures: n("verified_failures"),
+    activeRules: n("active_rules"),
+    unresolved: n("unresolved"),
+    completedLiveWrites: n("completed_live"),
+    recallVerifiedWrites: n("recall_verified"),
+    simulatedWrites: n("simulated"),
+    totalWrites: n("total_writes"),
+    records: n("records"),
   };
 }

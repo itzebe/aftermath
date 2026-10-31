@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { runtime as appRuntime } from "@/lib/runtime";
 import { redact } from "@/lib/util/redact";
+import { loadConfig } from "@/lib/config";
+import { adminLimiter, guardAdminRequest } from "@/lib/api/verify-guard";
+import { readJsonWithinLimit } from "@/lib/api/body-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,15 +19,20 @@ const BodySchema = z.object({
 /**
  * Run a recall query against the memory backend and report what came back.
  * Used by the Memory screen to demonstrate that stored lessons are retrievable.
+ *
+ * Administrator-only: each call reaches the Walrus Memory relayer, so it is
+ * gated by the admin token and a per-client rate limit.
  */
 export async function POST(request: Request) {
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
-  }
-  const parsed = BodySchema.safeParse(body);
+  const config = loadConfig();
+  const guard = guardAdminRequest(request, config, {
+    limiter: adminLimiter("memory-verify", config),
+  });
+  if (!guard.ok) return guard.response;
+
+  const read = await readJsonWithinLimit(request, config.bodyLimitBytes);
+  if (!read.ok) return read.response;
+  const parsed = BodySchema.safeParse(read.value);
   if (!parsed.success) {
     return NextResponse.json(
       { error: "invalid request", issues: parsed.error.issues },
