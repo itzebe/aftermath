@@ -1,10 +1,16 @@
 import { MemWalMock } from "@mysten-incubation/memwal";
 import { createHash } from "node:crypto";
-import type { CorrectiveLessonRecord, Incident } from "@/lib/schemas";
+import type {
+  CorrectiveLessonRecord,
+  Incident,
+  SafeguardMemoryRecord,
+} from "@/lib/schemas";
 import {
   incidentToMemoryText,
   lessonToMemoryText,
   parseLessonFromMemoryText,
+  parseSafeguardMemoryFromMemoryText,
+  safeguardMemoryToMemoryText,
   type BackendHealth,
   type MemoryAdapter,
   type MemoryBackendId,
@@ -125,6 +131,15 @@ export class SimulatedMemoryAdapter implements MemoryAdapter {
     return this.writeText("lesson", text, `lesson:${contentHash}`, options);
   }
 
+  rememberSafeguard(
+    memory: SafeguardMemoryRecord,
+    options?: WriteOptions,
+  ): Promise<MemoryWriteReceipt> {
+    const text = safeguardMemoryToMemoryText(memory);
+    const contentHash = createHash("sha256").update(text).digest("hex").slice(0, 32);
+    return this.writeText("lesson", text, `safeguard:${contentHash}`, options);
+  }
+
   async reconcileWrite(
     jobId: string,
     prior: MemoryWriteReceipt,
@@ -189,6 +204,7 @@ export class SimulatedMemoryAdapter implements MemoryAdapter {
       text: r.text,
       distance: r.distance,
       record: parseLessonFromMemoryText(r.text),
+      safeguardMemory: parseSafeguardMemoryFromMemoryText(r.text),
       provenance: this.provenance,
     }));
   }

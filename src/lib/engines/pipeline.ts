@@ -19,6 +19,7 @@ import {
   validateRule,
 } from "@/lib/engines/rule-engine";
 import { decide, policyVersionFor, type Precondition } from "@/lib/engines/decision-engine";
+import { evaluateSafeguardApplications } from "@/lib/engines/safeguard-memory";
 import type { AuditStore } from "@/lib/db/audit-store";
 
 export interface PipelineDeps {
@@ -121,6 +122,18 @@ export class IncidentPipeline {
       domain: incident.domain,
       actionType: incident.actionType,
     });
+    // Applicable safeguard memories are enforced exactly like active rules; a
+    // record that was merely retrieved is not enforced.
+    const applications = evaluateSafeguardApplications(recalled, {
+      domain: incident.domain,
+      actionType: incident.actionType,
+      pattern: diagnosis.pattern,
+      hasAuthoritativeReference: incident.evidenceReferences.length > 0,
+    });
+    const appliedSafeguards = recalled
+      .map((r) => r.safeguardMemory)
+      .filter((m): m is NonNullable<typeof m> => Boolean(m))
+      .filter((m) => applications.some((a) => a.memoryId === m.memory_id && a.applicable));
     const decision = decide({
       domain: incident.domain,
       actionType: incident.actionType,
@@ -129,6 +142,7 @@ export class IncidentPipeline {
       assessment,
       applicableRules: applicable,
       recalledLessons: recalled,
+      appliedSafeguards,
       preconditions: options.preconditions ?? [],
       policyVersion: policyVersionFor(priorActiveRules),
     });

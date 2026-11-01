@@ -153,6 +153,74 @@ Underneath, the same seven-stage engine the product was built on still runs:
 The finance demonstration is **read-only**. No transaction is ever broadcast and
 no wallet key or seed phrase is ever requested.
 
+## The learning loop
+
+Storing a memory is not learning. Retrieving one is not learning. The product
+only learns when a memory it wrote *changes what a later investigation does*.
+That loop is implemented, persisted, and visible.
+
+```
+investigate → learn a safeguard → persist to Walrus → recall → change behaviour → verify
+```
+
+A **Safeguard Memory** is a structured, durable record of one verified failure:
+its failure category, the verified description, the supporting evidence, the
+root cause where established, a corrective rule, the conditions under which the
+rule applies, the required verification checks, a confidence and limitations,
+the originating incident, a timestamp, and its Walrus reference.
+
+The loop runs inside the real pipelines (`pipeline.ts`, `submission-pipeline.ts`)
+and the real decision engine (`decision-engine.ts`), not in a separate
+demonstration path:
+
+1. **Learn.** After a diagnosis, `learnSafeguard` builds a memory — but only a
+   *sufficiently supported* finding becomes authoritative. Authority is granted
+   when the material supplies a machine-checkable observed fact, or an
+   authoritative source was consulted, or a verified outcome exists. An
+   unsupported observation is retained on the record for transparency but is
+   never persisted and never enforced, so it cannot silently become a permanent
+   rule.
+2. **Persist.** An authoritative safeguard is written through the existing Walrus
+   Memory Mainnet adapter with a content-hashed idempotency key, so a retry
+   dedupes and a corrected rule is a new version rather than a rejected reuse.
+   The receipt is durable; the persistence state is reported honestly.
+3. **Recall.** Each new incident recalls history, and every recalled record is
+   evaluated for *applicability* — domain, failure category, action type, and
+   the memory's own status. A record that was merely retrieved is recorded with
+   `applicable: false` and never influences the decision.
+4. **Change behaviour.** Applicable, authoritative safeguards are converted to
+   enforceable rules and passed to the decision engine. The engine is run twice
+   for the same investigation — once with no memory, once with the applicable
+   safeguards enforced — and the difference is the behaviour change. With no
+   authoritative evidence the engine concluded `UNKNOWN`; with the recalled
+   safeguard enforced it concludes `REQUIRE_VERIFICATION` and adds the
+   safeguard's required checks.
+5. **Verify.** The record stores which memory was retrieved, why it was relevant,
+   whether it applied, which rule it contributed, and whether it changed the
+   investigation. A safeguard that changed nothing is never counted as an
+   influence, and a "prevented" claim requires a memory learned from an *earlier*
+   record to have changed a *later* one.
+
+The **Learning Loop** page (`/learning`) and `GET /api/learning` expose the
+whole cycle: learning history, memory retrieval, the before/after behaviour
+change, measured learning impact, and provenance linking every claim back to its
+origin incident and Walrus blob. Both are public and read-only.
+
+Reproduce the loop end to end:
+
+```bash
+npm run learning:demo
+```
+
+The demonstration runs two clearly labelled TEST FIXTURE incidents through the
+real pipeline: the first learns and persists a safeguard; the second recalls it
+and refuses to accept the success claim, changing the decision from `UNKNOWN` to
+`REQUIRE_VERIFICATION`. With Mainnet credentials configured the safeguard is
+written to Walrus Memory Mainnet; without them the simulated backend is used and
+labelled as such.
+
+---
+
 ## Honest state
 
 The application reports its own configuration truthfully. When Walrus Memory
@@ -562,6 +630,9 @@ src/
       model-factory.ts    Client resolution + bounded AI-analysis cache
     engines/
       pipeline.ts         The seven-stage pipeline
+      submission-pipeline.ts Public submission pipeline (investigate → learn → decide)
+      safeguard-memory.ts The learning loop core: learn, applicability, behaviour change
+      learning-loop.ts    The Learning Loop view model (history, recall, impact, provenance)
       diagnosis.ts        Deterministic failure diagnosis
       rule-engine.ts      Corrective rule lifecycle
       decision-engine.ts  Safeguard decision engine

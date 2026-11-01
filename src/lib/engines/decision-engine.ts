@@ -3,6 +3,7 @@ import {
   type Decision,
   type EvidenceAssessment,
   type SafeguardDecision,
+  type SafeguardMemoryRecord,
   type SafeguardRule,
 } from "@/lib/schemas";
 import type { RecalledLesson } from "@/lib/adapters/memory";
@@ -27,6 +28,12 @@ export interface DecisionInput {
   assessment: EvidenceAssessment;
   applicableRules: SafeguardRule[];
   recalledLessons: RecalledLesson[];
+  /**
+   * Safeguard memories evaluated as *applicable* to this action. Only these are
+   * enforced; a memory that was merely retrieved is passed through
+   * `recalledLessons` for the trace but never governs the decision.
+   */
+  appliedSafeguards?: SafeguardMemoryRecord[];
   preconditions: Precondition[];
   policyVersion: string;
 }
@@ -48,6 +55,14 @@ export function decide(input: DecisionInput): SafeguardDecision {
   const activeRules = input.applicableRules
     .filter((r) => r.validationStatus === "active")
     .sort((a, b) => a.ruleId.localeCompare(b.ruleId));
+
+  // Applicable safeguard memories are enforced exactly like active rules. They
+  // arrive already filtered for applicability, so this function re-checks only
+  // the two properties that make a memory enforceable: it must be authoritative
+  // and active. A non-authoritative memory is never enforced.
+  const activeMemories = (input.appliedSafeguards ?? [])
+    .filter((m) => m.authoritative && m.status === "active")
+    .sort((a, b) => a.memory_id.localeCompare(b.memory_id));
 
   const missingPreconditions = input.preconditions
     .filter((p) => !p.satisfied)
@@ -74,6 +89,16 @@ export function decide(input: DecisionInput): SafeguardDecision {
       ? `Recalled ${retrievedMemoryIds.length} memory record(s); memory informs but does not govern this decision.`
       : "No relevant memory was recalled.",
   });
+  if (activeMemories.length) {
+    trace.push({
+      step: "applicable_safeguards",
+      detail:
+        `Enforcing ${activeMemories.length} applicable safeguard memory(ies): ` +
+        activeMemories
+          .map((m) => `${m.memory_id}@v${m.version} → ${m.action}`)
+          .join(", "),
+    });
+  }
   if (missingPreconditions.length) {
     trace.push({
       step: "preconditions",
@@ -81,11 +106,13 @@ export function decide(input: DecisionInput): SafeguardDecision {
     });
   }
 
-  const strongestRuleAction = activeRules.some((r) => r.action === "BLOCK")
-    ? "BLOCK"
-    : activeRules.length > 0
-      ? "REQUIRE_VERIFICATION"
-      : null;
+  const strongestRuleAction =
+    activeRules.some((r) => r.action === "BLOCK") ||
+    activeMemories.some((m) => m.action === "BLOCK")
+      ? "BLOCK"
+      : activeRules.length > 0 || activeMemories.length > 0
+        ? "REQUIRE_VERIFICATION"
+        : null;
 
   const finish = (
     decision: Decision,
@@ -96,6 +123,7 @@ export function decide(input: DecisionInput): SafeguardDecision {
       decision,
       reason,
       applicableRuleIds: activeRules.map((r) => r.ruleId),
+      applicableMemoryIds: activeMemories.map((m) => m.memory_id),
       evidenceReferences: [input.assessment.evidenceReference],
       retrievedMemoryIds,
       missingPreconditions,
@@ -141,10 +169,12 @@ export function decide(input: DecisionInput): SafeguardDecision {
       const recalledSafeguard = input.recalledLessons.some(
         (l) => l.record?.type === "corrective_lesson",
       );
-      if (activeRules.length > 0 || recalledSafeguard) {
+      if (activeRules.length > 0 || activeMemories.length > 0 || recalledSafeguard) {
         const why = activeRules.length
           ? `rule(s) ${activeRules.map((r) => r.ruleId).join(", ")} require authoritative verification`
-          : `${input.recalledLessons.filter((l) => l.record?.type === "corrective_lesson").length} recalled lesson(s) require authoritative verification`;
+          : activeMemories.length > 0
+            ? `applicable safeguard memory(ies) ${activeMemories.map((m) => m.memory_id).join(", ")} require authoritative verification`
+            : `${input.recalledLessons.filter((l) => l.record?.type === "corrective_lesson").length} recalled lesson(s) require authoritative verification`;
         return finish(
           "REQUIRE_VERIFICATION",
           "Evidence is unavailable, so the success claim is deferred rather than accepted or rejected.",

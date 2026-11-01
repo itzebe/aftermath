@@ -106,6 +106,50 @@ unavailability, and memory retrieval relevance. The framing is deliberately
 narrow. "Baseline" means first-occurrence scenarios, where no safeguard could
 exist yet. "Prevention" means repeat scenarios, where one did.
 
+### 8. The learning loop
+
+The eight stages above already store a lesson. Storing a memory is not learning,
+and the brief was pointed about it: a memory dashboard does not satisfy the
+requirement, a list of stored incidents does not, and a simulated before/after
+screen does not. What counts is that a memory the product wrote *changes what a
+later investigation actually does*.
+
+So the loop is wired into the real pipelines, not bolted beside them. A
+**Safeguard Memory** is a structured, durable record of one verified failure —
+failure category, verified description, supporting evidence, root cause where
+established, corrective rule, applicability conditions, required verification
+checks, confidence, limitations, origin incident, timestamp, Walrus reference.
+
+Three functions do the work, and they are kept separate so the chain is
+traceable:
+
+- `learnSafeguard` builds the memory, but only a *sufficiently supported*
+  finding becomes authoritative. Authority needs a machine-checkable observed
+  fact, a consulted authoritative source, or a verified outcome. An unsupported
+  observation stays on the record for transparency but is never persisted and
+  never enforced — it cannot silently harden into a permanent rule.
+- `evaluateSafeguardApplications` decides, per recalled record, whether it is
+  relevant *and applicable*. Domain, failure category, action type, and the
+  memory's own status all have to match. A record that was merely retrieved is
+  recorded with `applicable: false` and cannot influence the decision.
+- `computeBehaviourChange` runs the same deterministic decision engine twice:
+  once with no memory, once with the applicable safeguards enforced. The
+  difference is the behaviour change. It is a real counterfactual over the
+  engine, not a screenshot.
+
+The repeat of an unsupported-success claim shows the whole thing. The first
+incident is decided `UNKNOWN` — the evidence is unavailable, and the engine
+refuses to guess. That incident learns a safeguard and writes it to Walrus
+Memory. The second incident recalls it, the memory applies, and the engine now
+returns `REQUIRE_VERIFICATION` and adds the safeguard's required checks. The
+decision changed *because of the memory*, and the record says so, with the
+before, the after, the rule that changed it, and the memory it came from.
+
+A safeguard that changes nothing is never counted as an influence. A "prevented"
+claim needs a memory learned from an *earlier* record to have changed a *later*
+one. And when the evidence alone already decides the case, the memory is
+redundant and the record says that too.
+
 ## The product surface: submit an incident, get a safeguard
 
 The seven stages above describe the mechanism. The mechanism is only worth
@@ -792,6 +836,14 @@ applies to an agent's success claim, applied one level up.
 - The coding and workflow harnesses are controlled demonstrations, not
   general-purpose platforms. That is by design — the brief's non-goals are
   explicit about it.
+- The learning loop's counterfactual is a single-step comparison: it runs the
+  decision engine with and without the applicable safeguards for the *same*
+  evidence, which is what makes it attributable, but it does not simulate a
+  multi-step investigation replay. Where the evidence alone already decides the
+  case the memory is redundant, and the record says so rather than claiming an
+  influence. Repeat prevention is only counted when a memory learned earlier
+  changes a later investigation's decision; a first occurrence can never claim
+  one.
 
 What *is* finished, and was verified against the real services rather than
 asserted:

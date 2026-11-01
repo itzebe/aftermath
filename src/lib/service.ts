@@ -5,6 +5,7 @@ import { runAllScenarios, type DemoRunResult } from "@/lib/demos/runner";
 import { runDemoBatch, type BatchResult } from "@/lib/demos/resumable-runner";
 import { evaluate, type EvaluationMetrics, type ScenarioOutcome } from "@/lib/engines/evaluation";
 import { runSubmissionPipeline, submissionId } from "@/lib/engines/submission-pipeline";
+import { buildLearningLoop, type LearningLoop } from "@/lib/engines/learning-loop";
 import { runAiInvestigation } from "@/lib/engines/ai-investigation";
 import { resolveModelClient, AiAnalysisCache } from "@/lib/adapters/model-factory";
 import type { AiAnalysis } from "@/lib/schemas";
@@ -413,6 +414,19 @@ export async function getSafeguardRecord(
 
 export async function countSafeguardRecords(): Promise<number> {
   return runtime().store.countSafeguardRecords();
+}
+
+/**
+ * The learning-loop view model, derived from the durable Safeguard Records.
+ *
+ * Read-only and anonymous: it exposes the learning history, the retrieval
+ * trail, the visible behaviour changes, the learning impact, and the provenance
+ * of every claim — all computed from records the engine actually produced.
+ */
+export async function getLearningLoop(): Promise<LearningLoop> {
+  const rt = runtime();
+  const records = await rt.store.listSafeguardRecords(500);
+  return buildLearningLoop(records);
 }
 
 export type { IncidentInputDraft };

@@ -16,6 +16,7 @@ import { useEffect, useRef, useState } from "react";
 const PRIMARY = [
   { href: "/", label: "Investigate" },
   { href: "/records", label: "Safeguard Records" },
+  { href: "/learning", label: "Learning Loop" },
   { href: "/lab", label: "Evaluation Lab" },
 ];
 
