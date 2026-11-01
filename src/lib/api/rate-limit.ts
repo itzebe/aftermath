@@ -57,7 +57,20 @@ export interface RateLimitStore {
    * current window, which begins at `windowStart`.
    */
   hit(key: string, windowStart: number): Promise<number>;
+  /**
+   * Optionally drop counters whose window began before `cutoff`. Best-effort:
+   * a store may omit it, and a failure is not fatal (the counters are only a
+   * bound, and a stale row is harmless — it is reset by the next hit).
+   */
+  sweep?(cutoff: number): Promise<void>;
 }
+
+/**
+ * How long a counter row is retained after its window begins. Only genuinely
+ * stale rows are removed, so the sweep can never drop a window that any bucket
+ * could still be counting within, whatever its configured window length.
+ */
+const COUNTER_RETENTION_MS = 10 * 60_000;
 
 /** Postgres/SQLite implementation over the shared `Db` façade. */
 export class DbRateLimitStore implements RateLimitStore {
@@ -82,6 +95,13 @@ export class DbRateLimitStore implements RateLimitStore {
                window_start BIGINT NOT NULL,
                count INTEGER NOT NULL
              )`,
+          );
+          // The sweep deletes by window_start, so index it to keep the cleanup
+          // bounded rather than a full scan of a table a spoofing caller can
+          // grow.
+          await this.db.query(
+            `CREATE INDEX IF NOT EXISTS rate_limit_counters_window_start
+               ON rate_limit_counters (window_start)`,
           );
         })
         .catch((err) => {
@@ -118,6 +138,22 @@ export class DbRateLimitStore implements RateLimitStore {
     );
     const row = res.rows[0];
     return row ? Number(row.count) : 1;
+  }
+
+  /**
+   * Drop rows whose window began before `cutoff`.
+   *
+   * Without this the table grows once per distinct client key per window, and a
+   * caller who rotates a forwarding header can add a row per request. The sweep
+   * is opportunistic (run by the limiter on a fraction of requests) and only
+   * removes rows older than the retention window, so it never affects a live
+   * counter. A failure is swallowed by the caller: a stale row is harmless.
+   */
+  async sweep(cutoff: number): Promise<void> {
+    await this.ensureReady();
+    await this.db.query(`DELETE FROM rate_limit_counters WHERE window_start < $1`, [
+      cutoff,
+    ]);
   }
 }
 
@@ -160,6 +196,30 @@ export interface SharedRateLimiterOptions {
    * during a database outage without failing the public site closed.
    */
   fallback: FixedWindowRateLimiter;
+  /**
+   * Cap for the *global* bucket — every request in this bucket, regardless of
+   * client, shares one counter.
+   *
+   * The per-client key is derived from a forwarding header, which a caller can
+   * rotate: reaching the app without the trusted platform proxy (or through one
+   * that appends rather than overwrites) lets an attacker mint a fresh bucket
+   * per request. A per-client cap alone therefore bounds nothing in that case.
+   * The global counter cannot be rotated, so it is the backstop that keeps a
+   * spoofing caller from turning the endpoint into an unbounded cost. It is set
+   * well above the per-client cap so ordinary traffic never meets it; only a
+   * burst — which is what an evasion attempt looks like — does.
+   *
+   * Omitted (`undefined`) disables the global dimension, so an injected test
+   * limiter keeps its exact previous behaviour.
+   */
+  globalMaxRequests?: number;
+  /**
+   * A stable identifier for the *bucket* (not the client), used as the key of
+   * the shared global counter. Required whenever `globalMaxRequests` is set:
+   * the per-client key changes per caller, so the global counter must be keyed
+   * on something the caller cannot influence.
+   */
+  globalScope?: string;
   /** Injectable clock for deterministic tests. */
   now?: () => number;
 }
@@ -171,6 +231,13 @@ export interface RateLimitResult extends RateLimitVerdict {
    * tell a shared decision from a degraded one.
    */
   degraded: boolean;
+  /**
+   * True when the request was refused by the global backstop rather than by the
+   * per-client cap — i.e. the caller's own bucket was within its limit, but the
+   * bucket as a whole was over its shared ceiling. This is the signature of a
+   * spoofed-key burst, so the route surfaces it.
+   */
+  globalLimited?: boolean;
 }
 
 /**
@@ -183,17 +250,55 @@ export interface RateLimitResult extends RateLimitVerdict {
  */
 export class SharedRateLimiter {
   private readonly now: () => number;
+  private readonly globalMaxRequests?: number;
+  private readonly globalScope?: string;
+  /** Throttles the opportunistic sweep so it runs on a small fraction of hits. */
+  private nextSweepAt = 0;
+  private static readonly SWEEP_INTERVAL_MS = 60_000;
+
   constructor(private readonly options: SharedRateLimiterOptions) {
     this.now = options.now ?? (() => Date.now());
+    this.globalMaxRequests = options.globalMaxRequests;
+    this.globalScope = options.globalScope;
+  }
+
+  /**
+   * Best-effort cleanup of stale counters, run at most once per
+   * {@link SharedRateLimiter.SWEEP_INTERVAL_MS}. It is fire-and-forget and
+   * never awaited on the request path: a failed sweep is harmless, because a
+   * stale row is reset by the next hit and only affects table size.
+   */
+  private maybeSweep(now: number): void {
+    const sweep = this.options.store.sweep;
+    if (!sweep || now < this.nextSweepAt) return;
+    this.nextSweepAt = now + SharedRateLimiter.SWEEP_INTERVAL_MS;
+    void Promise.resolve()
+      .then(() => sweep.call(this.options.store, now - COUNTER_RETENTION_MS))
+      .catch(() => {});
   }
 
   async check(windowKey: string): Promise<RateLimitResult> {
     const now = this.now();
     const { maxRequests, windowMs } = this.options.policy;
     const windowStart = Math.floor(now / windowMs) * windowMs;
+    this.maybeSweep(now);
     try {
       const count = await this.options.store.hit(windowKey, windowStart);
-      const allowed = count <= maxRequests;
+      // The global backstop is charged *after* the per-client counter, and only
+      // rejects once it is over its (much higher) cap. It is keyed on the
+      // bucket scope, never on the per-client key, so a caller who rotates the
+      // forwarding header still shares this counter.
+      let globalCount = 0;
+      if (this.globalMaxRequests !== undefined && this.globalScope) {
+        globalCount = await this.options.store.hit(
+          globalLimitKey(this.globalScope),
+          windowStart,
+        );
+      }
+      const overClient = count > maxRequests;
+      const overGlobal =
+        this.globalMaxRequests !== undefined && globalCount > this.globalMaxRequests;
+      const allowed = !overClient && !overGlobal;
       const retryAfterSeconds = allowed
         ? 0
         : Math.max(1, Math.ceil((windowStart + windowMs - now) / 1000));
@@ -202,6 +307,7 @@ export class SharedRateLimiter {
         retryAfterSeconds,
         remaining: Math.max(0, maxRequests - count),
         degraded: false,
+        ...(overGlobal && !overClient ? { globalLimited: true } : {}),
       };
     } catch {
       // The store failed. Do not fail open to *unlimited*: apply the in-process
@@ -241,6 +347,13 @@ export const unavailableRateLimitStore: RateLimitStore = {
 export interface LimiterRegistryOptions {
   /** Build the shared store, or throw if it cannot be built. */
   resolveStore: () => RateLimitStore;
+  /**
+   * Cap for the shared, non-rotatable global counter. Passed through to the
+   * limiter so a spoofed per-client key cannot escape the bucket's ceiling.
+   */
+  globalMaxRequests?: number;
+  /** Stable bucket id for the global counter key. */
+  globalScope?: string;
 }
 
 /**
@@ -268,6 +381,10 @@ export function limiterFor(
       policy,
       store,
       fallback: new FixedWindowRateLimiter(policy),
+      ...(options.globalMaxRequests !== undefined
+        ? { globalMaxRequests: options.globalMaxRequests }
+        : {}),
+      ...(options.globalScope !== undefined ? { globalScope: options.globalScope } : {}),
       ...(now ? { now } : {}),
     });
     limiters.set(key, limiter);
@@ -285,9 +402,9 @@ export function resetSharedLimiters(): void {
  *
  * The key is `bucket:sha256(salt|clientId)`. The hash keeps the client address
  * out of the database (no personal data at rest) while still giving each client
- * a stable, distinct bucket. The salt is a per-deployment secret so the mapping
- * cannot be brute-forced from a leaked table; without it the key still works,
- * just with a fixed salt.
+ * a stable, distinct bucket. A deployment-specific `AFTERMATH_RATE_LIMIT_SALT`
+ * makes the mapping non-reversible from a leaked table; the built-in default is
+ * a public constant, so without that override the hash is only obfuscation.
  */
 export function rateLimitKey(
   bucket: RateLimitBucket,
@@ -295,4 +412,15 @@ export function rateLimitKey(
   salt: string,
 ): string {
   return `${bucket}:${createHash("sha256").update(`${salt}|${clientId}`, "utf8").digest("hex")}`;
+}
+
+/**
+ * The counter key for the bucket's global backstop.
+ *
+ * `scope` is the bucket's own stable id (never the per-client key), so the
+ * counter is shared by every caller and cannot be rotated by spoofing a
+ * forwarding header. The suffix keeps it from colliding with a per-client key.
+ */
+export function globalLimitKey(scope: string): string {
+  return `global:${scope}`;
 }

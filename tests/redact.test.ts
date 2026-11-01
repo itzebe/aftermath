@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { maskSecret, redact } from "@/lib/util/redact";
+import { maskSecret, redact, redactSubmission } from "@/lib/util/redact";
 
 /**
  * Secret-exposure guards.
@@ -43,6 +43,93 @@ describe("redact", () => {
   it("strips a suiprivkey-style bech32 key", () => {
     const msg = "using suiprivkey1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq";
     expect(redact(msg)).not.toContain("suiprivkey1qqqq");
+  });
+
+  // Every credential class the brief enumerates must be stripped from a value
+  // that could be persisted or served. Fixtures are synthetic.
+  const CASES: Array<[string, string, string]> = [
+    ["api key (sk-)", `key sk-${"a".repeat(32)}`, "sk-"],
+    ["google api key", `key AIza${"b".repeat(35)}`, "AIza"],
+    ["bearer token", "Authorization: Bearer abcDEF1234567890.token", "abcDEF1234567890"],
+    ["github token (ghp_)", `token ghp_${"C".repeat(36)}`, "ghp_"],
+    ["github token (github_pat_)", `token github_pat_${"d".repeat(30)}`, "github_pat_"],
+    ["aws access key", "AKIAIOSFODNN7EXAMPLE", "AKIAIOSFODNN7EXAMPLE"],
+    ["slack token", `xoxb-${"1".repeat(12)}-${"a".repeat(12)}`, "xoxb-"],
+    ["private key material", "0x" + "e".repeat(64), "e".repeat(64)],
+    ["password assignment", "password=hunter2secret", "hunter2secret"],
+    ["password with spaces", 'pwd: "correct horse battery"', "correct horse battery"],
+    ["database url", "postgres://admin:s3cr3tpw@db.host:5432/aftermath", "s3cr3tpw"],
+    ["api_key assignment", 'api_key="abcd1234efgh5678"', "abcd1234efgh5678"],
+    ["generic secret", "secret: supersecretvalue", "supersecretvalue"],
+  ];
+
+  for (const [label, input, mustNotContain] of CASES) {
+    it(`strips ${label}`, () => {
+      const out = redact(input);
+      expect(out).not.toContain(mustNotContain);
+      expect(out).toContain("[redacted-");
+    });
+  }
+
+  it("strips a PEM private-key block whole", () => {
+    const pem = [
+      "-----BEGIN EC PRIVATE KEY-----",
+      "MHcCAQEEIB" + "A".repeat(40),
+      "-----END EC PRIVATE KEY-----",
+    ].join("\n");
+    const out = redact(`deploy failed with\n${pem}\nretrying`);
+    expect(out).not.toContain("MHcCAQEEIB");
+    expect(out).toContain("[redacted-private-key-block]");
+  });
+
+  it("preserves a shorter hex reference that cannot be a 32-byte key", () => {
+    // A 40-hex value (an address, a truncated reference) is not key material.
+    const ref = "0x" + "1".repeat(40);
+    expect(redact(`address ${ref}`)).toContain(ref);
+  });
+
+  it("conservatively redacts a bare 64-hex value (key-or-hash is ambiguous)", () => {
+    // A bare 64-hex string is indistinguishable from a 32-byte private key, so
+    // it is redacted. The trade-off — a 64-hex EVM-style transaction hash is
+    // also redacted — is deliberate and documented as a limitation.
+    expect(redact(`tx 0x${"1".repeat(64)}`)).toBe("tx [redacted-hex-key]");
+  });
+
+  it("is idempotent: an already-redacted value is unchanged", () => {
+    const once = redact("password=hunter2secret and key ghp_" + "C".repeat(36));
+    expect(redact(once)).toBe(once);
+  });
+
+  it("does not corrupt ordinary incident prose", () => {
+    const prose =
+      "2026-03-01T10:00:00Z ERROR checkout-service POST /v1/charge returned " +
+      "503 after retry (attempt 2/3); the agent reported success";
+    expect(redact(prose)).toBe(prose);
+  });
+});
+
+describe("redactSubmission", () => {
+  it("redacts every free-text field and preserves the rest", () => {
+    const sub = {
+      text: `error with ghp_${"C".repeat(36)} and password=hunter2`,
+      expectedBehavior: "the charge succeeds",
+      actualBehavior: "bearer abcDEF1234567890 leaked",
+      service: "checkout-service",
+    };
+    const out = redactSubmission(sub);
+    expect(out.text).not.toContain("ghp_");
+    expect(out.text).not.toContain("hunter2");
+    expect(out.actualBehavior).not.toContain("abcDEF1234567890");
+    // Non-secret context survives.
+    expect(out.expectedBehavior).toBe("the charge succeeds");
+    expect(out.service).toBe("checkout-service");
+  });
+
+  it("leaves an already-redacted submission unchanged (idempotent on read)", () => {
+    const redacted = redactSubmission({
+      text: "key ghp_" + "C".repeat(36),
+    });
+    expect(redactSubmission(redacted)).toEqual(redacted);
   });
 });
 

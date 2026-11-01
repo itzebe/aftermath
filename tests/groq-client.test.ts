@@ -48,6 +48,7 @@ function baseConfig(overrides: Partial<AftermathConfig["ai"]> = {}): AftermathCo
       heavy: { maxRequests: 60, windowMs: 60_000 },
       status: { maxRequests: 60, windowMs: 60_000 },
     },
+    publicReadGlobalLimit: { read: 1200, heavy: 600, status: 600 },
     rateLimitSalt: "test-salt",
     bodyLimitBytes: 65_536,
     dbPath: ":memory:",

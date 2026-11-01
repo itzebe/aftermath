@@ -45,6 +45,19 @@ function buildStore(): RateLimitStore {
   }
 }
 
+/**
+ * The multiplier that turns an admin endpoint's per-client cap into its shared,
+ * non-rotatable global cap.
+ *
+ * The admin endpoints are already gated by the shared token, so the rate limit
+ * is a secondary bound. But the per-client key is a forwarding header, which a
+ * token holder could rotate to mint a fresh bucket per request; the global cap
+ * cannot be rotated, so it still bounds such a burst. The factor keeps the
+ * global cap well clear of normal use (a batch loop makes a handful of calls a
+ * minute) while remaining far below "unbounded".
+ */
+const ADMIN_GLOBAL_BACKSTOP_FACTOR = 20;
+
 /** The shared limiter for an admin endpoint, created lazily from the config. */
 export function adminWriteLimiter(
   endpoint: string,
@@ -54,7 +67,11 @@ export function adminWriteLimiter(
     maxRequests: 5,
     windowMs: 60_000,
   };
-  return limiterFor(`admin:${endpoint}`, policy, { resolveStore: buildStore });
+  return limiterFor(`admin:${endpoint}`, policy, {
+    resolveStore: buildStore,
+    globalMaxRequests: policy.maxRequests * ADMIN_GLOBAL_BACKSTOP_FACTOR,
+    globalScope: endpoint,
+  });
 }
 
 export interface AdminWriteGuardOptions {

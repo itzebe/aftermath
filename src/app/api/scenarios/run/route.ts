@@ -3,6 +3,7 @@ import { runScenarioBatch, getDemoProgress } from "@/lib/service";
 import { storeUnavailable } from "@/lib/api/errors";
 import { loadConfig } from "@/lib/config";
 import { adminWriteLimiter, guardAdminWrite } from "@/lib/api/admin-write-guard";
+import { guardPublicRead } from "@/lib/api/public-read-guard";
 import { readJsonWithinLimit } from "@/lib/api/body-limit";
 
 export const runtime = "nodejs";
@@ -66,11 +67,23 @@ export async function POST(request: Request) {
   }
 }
 
-/** Current progress of the demonstration, for the UI to resume/continue. */
-export async function GET() {
+/**
+ * Current progress of the demonstration, for the UI to resume/continue.
+ *
+ * It reads the durable demo-job state, so it is behind the shared read cap like
+ * the other public read endpoints: an anonymous caller cannot poll it in a tight
+ * loop to add database load. The cap is charged before the store is touched.
+ */
+export async function GET(request: Request) {
+  const guard = await guardPublicRead(request, loadConfig(), "public-read");
+  if (!guard.ok) return guard.response;
+
   try {
     const progress = await getDemoProgress();
-    return NextResponse.json(progress ?? { jobId: null, total: 0, completed: 0, remaining: 0 });
+    return NextResponse.json(
+      progress ?? { jobId: null, total: 0, completed: 0, remaining: 0 },
+      { headers: guard.headers },
+    );
   } catch (err) {
     return storeUnavailable(err);
   }

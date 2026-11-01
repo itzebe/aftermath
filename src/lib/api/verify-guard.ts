@@ -35,15 +35,27 @@ interface Window {
  * product surface, and a per-instance cap still bounds abuse on a serverless
  * host. Correctness never depends on it — a miss only lets a request through to
  * the token gate, which is the real control.
+ *
+ * The map is pruned opportunistically so a caller who presents a fresh key on
+ * every request (a spoofed forwarding header, or a bot) cannot grow it without
+ * bound: expired windows are dropped once the map crosses a threshold, which
+ * keeps memory proportional to the number of *active* callers rather than the
+ * number of distinct keys ever seen.
  */
 export class FixedWindowRateLimiter {
   private readonly windows = new Map<string, Window>();
+  /** Prune expired windows once the map grows past this size. */
+  private static readonly PRUNE_THRESHOLD = 10_000;
+
   constructor(private readonly options: RateLimiterOptions) {}
 
   /** Record a hit for `key`; return whether it is allowed and the wait time. */
   check(key: string, now: number = Date.now()): { allowed: boolean; retryAfterMs: number } {
     const existing = this.windows.get(key);
     if (!existing || now >= existing.resetAt) {
+      if (this.windows.size >= FixedWindowRateLimiter.PRUNE_THRESHOLD) {
+        this.prune(now);
+      }
       this.windows.set(key, { count: 1, resetAt: now + this.options.windowMs });
       return { allowed: true, retryAfterMs: 0 };
     }
@@ -52,6 +64,13 @@ export class FixedWindowRateLimiter {
     }
     existing.count += 1;
     return { allowed: true, retryAfterMs: 0 };
+  }
+
+  /** Drop windows that have already expired. */
+  private prune(now: number): void {
+    for (const [key, window] of this.windows) {
+      if (now >= window.resetAt) this.windows.delete(key);
+    }
   }
 
   reset(): void {
@@ -88,29 +107,46 @@ export function extractToken(request: Request): string | null {
  * client address is used instead — with the caveat that no forwarding header is
  * trustworthy on its own:
  *
- *   - `x-real-ip` is set by the hosting proxy (Vercel sets it) and is preferred.
+ *   - `x-vercel-forwarded-for` is preferred. On Vercel it is set from the real
+ *     connection and is not overwritten by a client-supplied `x-forwarded-for`,
+ *     so it survives a request that carries a spoofed `x-forwarded-for`.
+ *   - `x-real-ip` is next (Vercel sets it to the same value).
  *   - otherwise the *right-most* entry of `x-forwarded-for` is used, because a
  *     proxy appends the address it observed to whatever the client sent, so the
  *     left-most entries are attacker-controlled.
- *   - with neither header the caller lands in a shared `ip:unknown` bucket, so
+ *   - with none of these the caller lands in a shared `ip:unknown` bucket, so
  *     the cap still applies instead of failing open.
  *
- * This is best-effort: an attacker who can reach the origin directly, or who
- * spreads requests across instances, is not bounded by it. See the module note
- * on process-local limiting.
+ * This is best-effort by construction: a header can be rotated, and an attacker
+ * who reaches the origin without the trusted platform proxy controls it. The
+ * per-client cap is therefore backed by a *non-rotatable global cap* per bucket
+ * (see `publicReadGlobalLimit` and `adminWriteLimiter`), so spoofing the header
+ * cannot turn an endpoint into unbounded work.
  */
 export function clientIpKey(request: Request): string {
+  const vercel = request.headers.get("x-vercel-forwarded-for");
+  if (vercel && vercel.trim()) return `ip:${rightmost(vercel)}`;
   const real = request.headers.get("x-real-ip");
   if (real && real.trim()) return `ip:${real.trim()}`;
   const fwd = request.headers.get("x-forwarded-for");
   if (fwd) {
-    const parts = fwd
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
+    const parts = splitForwarded(fwd);
     if (parts.length) return `ip:${parts[parts.length - 1]}`;
   }
   return "ip:unknown";
+}
+
+function splitForwarded(value: string): string[] {
+  return value
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/** The last (proxy-appended, least client-controlled) entry of a list header. */
+function rightmost(value: string): string {
+  const parts = splitForwarded(value);
+  return parts.length ? parts[parts.length - 1]! : value.trim();
 }
 
 /** A stable, non-secret caller id for rate limiting. */

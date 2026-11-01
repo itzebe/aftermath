@@ -118,6 +118,19 @@ export interface AftermathConfig {
     status: { maxRequests: number; windowMs: number };
   };
   /**
+   * A non-rotatable ceiling for each public read bucket, shared across every
+   * client. The per-client cap above is keyed on a forwarding header, which a
+   * caller can rotate when the app is reached without the trusted platform
+   * proxy; this global cap cannot be rotated, so it is the backstop that keeps a
+   * spoofing burst bounded. It is set well above the per-client cap so ordinary
+   * traffic never meets it.
+   */
+  publicReadGlobalLimit: {
+    read: number;
+    heavy: number;
+    status: number;
+  };
+  /**
    * Salt for hashing a client address into a rate-limit counter key, so the
    * address itself is never stored. Falls back to a fixed development value;
    * a deployment should set `AFTERMATH_RATE_LIMIT_SALT`.
@@ -315,6 +328,14 @@ export function loadConfig(): AftermathConfig {
         maxRequests: positiveInt("AFTERMATH_RL_PUBLIC_STATUS_MAX", 60),
         windowMs: positiveInt("AFTERMATH_RL_PUBLIC_STATUS_WINDOW_MS", 60_000),
       },
+    },
+    // The shared, non-rotatable ceiling per bucket. Deliberately an order of
+    // magnitude above the per-client cap: it exists to bound a key-spoofing
+    // burst, not ordinary traffic.
+    publicReadGlobalLimit: {
+      read: positiveInt("AFTERMATH_RL_PUBLIC_READ_GLOBAL_MAX", 1_200),
+      heavy: positiveInt("AFTERMATH_RL_PUBLIC_HEAVY_GLOBAL_MAX", 600),
+      status: positiveInt("AFTERMATH_RL_PUBLIC_STATUS_GLOBAL_MAX", 600),
     },
     rateLimitSalt:
       optional("AFTERMATH_RATE_LIMIT_SALT") ?? "aftermath-public-read",

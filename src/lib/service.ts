@@ -1,6 +1,6 @@
 import { runtime } from "@/lib/runtime";
 import { loadConfig, relayerNetwork } from "@/lib/config";
-import { maskSecret } from "@/lib/util/redact";
+import { maskSecret, redactSubmission } from "@/lib/util/redact";
 import { runAllScenarios, type DemoRunResult } from "@/lib/demos/runner";
 import { runDemoBatch, type BatchResult } from "@/lib/demos/resumable-runner";
 import { evaluate, type EvaluationMetrics, type ScenarioOutcome } from "@/lib/engines/evaluation";
@@ -452,13 +452,30 @@ export async function submitIncident(
 }
 
 export async function getSafeguardRecords(limit = 100): Promise<SafeguardRecord[]> {
-  return runtime().store.listSafeguardRecords(limit);
+  const records = await runtime().store.listSafeguardRecords(limit);
+  return records.map(withRedactedSubmission);
 }
 
 export async function getSafeguardRecord(
   recordId: string,
 ): Promise<SafeguardRecord | null> {
-  return runtime().store.getSafeguardRecord(recordId);
+  const record = await runtime().store.getSafeguardRecord(recordId);
+  return record ? withRedactedSubmission(record) : null;
+}
+
+/**
+ * Return a record with its submission's credential-shaped strings redacted.
+ *
+ * This is the read boundary. New records are already redacted before they are
+ * written, so for them this is a no-op; applying it here as well is what
+ * protects a record written *before* the redaction rule existed — its stored
+ * payload may still contain a raw credential, and it must never be served.
+ *
+ * The rest of the record (ids, evidence spans, decisions) is untouched, because
+ * a whole-record deep redaction would also rewrite the record's own UUIDs.
+ */
+function withRedactedSubmission(record: SafeguardRecord): SafeguardRecord {
+  return { ...record, submission: redactSubmission(record.submission) };
 }
 
 export async function countSafeguardRecords(): Promise<number> {

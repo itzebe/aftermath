@@ -15,6 +15,7 @@
 
 import { createHash } from "node:crypto";
 import { randomUUID } from "node:crypto";
+import { redactSubmission } from "@/lib/util/redact";
 import {
   SafeguardRecordSchema,
   type AiAnalysis,
@@ -100,6 +101,12 @@ export async function runSubmissionPipeline(
 ): Promise<SafeguardRecord> {
   const recordId = submissionId(submission);
   const incidentId = recordId;
+
+  // The submission is untrusted and may carry a credential pasted in by
+  // accident. Redact it once, here, and store only the redacted form: the
+  // investigation reads the raw material through its own redacting boundary,
+  // but nothing durable or served should retain a secret-shaped value.
+  const storedSubmission = redactSubmission(submission);
 
   // Stage A/B: rule-based parse. The authoritative lookup is folded in first so
   // the investigation reflects what a connected source actually returned.
@@ -428,7 +435,7 @@ export async function runSubmissionPipeline(
     recordId,
     incidentId,
     createdAt: new Date().toISOString(),
-    submission,
+    submission: storedSubmission,
     investigation,
     recommendation,
     proposedRule,

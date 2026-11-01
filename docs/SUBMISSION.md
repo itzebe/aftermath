@@ -78,7 +78,8 @@ grounded by verbatim span; uncertainty stays explicit; a safeguard is proposed,
 then tested, and only ever called *validated* with proof.
 
 **Architecture.** A seven-stage pipeline. Incident intake (regex, never
-execution; credential-shaped strings redacted) → evidence verification against a
+execution; credential-shaped strings redacted before storage and again on read)
+→ evidence verification against a
 connected authoritative source → rule-based failure diagnosis → corrective-rule
 engine → Walrus Memory adapter → safeguard decision engine → learning
 evaluation. Durable audit index in PostgreSQL; a resumable, bounded-batch runner

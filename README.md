@@ -67,8 +67,10 @@ Incident -> Evidence -> Hypothesis -> Safeguard -> Verification -> Memory
 ```
 
 - **Incident** — the submitted text, treated strictly as data: parsed with
-  regular expressions, never executed, credential-shaped strings redacted before
-  storage.
+  regular expressions, never executed. Credential-shaped strings (API keys,
+  tokens, `password=`/`secret:` assignments, connection strings, private keys)
+  are redacted before the submission is persisted and again before any record is
+  served, so a pasted secret never reaches durable storage or a client.
 - **Evidence** — observed facts (each with its verbatim span), confirmed facts,
   hypotheses, unknowns, and next checks, kept strictly separate. A submission is
   material, not proof, so with no connected source the assessment is `UNKNOWN`.

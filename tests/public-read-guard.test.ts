@@ -44,6 +44,7 @@ function config(): AftermathConfig {
       reset: { maxRequests: 2, windowMs: 60_000 },
     },
     publicReadLimit: { read: POLICY, heavy: POLICY, status: POLICY },
+    publicReadGlobalLimit: { read: 1200, heavy: 600, status: 600 },
     rateLimitSalt: "test-salt",
     bodyLimitBytes: 65_536,
     dbPath: ":memory:",
@@ -116,5 +117,31 @@ describe("guardPublicRead", () => {
     expect(c.ok).toBe(false);
     if (!a.ok) throw new Error("expected allow");
     expect(a.headers["x-ratelimit-degraded"]).toBe("true");
+  });
+
+  it("refuses a spoofed-key burst via the global scope and labels it", async () => {
+    // Cap 2 per client, global ceiling 3. Rotating the client key must not
+    // escape the shared ceiling.
+    const l = new SharedRateLimiter({
+      policy: POLICY,
+      store: new InMemoryRateLimitStore(),
+      fallback: new FixedWindowRateLimiter(POLICY),
+      globalScope: "public-read",
+      globalMaxRequests: 3,
+      now: () => 1_000_000,
+    });
+    const cfg = config();
+    const results = [];
+    for (let i = 0; i < 5; i += 1) {
+      results.push(
+        await guardPublicRead(req(`198.51.100.${100 + i}`), cfg, "public-read", l),
+      );
+    }
+    expect(results.slice(0, 3).every((r) => r.ok)).toBe(true);
+    const refused = results[3];
+    expect(refused.ok).toBe(false);
+    if (refused.ok) throw new Error("expected refuse");
+    expect(refused.response.status).toBe(429);
+    expect(refused.response.headers.get("x-ratelimit-scope")).toBe("global");
   });
 });

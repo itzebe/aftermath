@@ -51,6 +51,10 @@ export function publicReadLimiter(
 ) {
   return limiterFor(`public:${bucket}`, config.publicReadLimit[BUCKET_POLICY[bucket]], {
     resolveStore: buildStore,
+    // A non-rotatable ceiling for the bucket, so a caller who rotates the
+    // forwarding header cannot mint an unlimited number of per-client buckets.
+    globalMaxRequests: config.publicReadGlobalLimit[BUCKET_POLICY[bucket]],
+    globalScope: bucket,
   });
 }
 
@@ -85,9 +89,11 @@ export async function guardPublicRead(
       response: NextResponse.json(
         {
           error: "rate_limited",
-          detail:
-            "Too many read requests from this client; try again shortly. " +
-            "Public data remains available at the normal rate.",
+          detail: verdict.globalLimited
+            ? "This public endpoint is receiving an unusual burst of traffic; " +
+              "try again shortly. Public data remains available at the normal rate."
+            : "Too many read requests from this client; try again shortly. " +
+              "Public data remains available at the normal rate.",
           retryAfterSeconds: verdict.retryAfterSeconds,
         },
         {
@@ -95,6 +101,7 @@ export async function guardPublicRead(
           headers: {
             "retry-after": String(verdict.retryAfterSeconds),
             "x-ratelimit-degraded": verdict.degraded ? "true" : "false",
+            ...(verdict.globalLimited ? { "x-ratelimit-scope": "global" } : {}),
           },
         },
       ),

@@ -171,8 +171,12 @@ moves down the chain.
 **Incident.** The submitted text is treated strictly as data. It is parsed with
 regular expressions and pure string operations; it is never executed, never
 evaluated as code or SQL, and never interpolated into a command. Credential-
-shaped strings are redacted before anything is stored, displayed, or written to
-memory, because a pasted log frequently contains a token by accident.
+shaped strings — API keys, tokens, `password=`/`secret:` assignments, connection
+strings, private-key blocks — are redacted before the submission is stored and
+again before any record is served, because a pasted log frequently contains a
+token by accident. A record written before this rule existed is still protected:
+redaction is applied on read, so the raw value is never returned even though it
+may remain in the stored payload.
 
 **Evidence.** The parse separates five things that are usually blurred
 together: what the material *shows* (observed, each with the verbatim span it

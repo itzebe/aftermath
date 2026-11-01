@@ -26,6 +26,7 @@ function config(adminToken: string | null): AftermathConfig {
     adminToken,
     adminRateLimit: { reset: POLICY },
     publicReadLimit: { read: POLICY, heavy: POLICY, status: POLICY },
+    publicReadGlobalLimit: { read: 1200, heavy: 600, status: 600 },
     rateLimitSalt: "test-salt",
     bodyLimitBytes: 65_536,
     dbPath: ":memory:",
