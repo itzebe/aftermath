@@ -74,15 +74,56 @@ export function versionedMemoryId(memory: {
  *     effective;
  *   - a non-authoritative correction cannot retire an authoritative safeguard.
  *
- * If an older version is recalled without its newer sibling, it remains
- * effective — the system cannot know about a version it did not retrieve. That
- * limitation is reported honestly by the callers rather than papered over.
+ * If an older version is recalled without its newer sibling, the recalled set is
+ * *incomplete*: a higher version may exist that recall did not return. When the
+ * caller supplies the highest version it knows from a separate source (the
+ * durable record index), the uncertainty is resolved — the effective version is
+ * the true highest. When it does not, the older version is still returned as
+ * effective (so the safeguard keeps protecting) but the entry is flagged
+ * `uncertain: true` and `latestKnownVersion` is recorded, and the callers and
+ * the UI report that the effective version may not be the latest globally.
+ *
+ * `knownLatest` is the maximum version the caller can establish per base id from
+ * a source other than recall (the durable index of what was actually learned).
+ * It is always at least the highest version seen in `records`.
  */
-export function resolveEffectiveSafeguards(records: SafeguardMemoryRecord[]): {
-  /** base memory_id -> the effective record for that identity. */
-  effective: Map<string, SafeguardMemoryRecord>;
+export interface EffectiveSafeguard {
+  record: SafeguardMemoryRecord;
+  /** The highest version of this base identity present in the recalled set. */
+  latestKnownVersion: number;
+  /**
+   * The highest version established from the caller's independent source, when
+   * one was supplied; `undefined` when completeness could not be established.
+   */
+  latestGloballyVerifiedVersion?: number;
+  /**
+   * True when a higher version may exist that was not available to enforce. In
+   * that case the recalled version is the latest *known*, not the latest
+   * *verified*, and the safeguard's currency cannot be guaranteed.
+   */
+  uncertain: boolean;
+}
+
+export interface ResolveEffectiveOptions {
+  /**
+   * The highest version the caller can establish per base id from a source other
+   * than recall (the durable record index). When present, a recalled version
+   * below this bound is treated as definitively superseded — an obsolete version
+   * is never enforced merely because its successor was omitted from recall.
+   */
+  knownLatest?: Map<string, number>;
+}
+
+export function resolveEffectiveSafeguards(
+  records: SafeguardMemoryRecord[],
+  options: ResolveEffectiveOptions = {},
+): {
+  /** base memory_id -> the effective record and its version-certainty metadata. */
+  effective: Map<string, EffectiveSafeguard>;
   /** versioned ids retired by a valid superseder, whether or not recalled. */
   retired: Set<string>;
+  /** versioned ids not enforced because the durable index shows a higher version. */
+  obsolete: Set<string>;
 } {
   const retired = new Set<string>();
   for (const r of records) {
@@ -100,8 +141,15 @@ export function resolveEffectiveSafeguards(records: SafeguardMemoryRecord[]): {
     else byBase.set(r.memory_id, [r]);
   }
 
-  const effective = new Map<string, SafeguardMemoryRecord>();
+  const effective = new Map<string, EffectiveSafeguard>();
+  const obsolete = new Set<string>();
   for (const [base, group] of byBase) {
+    const recalledHighest = group.reduce((a, b) => (b.version > a.version ? b : a));
+    const known = options.knownLatest?.get(base);
+    // The highest version that exists anywhere, as far as the caller can tell.
+    const globalHighest =
+      known === undefined ? undefined : Math.max(known, recalledHighest.version);
+
     const candidates = group.filter(
       (r) =>
         r.status === "active" &&
@@ -110,10 +158,28 @@ export function resolveEffectiveSafeguards(records: SafeguardMemoryRecord[]): {
     );
     if (candidates.length === 0) continue;
     const highest = candidates.reduce((a, b) => (b.version > a.version ? b : a));
-    effective.set(base, highest);
+
+    // A recalled version strictly below the independently-known highest is
+    // definitively obsolete: fail safe by not enforcing it, and record it so the
+    // caller can explain why rather than silently dropping it.
+    if (globalHighest !== undefined && highest.version < globalHighest) {
+      for (const r of group) obsolete.add(versionedMemoryId(r));
+      continue;
+    }
+
+    // Uncertainty remains only when the global highest could not be established.
+    const uncertain = globalHighest === undefined;
+    effective.set(base, {
+      record: highest,
+      latestKnownVersion: recalledHighest.version,
+      ...(globalHighest !== undefined
+        ? { latestGloballyVerifiedVersion: globalHighest }
+        : {}),
+      uncertain,
+    });
   }
 
-  return { effective, retired };
+  return { effective, retired, obsolete };
 }
 
 export type SafeguardDisposition = "created" | "duplicate" | "superseded";
@@ -368,6 +434,14 @@ export interface ApplicabilityContext {
   pattern: string;
   /** Whether the current incident carries a machine-checkable evidence reference. */
   hasAuthoritativeReference: boolean;
+  /**
+   * The highest safeguard version the caller can establish per base id from the
+   * durable record index (independent of what recall returned). When supplied,
+   * a recalled version below this bound is treated as definitively superseded
+   * and is never enforced. When absent, a recalled version is enforced but
+   * flagged uncertain — it may not be the latest that exists.
+   */
+  knownLatest?: Map<string, number>;
 }
 
 /** Whether a safeguard's conditions match the current investigation. */
@@ -434,10 +508,15 @@ export function evaluateSafeguardApplications(
 ): SafeguardApplication[] {
   // Resolve which version is effective for each base identity from the recalled
   // records, so a superseded version is never enforced alongside its successor.
+  // The caller's `knownLatest` (from the durable index) lets an obsolete recalled
+  // version be detected even when its successor was not recalled.
   const recalledRecords = recalled
     .map((r) => r.safeguardMemory)
     .filter((m): m is SafeguardMemoryRecord => Boolean(m));
-  const { effective, retired } = resolveEffectiveSafeguards(recalledRecords);
+  const { effective, retired, obsolete } = resolveEffectiveSafeguards(
+    recalledRecords,
+    context.knownLatest ? { knownLatest: context.knownLatest } : {},
+  );
 
   return recalled.map((r) => {
     const record = r.safeguardMemory;
@@ -475,19 +554,40 @@ export function evaluateSafeguardApplications(
     if (record) {
       const version = record.version;
       const applies = safeguardApplies(record, context);
-      const effectiveRecord = effective.get(record.memory_id);
+      const effectiveEntry = effective.get(record.memory_id);
+      const effectiveRecord = effectiveEntry?.record;
       const isEffective = effectiveRecord === record;
+      const isObsolete = obsolete.has(versionedMemoryId(record));
       const superseded =
         retired.has(versionedMemoryId(record)) ||
         (effectiveRecord !== undefined && effectiveRecord.version > record.version);
       const applicable = applies.applicable && isEffective;
       const applicabilityBasis = !applies.applicable
         ? applies.basis
-        : superseded
-          ? `Version ${version} has been superseded by ` +
-            `${effectiveRecord ? versionedMemoryId(effectiveRecord) : "a later version"}; ` +
-            "only the effective version is enforced."
-          : applies.basis;
+        : isObsolete
+          ? `Version ${version} is not the latest: the durable index shows a ` +
+            "higher version of this safeguard exists, so this obsolete version " +
+            "is not enforced."
+          : superseded
+            ? `Version ${version} has been superseded by ` +
+              `${effectiveRecord ? versionedMemoryId(effectiveRecord) : "a later version"}; ` +
+              "only the effective version is enforced."
+            : applies.basis;
+      // Version currency is reported only for a record that is actually
+      // enforced: an uncertain version is still applied (it may be the latest),
+      // but the reader is told the effective version may not be the latest that
+      // exists. The uncertainty never weakens the safeguard below the current
+      // evidence — it only adds a caution.
+      const versionCertainty =
+        applicable && effectiveEntry
+          ? {
+              latestKnownVersion: effectiveEntry.latestKnownVersion,
+              ...(effectiveEntry.latestGloballyVerifiedVersion !== undefined
+                ? { latestGloballyVerifiedVersion: effectiveEntry.latestGloballyVerifiedVersion }
+                : {}),
+              uncertain: effectiveEntry.uncertain,
+            }
+          : undefined;
       return {
         memoryId: record.memory_id,
         version,
@@ -504,6 +604,7 @@ export function evaluateSafeguardApplications(
           : {}),
         changedBehaviour: false,
         authoritative: record.authoritative,
+        ...(versionCertainty ? { versionCertainty } : {}),
         provenance: r.provenance,
       };
     }

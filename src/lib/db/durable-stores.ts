@@ -26,6 +26,13 @@ export interface DurableStores {
   audit: AuditStore;
   jobs: DemoJobStore;
   workflow: WorkflowStateStore;
+  /**
+   * The shared SQL façade. Exposed so cross-cutting infrastructure that must be
+   * shared across instances — the rate-limit counters — reuses the same
+   * connection and engine selection as the audit index, instead of opening a
+   * second pool or falling back to a process-local counter.
+   */
+  db: Db;
   backend: "sqlite" | "postgres";
   durable: boolean;
   detail: string;
@@ -54,6 +61,7 @@ export function resolveDurableStores(
       audit,
       jobs,
       workflow,
+      db,
       backend: "postgres",
       durable: true,
       detail: audit.detail,
@@ -83,6 +91,7 @@ export function resolveDurableStores(
     audit,
     jobs,
     workflow,
+    db,
     backend: "sqlite",
     durable: audit.durable,
     detail: audit.detail,

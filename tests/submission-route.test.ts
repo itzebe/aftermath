@@ -14,7 +14,7 @@ import path from "node:path";
  */
 let dir: string;
 let POST: (req: Request) => Promise<Response>;
-let GET: () => Promise<Response>;
+let GET: (request: Request) => Promise<Response>;
 
 const ADMIN_TOKEN = "submission-route-test-token";
 
@@ -92,7 +92,7 @@ describe("POST /api/incidents/submit", () => {
 describe("GET /api/records", () => {
   it("lists the records the submission produced", async () => {
     await post({ text: "a distinct incident for listing: E1234" });
-    const res = await GET();
+    const res = await GET(new Request("http://test/api/x"));
     expect(res.status).toBe(200);
     const body = (await res.json()) as { records: { recordId: string }[] };
     expect(body.records.length).toBeGreaterThan(0);

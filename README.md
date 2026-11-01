@@ -190,11 +190,15 @@ demonstration path:
    `applicable: false` and never influences the decision.
 4. **Change behaviour.** Applicable, authoritative safeguards are converted to
    enforceable rules and passed to the decision engine. The engine is run twice
-   for the same investigation — once with no memory, once with the applicable
-   safeguards enforced — and the difference is the behaviour change. With no
-   authoritative evidence the engine concluded `UNKNOWN`; with the recalled
-   safeguard enforced it concludes `REQUIRE_VERIFICATION` and adds the
-   safeguard's required checks.
+   for the same investigation — once with the applicable safeguards held out,
+   once with them enforced, every other input held constant — and the difference
+   is the behaviour change. A safeguard can move the verdict itself (an
+   `UNKNOWN` success claim becomes `REQUIRE_VERIFICATION` when the memory is the
+   only applicable prior) and it always adds its required checks. In the shipped
+   demonstration the legacy corrective-lesson path already escalates the same
+   claim to `REQUIRE_VERIFICATION`, so there the memory's contribution is the
+   added verification, not the verdict — and the record reports exactly that
+   rather than claiming a verdict change it did not cause.
 5. **Verify.** The record stores which memory was retrieved, why it was relevant,
    whether it applied, which rule it contributed, and whether it changed the
    investigation. A safeguard that changed nothing is never counted as an
@@ -214,10 +218,15 @@ npm run learning:demo
 
 The demonstration runs two clearly labelled TEST FIXTURE incidents through the
 real pipeline: the first learns and persists a safeguard; the second recalls it
-and refuses to accept the success claim, changing the decision from `UNKNOWN` to
-`REQUIRE_VERIFICATION`. With Mainnet credentials configured the safeguard is
-written to Walrus Memory Mainnet; without them the simulated backend is used and
-labelled as such.
+and refuses to accept the success claim, adding the safeguard's required
+verification checks. Both arms conclude `REQUIRE_VERIFICATION` — the legacy
+corrective-lesson path already escalates the claim, so the demo reports
+`verdict changed: false` with `attributable to memory: yes` for the checks it
+added, rather than overstating a verdict change. The engine *can* move the
+verdict when the memory is the only applicable prior; that case is pinned by a
+unit test. With Mainnet credentials configured the safeguard is written to
+Walrus Memory Mainnet; without them the simulated backend is used and labelled
+as such.
 
 ### Public access
 

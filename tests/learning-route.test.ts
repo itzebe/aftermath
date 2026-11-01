@@ -14,7 +14,7 @@ import path from "node:path";
  * it is reachable without authentication.
  */
 let dir: string;
-let GET: () => Promise<Response>;
+let GET: (request: Request) => Promise<Response>;
 let POST: (req: Request) => Promise<Response>;
 
 const ADMIN_TOKEN = "learning-route-test-token";
@@ -61,7 +61,7 @@ the agent reported success for the settlement operation; no transaction verifica
 
 describe("GET /api/learning", () => {
   it("is reachable without authentication and returns a view model", async () => {
-    const res = await GET();
+    const res = await GET(new Request("http://test/api/x"));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toHaveProperty("history");
@@ -73,7 +73,7 @@ describe("GET /api/learning", () => {
     expect((await submit(FIRST)).status).toBe(200);
     expect((await submit(SECOND)).status).toBe(200);
 
-    const res = await GET();
+    const res = await GET(new Request("http://test/api/x"));
     const body = await res.json();
 
     expect(body.impact.totalVerifiedSafeguards).toBeGreaterThanOrEqual(1);

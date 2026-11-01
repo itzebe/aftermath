@@ -596,6 +596,47 @@ describe("recall: versioning and supersession are resolved at recall time", () =
     expect(apps.find((a) => a.version === 2)!.applicable).toBe(false);
   });
 
+  it("does not enforce a recalled version the durable index shows is obsolete", () => {
+    // Recall returned only v1, but the durable index says v2 exists. Enforcing
+    // v1 would apply a rule already corrected, so it must not be enforced.
+    const v1 = record({ version: 1, corrective_rule: "OLD" });
+    const knownLatest = new Map([[v1.memory_id, 2]]);
+    const apps = evaluateSafeguardApplications([hit(v1, "b1")], {
+      ...context,
+      knownLatest,
+    });
+    expect(apps[0].applicable).toBe(false);
+    expect(apps[0].applicabilityBasis).toMatch(/obsolete|not the latest/i);
+  });
+
+  it("flags a recalled version as uncertain when completeness cannot be established", () => {
+    // No independent index was supplied, so we cannot prove this is the latest.
+    // The safeguard is still enforced (it may be the latest), but the reader is
+    // told the version's currency is unverified.
+    const v1 = record({ version: 1 });
+    const apps = evaluateSafeguardApplications([hit(v1, "b1")], context);
+    expect(apps[0].applicable).toBe(true);
+    expect(apps[0].versionCertainty).toEqual({
+      latestKnownVersion: 1,
+      uncertain: true,
+    });
+  });
+
+  it("reports a recalled version as certain when the index confirms it is the highest", () => {
+    const v1 = record({ version: 1 });
+    const knownLatest = new Map([[v1.memory_id, 1]]);
+    const apps = evaluateSafeguardApplications([hit(v1, "b1")], {
+      ...context,
+      knownLatest,
+    });
+    expect(apps[0].applicable).toBe(true);
+    expect(apps[0].versionCertainty).toEqual({
+      latestKnownVersion: 1,
+      latestGloballyVerifiedVersion: 1,
+      uncertain: false,
+    });
+  });
+
   it("does not count an applicable memory that changed nothing as influential", async () => {
     // A record whose memory applied but neither moved the verdict nor added a
     // required check must not be counted as an influenced investigation. This is

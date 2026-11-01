@@ -179,6 +179,24 @@ export async function runSubmissionPipeline(
     ),
   );
 
+  // Consult the durable record index (the record of what was actually learned)
+  // once, before applicability is decided. Recall is best-effort and bounded, so
+  // it can omit the newest version of a safeguard; the index tells us the
+  // highest version that exists per base identity, which lets an obsolete
+  // recalled version be detected even when its successor was not recalled.
+  const durableSafeguardRecords = await deps.store
+    .listSafeguardRecords(500)
+    .catch(() => []);
+  const knownLatest = new Map<string, number>();
+  for (const rec of durableSafeguardRecords) {
+    for (const m of rec.learnedSafeguards ?? []) {
+      const current = knownLatest.get(m.memoryId);
+      if (current === undefined || m.version > current) {
+        knownLatest.set(m.memoryId, m.version);
+      }
+    }
+  }
+
   // Stage C2: decide, per recalled record, why it is relevant and whether it
   // actually applies. Only an applicable, authoritative safeguard is enforced;
   // a record that was merely retrieved is recorded and never changes anything.
@@ -189,6 +207,7 @@ export async function runSubmissionPipeline(
       actionType: investigation.actionType,
       pattern: investigation.diagnosis.pattern,
       hasAuthoritativeReference,
+      ...(knownLatest.size > 0 ? { knownLatest } : {}),
     },
   );
   const appliedSafeguards = recalled
@@ -350,18 +369,13 @@ export async function runSubmissionPipeline(
   // Consult the durable record index as well as recall, so a correction versions
   // correctly even when the prior version was not returned by recall. Recall is
   // best-effort and bounded; the durable index is the record of what was learned.
-  const durablePriors = await deps.store
-    .listSafeguardRecords(500)
-    .then((records) =>
-      records.flatMap((rec) =>
-        (rec.learnedSafeguards ?? []).map((m) => ({
-          memory_id: m.memoryId,
-          version: m.version,
-          corrective_rule: m.correctiveRule,
-        })),
-      ),
-    )
-    .catch(() => []);
+  const durablePriors: PriorSafeguard[] = durableSafeguardRecords.flatMap((rec) =>
+    (rec.learnedSafeguards ?? []).map((m) => ({
+      memory_id: m.memoryId,
+      version: m.version,
+      corrective_rule: m.correctiveRule,
+    })),
+  );
   const existingSafeguards: PriorSafeguard[] = [
     ...recalledSafeguards.map((m) => ({
       memory_id: m.memory_id,

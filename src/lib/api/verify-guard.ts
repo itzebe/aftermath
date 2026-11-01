@@ -218,6 +218,12 @@ export function guardVerifyRequest(
  * of them may be public. They share one administrator credential and one
  * fail-closed rule set, kept here next to the verification guard so both gates
  * cannot drift apart.
+ *
+ * The token gate lives here; the *durable* rate-limit gate lives in
+ * `admin-write-guard.ts`, which charges a shared database counter instead of the
+ * process-local `FixedWindowRateLimiter` below. The helpers here
+ * (`extractAdminToken`, `clientIpKey`, `constantTimeEqual`) are shared by both,
+ * so the two gates cannot drift.
  * -------------------------------------------------------------------------- */
 
 /**

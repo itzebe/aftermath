@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { runScenarioBatch, getDemoProgress } from "@/lib/service";
 import { storeUnavailable } from "@/lib/api/errors";
 import { loadConfig } from "@/lib/config";
-import { adminLimiter, guardAdminRequest } from "@/lib/api/verify-guard";
+import { adminWriteLimiter, guardAdminWrite } from "@/lib/api/admin-write-guard";
 import { readJsonWithinLimit } from "@/lib/api/body-limit";
 
 export const runtime = "nodejs";
@@ -21,16 +21,17 @@ export const maxDuration = 300;
  * Body (optional): { "restart": boolean, "budgetMs": number }
  *
  * Administrator-only, because a batch performs real Mainnet writes and
- * `restart:true` additionally clears simulated audit and workflow state. A
- * storage failure is reported as an explicit failure; a batch is never
- * presented as a completed run.
+ * `restart:true` additionally clears simulated audit and workflow state. The
+ * rate limit is enforced through a shared, atomic counter so it holds across
+ * serverless instances. A storage failure is reported as an explicit failure; a
+ * batch is never presented as a completed run.
  */
 export async function POST(request: Request) {
   const config = loadConfig();
 
   // Gate the token first, before touching the body: an unauthenticated caller
   // must not be able to make the server read a request body at all.
-  const tokenGuard = guardAdminRequest(request, config, { rateLimit: false });
+  const tokenGuard = await guardAdminWrite(request, config, { rateLimit: false });
   if (!tokenGuard.ok) return tokenGuard.response;
 
   // The body must be read before the limiter can know whether `restart` was
@@ -46,8 +47,8 @@ export async function POST(request: Request) {
   // still requires the admin token, but is exempt from the per-minute cap: an
   // operator holding the token may need to restart a wedged job immediately.
   // Every non-restart batch is rate-limited.
-  const guard = guardAdminRequest(request, config, {
-    limiter: adminLimiter("scenarios/run", config),
+  const guard = await guardAdminWrite(request, config, {
+    limiter: adminWriteLimiter("scenarios/run", config),
     rateLimit: !restart,
   });
   if (!guard.ok) return guard.response;

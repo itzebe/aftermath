@@ -27,6 +27,12 @@ function config(token: string | null): AftermathConfig {
       "memory-verify": { maxRequests: 5, windowMs: 60_000 },
       reset: { maxRequests: 2, windowMs: 60_000 },
     },
+    publicReadLimit: {
+      read: { maxRequests: 120, windowMs: 60_000 },
+      heavy: { maxRequests: 60, windowMs: 60_000 },
+      status: { maxRequests: 60, windowMs: 60_000 },
+    },
+    rateLimitSalt: "test-salt",
     bodyLimitBytes: 65_536,
     dbPath: ":memory:",
     harnessDir: "/tmp/h",

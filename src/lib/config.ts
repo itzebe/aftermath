@@ -94,12 +94,35 @@ export interface AftermathConfig {
    */
   adminToken: string | null;
   /**
-   * Per-endpoint fixed-window request caps, keyed by the endpoint id the route
-   * passes to `adminLimiter`. These bound a holder of the admin token and blunt
-   * accidental client loops. They are process-local; see the note on
-   * multi-instance deployments.
+   * Per-endpoint fixed-window request caps for the administrator write
+   * endpoints, keyed by the endpoint id the route passes to
+   * `adminWriteLimiter`. These bound a holder of the admin token and blunt
+   * accidental client loops. They are enforced through a *shared* counter (the
+   * durable database), so the cap holds across serverless instances and cold
+   * starts, not per-instance.
    */
   adminRateLimit: Record<string, { maxRequests: number; windowMs: number }>;
+  /**
+   * Anonymous read caps, per bucket, for the public read endpoints.
+   *
+   * These are enforced through a *shared* counter (the durable database), not a
+   * module-level Map, so the cap holds across serverless instances and cold
+   * starts. Expensive endpoints (those that call Walrus or Tatum, or rebuild a
+   * large view model) get a tighter cap than cheap ones. The buckets are coarse
+   * on purpose so a shared NAT egress address does not exhaust a single
+   * visitor's allowance.
+   */
+  publicReadLimit: {
+    read: { maxRequests: number; windowMs: number };
+    heavy: { maxRequests: number; windowMs: number };
+    status: { maxRequests: number; windowMs: number };
+  };
+  /**
+   * Salt for hashing a client address into a rate-limit counter key, so the
+   * address itself is never stored. Falls back to a fixed development value;
+   * a deployment should set `AFTERMATH_RATE_LIMIT_SALT`.
+   */
+  rateLimitSalt: string;
   /**
    * Maximum accepted request body, in bytes. Enforced before the body is read
    * or parsed, so an oversized payload is rejected without being buffered.
@@ -276,6 +299,25 @@ export function loadConfig(): AftermathConfig {
         windowMs: positiveInt("AFTERMATH_RL_RESET_WINDOW_MS", 60_000),
       },
     },
+    publicReadLimit: {
+      // Cheap, bounded reads (rules, config, incidents, records, evaluation).
+      read: {
+        maxRequests: positiveInt("AFTERMATH_RL_PUBLIC_READ_MAX", 120),
+        windowMs: positiveInt("AFTERMATH_RL_PUBLIC_READ_WINDOW_MS", 60_000),
+      },
+      // Reads that rebuild a large view model (the learning loop).
+      heavy: {
+        maxRequests: positiveInt("AFTERMATH_RL_PUBLIC_HEAVY_MAX", 60),
+        windowMs: positiveInt("AFTERMATH_RL_PUBLIC_HEAVY_WINDOW_MS", 60_000),
+      },
+      // Reads that make a live upstream call (memory ledger, overview).
+      status: {
+        maxRequests: positiveInt("AFTERMATH_RL_PUBLIC_STATUS_MAX", 60),
+        windowMs: positiveInt("AFTERMATH_RL_PUBLIC_STATUS_WINDOW_MS", 60_000),
+      },
+    },
+    rateLimitSalt:
+      optional("AFTERMATH_RATE_LIMIT_SALT") ?? "aftermath-public-read",
     bodyLimitBytes: clampPositiveInt(
       "AFTERMATH_BODY_LIMIT_BYTES",
       DEFAULT_BODY_LIMIT_BYTES,

@@ -787,6 +787,19 @@ export const SafeguardApplicationSchema = z.object({
   changedBehaviour: z.boolean(),
   /** Whether the memory is authoritative (only these may be enforced). */
   authoritative: z.boolean(),
+  /**
+   * Version currency of the enforced record, present only when the record was
+   * applied. `uncertain` is true when a higher version may exist that recall did
+   * not return, so the applied version is the latest *known* rather than the
+   * latest *verified*.
+   */
+  versionCertainty: z
+    .object({
+      latestKnownVersion: z.number().int().positive(),
+      latestGloballyVerifiedVersion: z.number().int().positive().optional(),
+      uncertain: z.boolean(),
+    })
+    .optional(),
   provenance: ProvenanceSchema,
 });
 export type SafeguardApplication = z.infer<typeof SafeguardApplicationSchema>;
