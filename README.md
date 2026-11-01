@@ -219,6 +219,25 @@ and refuses to accept the success claim, changing the decision from `UNKNOWN` to
 written to Walrus Memory Mainnet; without them the simulated backend is used and
 labelled as such.
 
+### Public access
+
+The learning loop is **read-only public**. `/learning`, `GET /api/learning`, and
+every Safeguard Record are anonymous — a visitor can see the whole cycle without
+a token.
+
+Triggering a *new* investigation is not yet open to anonymous visitors. Incident
+submission (`POST /api/incidents/submit`) is administrator-gated because every
+request spends free-tier model quota, and the scenario runner writes to Walrus
+Mainnet. This is stated plainly rather than presented as finished public
+self-service.
+
+The integration points for opening it up are already in place and need no change
+to the loop itself: `submitIncident` / `runSubmissionPipeline` are pure of the
+transport, recall and safeguard evaluation run inside them, and the submission
+schema is validated before any work. A public path would add a stricter
+anonymous rate limit and a quota guard at `POST /api/incidents/submit` while
+keeping the same pipeline, the same recall, and the same eligibility rules.
+
 ---
 
 ## Honest state
