@@ -92,6 +92,7 @@ function reportRecord(record: SafeguardRecord, label: string): void {
     const b = record.behaviourChange;
     process.stdout.write("\nbehaviour change:\n");
     process.stdout.write(`  changed     : ${b.changed}\n`);
+    process.stdout.write(`  attributed  : ${b.attributableToMemory ?? false}\n`);
     process.stdout.write(`  before      : ${b.beforeDecision}\n`);
     process.stdout.write(`  after       : ${b.afterDecision}\n`);
     if (b.addedRequiredChecks.length) {
@@ -137,20 +138,32 @@ async function main(): Promise<void> {
     rule("VERDICT");
     const learned = first.learnedSafeguards?.[0];
     const secondApplied = (second.safeguardApplications ?? []).filter((a) => a.applicable);
-    const changed = Boolean(second.behaviourChange?.changed);
+    const b = second.behaviourChange;
+    const changed = Boolean(b?.attributableToMemory);
+    const verdictChanged = Boolean(b && b.beforeDecision !== b.afterDecision);
     process.stdout.write(`safeguard learned        : ${learned ? learned.memoryId : "none"}\n`);
     process.stdout.write(`persisted to memory      : ${learned?.walrus.persisted ?? false}\n`);
     process.stdout.write(`recalled on second run   : ${(second.recalledMemories ?? []).length > 0}\n`);
     process.stdout.write(`applied on second run    : ${secondApplied.length > 0}\n`);
-    process.stdout.write(`behaviour changed        : ${changed}\n`);
-    if (second.behaviourChange) {
+    process.stdout.write(`influenced by memory     : ${changed}\n`);
+    process.stdout.write(`verdict changed          : ${verdictChanged}\n`);
+    if (b) {
       process.stdout.write(
-        `decision before -> after : ${second.behaviourChange.beforeDecision} -> ${second.behaviourChange.afterDecision}\n`,
+        `decision before -> after : ${b.beforeDecision} -> ${b.afterDecision}\n`,
+      );
+      process.stdout.write(
+        `checks added by memory   : ${b.addedRequiredChecks.length}\n`,
       );
     }
     process.stdout.write(
       `\nThe loop is ${learned && changed ? "COMPLETE" : "INCOMPLETE"} for this run.\n`,
     );
+    if (learned && changed && !verdictChanged) {
+      process.stdout.write(
+        "Note: the verdict was already reached by the pre-existing rule path, so the\n" +
+          "memory is credited only with the verification it added, never with the verdict.\n",
+      );
+    }
   } finally {
     await store.close();
   }

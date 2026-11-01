@@ -268,8 +268,11 @@ describe("decision engine — applicable safeguard memories are enforced", () =>
     expect(without.decision).toBe("UNKNOWN");
     expect(withMemory.decision).toBe("REQUIRE_VERIFICATION");
     expect(withMemory.applicableMemoryIds).toContain(
-      "safeguard-finance-unsupported_completion_claim",
+      "safeguard-finance-unsupported_completion_claim@v1",
     );
+    // The memory's required checks are exposed, so the learning loop can measure
+    // the memory's own contribution rather than inferring it from the verdict.
+    expect(withMemory.requiredChecks).toEqual(["Capture the authoritative record."]);
   });
 
   it("never lets a memory convert UNKNOWN into success", () => {
@@ -331,6 +334,33 @@ describe("decision engine — applicable safeguard memories are enforced", () =>
       appliedSafeguards: [memoryRecord()],
     });
     expect(d.trace.some((t) => t.step === "applicable_safeguards")).toBe(true);
+  });
+
+  it("does not enforce a safeguard memory in preflight mode", () => {
+    // A memory answers "may this outcome be accepted?", not "may this action
+    // run?". Preflight authority belongs to preconditions and active rules.
+    const d = decide({
+      ...base,
+      mode: "preflight",
+      assertedSuccess: false,
+      assessment: assessment("UNKNOWN"),
+      applicableRules: [],
+      appliedSafeguards: [memoryRecord()],
+    });
+    expect(d.decision).toBe("UNKNOWN");
+    expect(d.applicableMemoryIds ?? []).toHaveLength(0);
+  });
+
+  it("lists each enforced version once, as memory_id@vN", () => {
+    const d = decide({
+      ...base,
+      assessment: assessment("UNKNOWN"),
+      applicableRules: [],
+      appliedSafeguards: [memoryRecord(), memoryRecord()],
+    });
+    expect(d.applicableMemoryIds).toEqual([
+      "safeguard-finance-unsupported_completion_claim@v1",
+    ]);
   });
 });
 

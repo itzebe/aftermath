@@ -133,7 +133,13 @@ export class IncidentPipeline {
     const appliedSafeguards = recalled
       .map((r) => r.safeguardMemory)
       .filter((m): m is NonNullable<typeof m> => Boolean(m))
-      .filter((m) => applications.some((a) => a.memoryId === m.memory_id && a.applicable));
+      .filter((m) =>
+        // Match the exact version: a superseded version shares the base id but
+        // must never be enforced.
+        applications.some(
+          (a) => a.memoryId === m.memory_id && a.version === m.version && a.applicable,
+        ),
+      );
     const decision = decide({
       domain: incident.domain,
       actionType: incident.actionType,

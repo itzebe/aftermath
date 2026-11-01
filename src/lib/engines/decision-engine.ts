@@ -60,9 +60,16 @@ export function decide(input: DecisionInput): SafeguardDecision {
   // arrive already filtered for applicability, so this function re-checks only
   // the two properties that make a memory enforceable: it must be authoritative
   // and active. A non-authoritative memory is never enforced.
+  //
+  // Enforcement is scoped to claim/investigation decisions. A memory answers
+  // "may this outcome be accepted?", not "may this action run?" — preflight
+  // decisions are governed by preconditions and active rules, and a learned
+  // safeguard must not silently inherit that authority. Any memories passed in
+  // preflight mode are therefore recorded as retrieved-but-not-enforced.
   const activeMemories = (input.appliedSafeguards ?? [])
     .filter((m) => m.authoritative && m.status === "active")
     .sort((a, b) => a.memory_id.localeCompare(b.memory_id));
+  const enforcedMemories = input.mode === "claim" ? activeMemories : [];
 
   const missingPreconditions = input.preconditions
     .filter((p) => !p.satisfied)
@@ -89,12 +96,12 @@ export function decide(input: DecisionInput): SafeguardDecision {
       ? `Recalled ${retrievedMemoryIds.length} memory record(s); memory informs but does not govern this decision.`
       : "No relevant memory was recalled.",
   });
-  if (activeMemories.length) {
+  if (enforcedMemories.length) {
     trace.push({
       step: "applicable_safeguards",
       detail:
-        `Enforcing ${activeMemories.length} applicable safeguard memory(ies): ` +
-        activeMemories
+        `Enforcing ${enforcedMemories.length} applicable safeguard memory(ies): ` +
+        enforcedMemories
           .map((m) => `${m.memory_id}@v${m.version} → ${m.action}`)
           .join(", "),
     });
@@ -108,9 +115,9 @@ export function decide(input: DecisionInput): SafeguardDecision {
 
   const strongestRuleAction =
     activeRules.some((r) => r.action === "BLOCK") ||
-    activeMemories.some((m) => m.action === "BLOCK")
+    enforcedMemories.some((m) => m.action === "BLOCK")
       ? "BLOCK"
-      : activeRules.length > 0 || activeMemories.length > 0
+      : activeRules.length > 0 || enforcedMemories.length > 0
         ? "REQUIRE_VERIFICATION"
         : null;
 
@@ -118,12 +125,26 @@ export function decide(input: DecisionInput): SafeguardDecision {
     decision: Decision,
     reason: string,
     extraTrace: Array<{ step: string; detail: string }> = [],
-  ): SafeguardDecision =>
-    SafeguardDecisionSchema.parse({
+  ): SafeguardDecision => {
+    // Provenance is emitted as `memory_id@vN` and de-duplicated, so a version is
+    // never ambiguous and a repeated identity is never listed twice. Superseded
+    // or non-applicable versions are not enforced and never appear here.
+    const enforcedIds = [
+      ...new Set(enforcedMemories.map((m) => `${m.memory_id}@v${m.version}`)),
+    ].sort();
+    // Required checks are only meaningful when the decision actually requires
+    // verification. On ALLOW or BLOCK no check is required, so an enforced memory
+    // there contributes no requirement and is never counted as an influence.
+    const requiredChecks =
+      decision === "REQUIRE_VERIFICATION"
+        ? [...new Set(enforcedMemories.flatMap((m) => m.required_checks))]
+        : [];
+    return SafeguardDecisionSchema.parse({
       decision,
       reason,
       applicableRuleIds: activeRules.map((r) => r.ruleId),
-      applicableMemoryIds: activeMemories.map((m) => m.memory_id),
+      applicableMemoryIds: enforcedIds,
+      requiredChecks,
       evidenceReferences: [input.assessment.evidenceReference],
       retrievedMemoryIds,
       missingPreconditions,
@@ -132,6 +153,7 @@ export function decide(input: DecisionInput): SafeguardDecision {
       decidedAt: new Date().toISOString(),
       trace: [...trace, ...extraTrace],
     });
+  };
 
   const status = input.assessment.status;
 
@@ -169,11 +191,11 @@ export function decide(input: DecisionInput): SafeguardDecision {
       const recalledSafeguard = input.recalledLessons.some(
         (l) => l.record?.type === "corrective_lesson",
       );
-      if (activeRules.length > 0 || activeMemories.length > 0 || recalledSafeguard) {
+      if (activeRules.length > 0 || enforcedMemories.length > 0 || recalledSafeguard) {
         const why = activeRules.length
           ? `rule(s) ${activeRules.map((r) => r.ruleId).join(", ")} require authoritative verification`
-          : activeMemories.length > 0
-            ? `applicable safeguard memory(ies) ${activeMemories.map((m) => m.memory_id).join(", ")} require authoritative verification`
+          : enforcedMemories.length > 0
+            ? `applicable safeguard memory(ies) ${enforcedMemories.map((m) => m.memory_id).join(", ")} require authoritative verification`
             : `${input.recalledLessons.filter((l) => l.record?.type === "corrective_lesson").length} recalled lesson(s) require authoritative verification`;
         return finish(
           "REQUIRE_VERIFICATION",

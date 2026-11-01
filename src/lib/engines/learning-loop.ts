@@ -49,6 +49,8 @@ export interface MemoryRetrievalEntry {
   incidentId: string;
   createdAt: string;
   memoryId: string;
+  /** The exact version evaluated, so a version is never ambiguous. */
+  version?: number;
   blobId: string;
   originalIncidentId: string;
   relation: string;
@@ -67,11 +69,14 @@ export interface BehaviourChangeEntry {
   createdAt: string;
   summary: string;
   changed: boolean;
+  /** True only when the change is attributable to the safeguard-memory mechanism. */
+  attributableToMemory: boolean;
   beforeDecision: string;
   afterDecision: string;
   addedRequiredChecks: string[];
   changedByRule?: string;
   changedByMemoryId?: string;
+  changedByMemoryVersion?: number;
   explanation: string;
 }
 
@@ -98,6 +103,8 @@ export interface LearningImpact {
 
 export interface LearningProvenanceEntry {
   memoryId: string;
+  /** The exact version this entry describes. */
+  version: number;
   originIncidentId: string;
   blobId?: string;
   backend: string;
@@ -109,6 +116,8 @@ export interface LearningProvenanceEntry {
   influenced: string[];
   domain: string;
   failureCategory: string;
+  /** Lifecycle: a superseded version is retained for provenance but not enforced. */
+  status: string;
   provenance: "live" | "simulated";
 }
 
@@ -150,19 +159,27 @@ export function buildLearningLoop(records: SafeguardRecord[]): LearningLoop {
     const applications = record.safeguardApplications ?? [];
 
     for (const app of applications) {
-      push(retrievedIn, app.memoryId, record.recordId);
+      const appKey = app.version !== undefined ? `${app.memoryId}@v${app.version}` : app.memoryId;
+      push(retrievedIn, appKey, record.recordId);
       if (app.applicable && app.changedBehaviour) {
-        push(influencedIn, app.memoryId, record.recordId);
+        push(influencedIn, appKey, record.recordId);
       }
       retrieval.push({
         recordId: record.recordId,
         incidentId: record.incidentId,
         createdAt: record.createdAt,
         memoryId: app.memoryId,
+        ...(app.version !== undefined ? { version: app.version } : {}),
         blobId: app.blobId,
+        // Prefer the exact version's origin; fall back to the base identity so a
+        // version learned in an earlier record still traces to an incident.
         originalIncidentId:
+          record.learnedSafeguards?.find(
+            (m) => m.memoryId === app.memoryId && m.version === app.version,
+          )?.originIncidentId ??
           record.learnedSafeguards?.find((m) => m.memoryId === app.memoryId)
-            ?.originIncidentId ?? "",
+            ?.originIncidentId ??
+          "",
         relation: app.relation,
         relevance: app.relevance,
         applicable: app.applicable,
@@ -181,6 +198,8 @@ export function buildLearningLoop(records: SafeguardRecord[]): LearningLoop {
         createdAt: record.createdAt,
         summary: record.investigation.summary,
         changed: record.behaviourChange.changed,
+        attributableToMemory:
+          record.behaviourChange.attributableToMemory ?? record.behaviourChange.changed,
         beforeDecision: record.behaviourChange.beforeDecision,
         afterDecision: record.behaviourChange.afterDecision,
         addedRequiredChecks: record.behaviourChange.addedRequiredChecks,
@@ -189,6 +208,9 @@ export function buildLearningLoop(records: SafeguardRecord[]): LearningLoop {
           : {}),
         ...(record.behaviourChange.changedByMemoryId
           ? { changedByMemoryId: record.behaviourChange.changedByMemoryId }
+          : {}),
+        ...(record.behaviourChange.changedByMemoryVersion
+          ? { changedByMemoryVersion: record.behaviourChange.changedByMemoryVersion }
           : {}),
         explanation: record.behaviourChange.explanation,
       });
@@ -213,21 +235,24 @@ export function buildLearningLoop(records: SafeguardRecord[]): LearningLoop {
             backend: safeguard.walrus.backend,
           }
         : null,
-      influencedInvestigationIds: influencedIn.get(safeguard?.memoryId ?? "") ?? [],
+      influencedInvestigationIds: safeguard
+        ? influencedIn.get(`${safeguard.memoryId}@v${safeguard.version}`) ?? []
+        : [],
       provenance: record.provenance,
     });
   }
 
   // Learning impact, computed only from actual records. Safeguards are grouped
-  // by memory id, so re-deriving the same safeguard in a later incident does not
-  // inflate the count of distinct safeguards.
+  // by their *versioned* identity, so a correction is counted as a distinct
+  // safeguard while a re-derivation of the same version is not.
   const byMemoryId = new Map<
     string,
     { memory: SafeguardMemory; recordIds: string[]; persisted: boolean; recallVerified: boolean }
   >();
   for (const record of ordered) {
     for (const memory of record.learnedSafeguards ?? []) {
-      const entry = byMemoryId.get(memory.memoryId);
+      const key = `${memory.memoryId}@v${memory.version}`;
+      const entry = byMemoryId.get(key);
       if (entry) {
         entry.recordIds.push(record.recordId);
         entry.persisted = entry.persisted || memory.walrus.persisted;
@@ -235,7 +260,7 @@ export function buildLearningLoop(records: SafeguardRecord[]): LearningLoop {
         // Prefer the memory instance that carries the blob id, for provenance.
         if (memory.walrus.blobId && !entry.memory.walrus.blobId) entry.memory = memory;
       } else {
-        byMemoryId.set(memory.memoryId, {
+        byMemoryId.set(key, {
           memory,
           recordIds: [record.recordId],
           persisted: memory.walrus.persisted,
@@ -253,24 +278,33 @@ export function buildLearningLoop(records: SafeguardRecord[]): LearningLoop {
   for (const apps of influencedIn.values()) for (const r of apps) influencedRecords.add(r);
 
   const strengthened = behaviourChanges.filter(
-    (b) => b.changed && b.addedRequiredChecks.length > 0,
+    (b) => b.changed && b.attributableToMemory && b.addedRequiredChecks.length > 0,
   );
 
   // A demonstrated repeat prevention requires a memory learned from an earlier
-  // record to have changed a *later* investigation's decision. A single
-  // investigation changing its own decision is not a prevention claim.
+  // record to have changed a *later* investigation's *decision* — not merely
+  // added verification checks. Adding checks strengthens an investigation; only
+  // a decision the engine would otherwise have reached differently counts as
+  // preventing a recurrence. A single investigation changing its own decision is
+  // not a prevention claim either.
   const learnedAt = new Map<string, string>();
   for (const s of allSafeguards) {
+    const key = `${s.memory.memoryId}@v${s.memory.version}`;
     for (const recordId of s.recordIds) {
       const record = ordered.find((r) => r.recordId === recordId);
       if (!record) continue;
-      const prev = learnedAt.get(s.memory.memoryId);
-      if (!prev || record.createdAt < prev) learnedAt.set(s.memory.memoryId, record.createdAt);
+      const prev = learnedAt.get(key);
+      if (!prev || record.createdAt < prev) learnedAt.set(key, record.createdAt);
     }
   }
   const demonstratedPreventions = behaviourChanges.filter((b) => {
-    if (!b.changed || !b.changedByMemoryId) return false;
-    const learned = learnedAt.get(b.changedByMemoryId);
+    if (!b.changed || !b.attributableToMemory || !b.changedByMemoryId) return false;
+    if (b.beforeDecision === b.afterDecision) return false;
+    const key =
+      b.changedByMemoryVersion !== undefined
+        ? `${b.changedByMemoryId}@v${b.changedByMemoryVersion}`
+        : b.changedByMemoryId;
+    const learned = learnedAt.get(key);
     return Boolean(learned && learned < b.createdAt);
   });
 
@@ -301,19 +335,24 @@ export function buildLearningLoop(records: SafeguardRecord[]): LearningLoop {
   // Provenance: one entry per distinct safeguard memory, linking it to its
   // origin incident, its Walrus reference, and every later investigation it
   // touched.
-  const provenance: LearningProvenanceEntry[] = allSafeguards.map(({ memory }) => ({
-    memoryId: memory.memoryId,
-    originIncidentId: memory.originIncidentId,
-    ...(memory.walrus.blobId ? { blobId: memory.walrus.blobId } : {}),
-    backend: memory.walrus.backend,
-    persisted: memory.walrus.persisted,
-    recallVerified: memory.walrus.recallVerified,
-    retrievedIn: retrievedIn.get(memory.memoryId) ?? [],
-    influenced: influencedIn.get(memory.memoryId) ?? [],
-    domain: memory.domain,
-    failureCategory: memory.failureCategory,
-    provenance: memory.provenance,
-  }));
+  const provenance: LearningProvenanceEntry[] = allSafeguards.map(({ memory }) => {
+    const key = `${memory.memoryId}@v${memory.version}`;
+    return {
+      memoryId: memory.memoryId,
+      version: memory.version,
+      originIncidentId: memory.originIncidentId,
+      ...(memory.walrus.blobId ? { blobId: memory.walrus.blobId } : {}),
+      backend: memory.walrus.backend,
+      persisted: memory.walrus.persisted,
+      recallVerified: memory.walrus.recallVerified,
+      retrievedIn: retrievedIn.get(key) ?? [],
+      influenced: influencedIn.get(key) ?? [],
+      domain: memory.domain,
+      failureCategory: memory.failureCategory,
+      status: memory.status,
+      provenance: memory.provenance,
+    };
+  });
 
   return {
     history,

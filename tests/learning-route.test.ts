@@ -79,13 +79,21 @@ describe("GET /api/learning", () => {
     expect(body.impact.totalVerifiedSafeguards).toBeGreaterThanOrEqual(1);
     expect(body.impact.safeguardsPersisted).toBeGreaterThanOrEqual(1);
     expect(body.impact.investigationsInfluenced).toBeGreaterThanOrEqual(1);
-    expect(body.impact.demonstratedRepeatPreventions).toBeGreaterThanOrEqual(1);
 
-    // The second investigation's before/after must be present and changed.
-    const changed = body.behaviourChanges.find((b: { changed: boolean }) => b.changed);
+    // The second investigation's before/after must be present. The verdict is
+    // reached by the pre-existing legacy lesson path, which the comparison holds
+    // constant; the memory's own, isolated contribution is the added verification
+    // requirement. Reporting the verdict as memory-caused would be the
+    // attribution error this guards against, so the decision is unchanged across
+    // the two arms and no repeat-prevention is claimed.
+    const changed = body.behaviourChanges.find(
+      (b: { attributableToMemory: boolean }) => b.attributableToMemory,
+    );
     expect(changed).toBeDefined();
-    expect(changed.beforeDecision).toBe("UNKNOWN");
+    expect(changed.beforeDecision).toBe("REQUIRE_VERIFICATION");
     expect(changed.afterDecision).toBe("REQUIRE_VERIFICATION");
+    expect(changed.addedRequiredChecks.length).toBeGreaterThan(0);
+    expect(changed.changedByMemoryVersion).toBe(1);
 
     // Provenance links the memory to its origin incident and its influence.
     const prov = body.provenance[0];

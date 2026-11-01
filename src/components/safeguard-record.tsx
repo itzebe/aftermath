@@ -379,7 +379,9 @@ function LearningNode({ record }: { record: SafeguardRecord }) {
   if (learned.length === 0 && applications.length === 0 && !change) return null;
 
   const applied = applications.filter((a) => a.applicable);
-  const influenced = Boolean(change?.changed);
+  const influenced = Boolean(change?.attributableToMemory);
+  const verdictChanged =
+    Boolean(change) && change!.beforeDecision !== change!.afterDecision;
 
   return (
     <ChainNode
@@ -395,7 +397,11 @@ function LearningNode({ record }: { record: SafeguardRecord }) {
             {applied.length} applied
           </Pill>
           <Pill tone={influenced ? "ok" : "neutral"}>
-            {influenced ? "behaviour changed" : "no behaviour change"}
+            {verdictChanged
+              ? "verdict changed"
+              : influenced
+                ? "requirements strengthened"
+                : "no behaviour change"}
           </Pill>
         </div>
       }
@@ -406,7 +412,7 @@ function LearningNode({ record }: { record: SafeguardRecord }) {
           <ul className="space-y-2">
             {learned.map((m) => (
               <li
-                key={m.memoryId}
+                key={`${m.memoryId}@v${m.version}`}
                 className="rounded border hairline bg-[#0a0d12] px-3 py-2"
               >
                 <div className="flex flex-wrap items-center gap-2">
@@ -507,6 +513,9 @@ function LearningNode({ record }: { record: SafeguardRecord }) {
                   {change.beforeDecision.replace(/_/g, " ")}
                 </Pill>
               </div>
+              <div className="mt-1 text-[0.6875rem] leading-relaxed text-paper-600">
+                The same engine with the applicable safeguard held out.
+              </div>
             </div>
             <div className="hidden justify-center sm:flex" aria-hidden>
               <span className="mono text-paper-600">→</span>
@@ -523,6 +532,9 @@ function LearningNode({ record }: { record: SafeguardRecord }) {
                 <Pill tone={DECISION_TONE[change.afterDecision] ?? "neutral"}>
                   {change.afterDecision.replace(/_/g, " ")}
                 </Pill>
+              </div>
+              <div className="mt-1 text-[0.6875rem] leading-relaxed text-paper-600">
+                The same engine with the applicable safeguard enforced.
               </div>
             </div>
           </div>

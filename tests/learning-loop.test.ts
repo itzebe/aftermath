@@ -170,7 +170,7 @@ describe("learn: duplicate and supersession handling", () => {
     });
     expect(learned!.disposition).toBe("superseded");
     expect(learned!.record.version).toBe(2);
-    expect(learned!.record.supersedes).toBe(base.memory_id);
+    expect(learned!.record.supersedes).toBe(`${base.memory_id}@v1`);
   });
 });
 
@@ -265,10 +265,11 @@ describe("behaviour change: the safeguard changes a real decision", () => {
     const change = computeBehaviourChange({
       beforeDecision: "ALLOW",
       afterDecision: "ALLOW",
-      appliedChecks: [],
+      afterChecks: [],
       retrievedNotApplicable: 0,
     });
     expect(change.changed).toBe(false);
+    expect(change.attributableToMemory).toBe(false);
     expect(change.explanation).toMatch(/did not change/i);
   });
 
@@ -276,19 +277,40 @@ describe("behaviour change: the safeguard changes a real decision", () => {
     const change = computeBehaviourChange({
       beforeDecision: "UNKNOWN",
       afterDecision: "REQUIRE_VERIFICATION",
-      appliedChecks: ["Capture the record."],
+      afterChecks: ["Capture the record."],
       appliedRule: "Require verification.",
       appliedMemoryId: "m1",
+      appliedMemoryVersion: 1,
       retrievedNotApplicable: 0,
     });
     expect(change.changed).toBe(true);
+    expect(change.attributableToMemory).toBe(true);
     expect(change.changedByMemoryId).toBe("m1");
-    expect(change.explanation).toMatch(/no memory applied/i);
+    expect(change.explanation).toMatch(/held constant/i);
+  });
+
+  it("attributes a check-only change to the memory, not to the verdict", () => {
+    // The verdict is reached by the legacy lessons alone; the memory's own
+    // contribution is the added verification check. That is a real influence,
+    // but it is not a decision change.
+    const change = computeBehaviourChange({
+      beforeDecision: "REQUIRE_VERIFICATION",
+      afterDecision: "REQUIRE_VERIFICATION",
+      afterChecks: ["Capture the record."],
+      appliedRule: "Require verification.",
+      appliedMemoryId: "m1",
+      appliedMemoryVersion: 1,
+      retrievedNotApplicable: 0,
+    });
+    expect(change.changed).toBe(true);
+    expect(change.attributableToMemory).toBe(true);
+    expect(change.addedRequiredChecks).toEqual(["Capture the record."]);
+    expect(change.beforeDecision).toBe(change.afterDecision);
   });
 });
 
 describe("behaviour change: end to end", () => {
-  it("changes UNKNOWN to REQUIRE_VERIFICATION on the repeat, with evidence", async () => {
+  it("strengthens the repeat investigation with the recalled safeguard", async () => {
     const d = deps();
     const first = await runSubmissionPipeline({ text: FIRST }, d);
     // The first run learns the safeguard but is itself decided without memory.
@@ -296,12 +318,23 @@ describe("behaviour change: end to end", () => {
 
     const second = await runSubmissionPipeline({ text: SECOND }, d);
     expect(second.behaviourChange).toBeDefined();
-    expect(second.behaviourChange!.beforeDecision).toBe("UNKNOWN");
-    expect(second.behaviourChange!.afterDecision).toBe("REQUIRE_VERIFICATION");
-    expect(second.behaviourChange!.changed).toBe(true);
-    expect(second.decision.decision).toBe("REQUIRE_VERIFICATION");
-    expect(second.decision.applicableMemoryIds).toContain(
+    const change = second.behaviourChange!;
+    // The verdict is reached by the pre-existing legacy lesson path; the memory's
+    // own, isolated contribution is the added verification requirement. Reporting
+    // the verdict as memory-caused would be the attribution error this guards
+    // against.
+    expect(change.beforeDecision).toBe("REQUIRE_VERIFICATION");
+    expect(change.afterDecision).toBe("REQUIRE_VERIFICATION");
+    expect(change.attributableToMemory).toBe(true);
+    expect(change.addedRequiredChecks.length).toBeGreaterThan(0);
+    expect(change.changedByMemoryId).toBe(
       "safeguard-incident-unsupported_completion_claim",
+    );
+    expect(change.changedByMemoryVersion).toBe(1);
+    expect(second.decision.decision).toBe("REQUIRE_VERIFICATION");
+    // Provenance is versioned, so the enforced version is unambiguous.
+    expect(second.decision.applicableMemoryIds).toContain(
+      "safeguard-incident-unsupported_completion_claim@v1",
     );
   });
 
@@ -434,5 +467,162 @@ describe("learning loop view model", () => {
     );
     const loop = buildLearningLoop(await d.store.listSafeguardRecords());
     expect(loop.impact.fixtures.records).toBe(1);
+  });
+});
+
+describe("behaviour change: a memory can change the verdict itself", () => {
+  it("turns UNKNOWN into REQUIRE_VERIFICATION when only the memory is present", async () => {
+    // The decisive case: no legacy corrective lesson has been learned (the
+    // adapter starts empty except for one pre-seeded safeguard memory), so the
+    // before arm has nothing to escalate on. The verdict change is therefore
+    // attributable to the memory alone, not to the pre-existing lesson path.
+    const d = deps();
+    await d.memory.rememberSafeguard(
+      SafeguardMemoryRecordSchema.parse({
+        type: "safeguard_memory",
+        memory_id: "safeguard-incident-unsupported_completion_claim",
+        version: 1,
+        origin_incident_id: "inc-origin",
+        domain: "incident",
+        action_type: "validate_reported_success",
+        failure_category: "unsupported_completion_claim",
+        verified_failure: "claim without evidence",
+        evidence: ["incident:inc-origin"],
+        corrective_rule: "Require authoritative verification before accepting success.",
+        applies_when: [
+          "domain=incident",
+          "actionType=validate_reported_success",
+          "failureCategory=unsupported_completion_claim",
+        ],
+        required_checks: ["Capture the authoritative record."],
+        action: "BLOCK",
+        severity: "high",
+        confidence: 0.9,
+        limitations: [],
+        authoritative: true,
+        support_basis: "grounded",
+        status: "active",
+        provenance: "simulated",
+      }),
+    );
+    const record = await runSubmissionPipeline({ text: FIRST }, d);
+    const change = record.behaviourChange;
+    expect(change).toBeDefined();
+    expect(change!.beforeDecision).toBe("UNKNOWN");
+    expect(change!.afterDecision).toBe("REQUIRE_VERIFICATION");
+    expect(change!.changedByMemoryId).toBe(
+      "safeguard-incident-unsupported_completion_claim",
+    );
+    expect(record.decision.decision).toBe("REQUIRE_VERIFICATION");
+  });
+});
+
+describe("recall: versioning and supersession are resolved at recall time", () => {
+  function record(overrides: Partial<SafeguardMemoryRecord> = {}): SafeguardMemoryRecord {
+    return SafeguardMemoryRecordSchema.parse({
+      type: "safeguard_memory",
+      memory_id: "safeguard-incident-unsupported_completion_claim",
+      version: 1,
+      origin_incident_id: "inc-1",
+      domain: "incident",
+      action_type: "validate_reported_success",
+      failure_category: "unsupported_completion_claim",
+      verified_failure: "claim without evidence",
+      evidence: ["incident:inc-1"],
+      corrective_rule: "Require authoritative verification before accepting success.",
+      applies_when: ["domain=incident", "actionType=validate_reported_success"],
+      required_checks: ["Capture the authoritative record."],
+      action: "BLOCK",
+      severity: "high",
+      confidence: 0.9,
+      limitations: [],
+      authoritative: true,
+      support_basis: "grounded",
+      status: "active",
+      provenance: "simulated",
+      ...overrides,
+    });
+  }
+  const context = {
+    domain: "incident",
+    actionType: "validate_reported_success",
+    pattern: "unsupported_completion_claim",
+    hasAuthoritativeReference: false,
+  };
+  const hit = (m: SafeguardMemoryRecord, blob: string): RecalledLesson => ({
+    blobId: blob,
+    text: "x",
+    distance: 0.1,
+    provenance: "simulated",
+    safeguardMemory: m,
+  });
+
+  it("enforces only the highest active authoritative version", () => {
+    const v1 = record({ version: 1, corrective_rule: "OLD" });
+    const v2 = record({
+      version: 2,
+      corrective_rule: "NEW",
+      supersedes: "safeguard-incident-unsupported_completion_claim@v1",
+    });
+    const apps = evaluateSafeguardApplications([hit(v1, "b1"), hit(v2, "b2")], context);
+    const v1app = apps.find((a) => a.version === 1)!;
+    const v2app = apps.find((a) => a.version === 2)!;
+    expect(v2app.applicable).toBe(true);
+    expect(v1app.applicable).toBe(false);
+    expect(v1app.applicabilityBasis).toMatch(/superseded/i);
+  });
+
+  it("enforces the latest version even without an explicit supersedes edge", () => {
+    // A later record that re-derives the same category with a changed rule is the
+    // effective one, whether or not it names its predecessor.
+    const v1 = record({ version: 1, corrective_rule: "OLD" });
+    const v2 = record({ version: 2, corrective_rule: "NEW" });
+    const apps = evaluateSafeguardApplications([hit(v1, "b1"), hit(v2, "b2")], context);
+    expect(apps.find((a) => a.version === 1)!.applicable).toBe(false);
+    expect(apps.find((a) => a.version === 2)!.applicable).toBe(true);
+  });
+
+  it("does not let a non-authoritative correction retire an authoritative one", () => {
+    const v1 = record({ version: 1 });
+    const weak = record({
+      version: 2,
+      corrective_rule: "WEAK",
+      authoritative: false,
+      supersedes: "safeguard-incident-unsupported_completion_claim@v1",
+    });
+    const apps = evaluateSafeguardApplications([hit(v1, "b1"), hit(weak, "b2")], context);
+    // The authoritative v1 survives; the weak v2 is recorded but never enforced.
+    expect(apps.find((a) => a.version === 1)!.applicable).toBe(true);
+    expect(apps.find((a) => a.version === 2)!.applicable).toBe(false);
+  });
+
+  it("does not count an applicable memory that changed nothing as influential", async () => {
+    // A record whose memory applied but neither moved the verdict nor added a
+    // required check must not be counted as an influenced investigation. This is
+    // the attribution guard: retrieved/applied is not the same as influential.
+    const d = deps();
+    const record = await runSubmissionPipeline({ text: FIRST }, d);
+    const mutated = {
+      ...record,
+      behaviourChange: {
+        changed: false,
+        attributableToMemory: false,
+        beforeDecision: "UNKNOWN" as const,
+        afterDecision: "UNKNOWN" as const,
+        beforeRequiredChecks: [],
+        afterRequiredChecks: [],
+        addedRequiredChecks: [],
+        explanation: "no change",
+      },
+      safeguardApplications: (record.safeguardApplications ?? []).map((a) => ({
+        ...a,
+        changedBehaviour: false,
+      })),
+    };
+    const loop = buildLearningLoop([mutated]);
+    expect(loop.impact.memoriesApplied).toBe(0);
+    expect(loop.impact.investigationsInfluenced).toBe(0);
+    expect(loop.impact.demonstratedRepeatPreventions).toBe(0);
+    expect(loop.impact.verificationRequirementsStrengthened).toBe(0);
   });
 });

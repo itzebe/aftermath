@@ -130,8 +130,10 @@ describe("production verifier — learning loop", () => {
     behaviourChanges: [
       {
         changed: true,
-        beforeDecision: "UNKNOWN",
+        attributableToMemory: true,
+        beforeDecision: "REQUIRE_VERIFICATION",
         afterDecision: "REQUIRE_VERIFICATION",
+        addedRequiredChecks: ["Capture the authoritative record."],
         changedByMemoryId: "safeguard-incident-unsupported_completion_claim",
       },
     ],
@@ -190,19 +192,21 @@ describe("production verifier — learning loop", () => {
     expect(found?.ok).toBe(false);
   });
 
-  it("fails when a changed behaviour does not change the decision", () => {
+  it("fails when a changed behaviour is not attributable to the memory", () => {
     const noop: LearningLoopShape = {
       ...liveLearning,
       behaviourChanges: [
         {
           changed: true,
-          beforeDecision: "UNKNOWN",
-          afterDecision: "UNKNOWN",
+          attributableToMemory: false,
+          beforeDecision: "REQUIRE_VERIFICATION",
+          afterDecision: "REQUIRE_VERIFICATION",
+          addedRequiredChecks: [],
           changedByMemoryId: "safeguard-incident-unsupported_completion_claim",
         },
       ],
     };
-    const found = assessLearning(noop).find((c) => c.name.includes("changed decision"));
+    const found = assessLearning(noop).find((c) => c.name.includes("memory-caused effect"));
     expect(found?.ok).toBe(false);
   });
 

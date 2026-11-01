@@ -62,7 +62,7 @@ export default function LearningPage() {
   if (!data) return <Loading label="Loading the learning loop…" />;
 
   const { impact } = data;
-  const influenced = data.behaviourChanges.filter((b) => b.changed);
+  const influenced = data.behaviourChanges.filter((b) => b.attributableToMemory);
   const hasAnyLearning = data.history.length > 0;
 
   return (
@@ -129,7 +129,7 @@ export default function LearningPage() {
                 label="Investigations influenced"
                 value={impact.investigationsInfluenced}
                 tone={impact.investigationsInfluenced > 0 ? "ok" : "neutral"}
-                sub="Investigations whose decision or requirements a memory changed."
+                sub="Investigations whose verdict or required checks a memory changed."
               />
               <Metric
                 label="Requirements strengthened"
@@ -137,7 +137,7 @@ export default function LearningPage() {
                 tone={
                   impact.verificationRequirementsStrengthened > 0 ? "ok" : "neutral"
                 }
-                sub="Investigations where a memory added required verification."
+                sub="Investigations where a memory added a required verification check."
               />
               <Metric
                 label="Repeat preventions"
@@ -201,7 +201,7 @@ export default function LearningPage() {
             id="behaviour"
             eyebrow="Section C"
             title="Behaviour change"
-            lead="The decision engine run twice for the same investigation: once with no memory applied, once with the applicable safeguard enforced. The difference is a real counterfactual over the engine, not a simulation."
+            lead="The decision engine run twice for the same investigation: once with the applicable safeguard held out, once with it enforced. Both arms use identical evidence, identical legacy lessons, and identical active rules, so the difference is the memory's own contribution — a real counterfactual over the engine, not a simulation."
           >
             {data.behaviourChanges.length === 0 ? (
               <EmptyState title="No memory has been applied yet">
@@ -218,10 +218,12 @@ export default function LearningPage() {
             {influenced.length === 0 ? (
               <div className="mt-4">
                 <Notice tone="info" title="Honest limitation">
-                  No recalled safeguard has yet changed a decision. Memories may
-                  have been retrieved without being applicable, and a safeguard
-                  that does not change an outcome is never counted as an
-                  influence.
+                  No recalled safeguard has yet changed a decision or added a
+                  required check. Memories may have been retrieved without being
+                  applicable, and a safeguard that changes nothing is never
+                  counted as an influence. Where a verdict was already reached by
+                  the pre-existing rule path, the memory is credited only with the
+                  verification it added, never with the verdict.
                 </Notice>
               </div>
             ) : null}
@@ -239,7 +241,7 @@ export default function LearningPage() {
             ) : (
               <div className="space-y-4">
                 {data.provenance.map((p) => (
-                  <ProvenanceCard key={p.memoryId} entry={p} />
+                  <ProvenanceCard key={`${p.memoryId}@v${p.version}`} entry={p} />
                 ))}
               </div>
             )}
@@ -456,7 +458,11 @@ function BehaviourChangeCard({ entry }: { entry: BehaviourChangeEntry }) {
           <div className="heading mt-1.5 text-[0.9375rem]">{entry.summary}</div>
         </div>
         <Pill tone={entry.changed ? "ok" : "neutral"}>
-          {entry.changed ? "behaviour changed" : "no change"}
+          {entry.beforeDecision !== entry.afterDecision
+            ? "verdict changed"
+            : entry.changed
+              ? "requirements strengthened"
+              : "no change"}
         </Pill>
       </div>
 
@@ -469,7 +475,8 @@ function BehaviourChangeCard({ entry }: { entry: BehaviourChangeEntry }) {
             </Pill>
           </div>
           <p className="mt-2 text-[0.75rem] leading-relaxed text-paper-500">
-            The decision engine with no memory applied.
+            The decision engine with the applicable safeguard held out; legacy
+            lessons and active rules are unchanged.
           </p>
         </div>
         <div
@@ -523,6 +530,9 @@ function BehaviourChangeCard({ entry }: { entry: BehaviourChangeEntry }) {
           {entry.changedByMemoryId ? (
             <div className="mono mt-1 text-[0.6875rem] text-paper-600">
               from memory {entry.changedByMemoryId}
+              {entry.changedByMemoryVersion !== undefined
+                ? `@v${entry.changedByMemoryVersion}`
+                : ""}
             </div>
           ) : null}
         </div>
@@ -540,11 +550,14 @@ function ProvenanceCard({ entry }: { entry: LearningProvenanceEntry }) {
     <div className="panel p-5">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <div className="mono min-w-0 break-all text-[0.8125rem]">
-          {entry.memoryId}@v1
+          {entry.memoryId}@v{entry.version}
         </div>
         <div className="flex flex-wrap gap-2">
           <Pill tone={entry.provenance === "live" ? "ok" : "warn"}>
             {entry.provenance}
+          </Pill>
+          <Pill tone={entry.status === "active" ? "info" : "neutral"}>
+            {entry.status}
           </Pill>
           <Pill
             tone={

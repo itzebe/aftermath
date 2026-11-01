@@ -37,6 +37,7 @@ import {
   computeBehaviourChange,
   evaluateSafeguardApplications,
   learnSafeguard,
+  type PriorSafeguard,
 } from "@/lib/engines/safeguard-memory";
 import {
   extractSignals,
@@ -194,7 +195,11 @@ export async function runSubmissionPipeline(
     .map((r) => r.safeguardMemory)
     .filter((m): m is NonNullable<typeof m> => Boolean(m))
     .filter((m) =>
-      safeguardApplications.some((a) => a.memoryId === m.memory_id && a.applicable),
+      // Match the exact version, not just the base id: a superseded version
+      // shares the base id but must never be enforced.
+      safeguardApplications.some(
+        (a) => a.memoryId === m.memory_id && a.version === m.version && a.applicable,
+      ),
     );
 
   // Stage D: propose and validate the safeguard against the shared rule engine.
@@ -235,11 +240,13 @@ export async function runSubmissionPipeline(
 
   // Stage E2: the memory-informed decision.
   //
-  // `before` is the engine's decision with *no memory applied* — no recalled
-  // lessons and no applicable safeguards — which is the world before this
-  // lesson was learned. `after` is the decision with the applicable safeguard
-  // memories enforced. Both are the *same* deterministic engine, so the
-  // difference is a real counterfactual, not a fabricated screen.
+  // Both arms are the *same* deterministic engine over *identical* inputs: the
+  // same evidence, the same recalled lessons (the legacy corrective-lesson path
+  // is held constant — it is a pre-existing mechanism, not the safeguard
+  // memory), the same active rules. The single difference is whether the
+  // applicable safeguard memories are enforced. That isolation is what makes the
+  // reported change attributable to the safeguard memory rather than to a
+  // decision the engine would already have reached.
   const decideInput = {
     domain: investigation.domain,
     actionType: investigation.actionType,
@@ -255,28 +262,36 @@ export async function runSubmissionPipeline(
   };
   const decisionBeforeMemory = decide({
     ...decideInput,
-    recalledLessons: [],
     appliedSafeguards: [],
   });
   const decision = decide({ ...decideInput, appliedSafeguards });
 
-  const appliedChecks = appliedSafeguards.flatMap((m) => m.required_checks);
   const behaviourChange: BehaviourChange | undefined = appliedSafeguards.length
     ? computeBehaviourChange({
         beforeDecision: decisionBeforeMemory.decision,
         afterDecision: decision.decision,
-        appliedChecks,
+        beforeChecks: decisionBeforeMemory.requiredChecks ?? [],
+        afterChecks: decision.requiredChecks ?? [],
         appliedRule: appliedSafeguards[0]?.corrective_rule,
         appliedMemoryId: appliedSafeguards[0]?.memory_id,
+        appliedMemoryVersion: appliedSafeguards[0]?.version,
         retrievedNotApplicable: safeguardApplications.filter((a) => !a.applicable)
           .length,
       })
     : undefined;
 
-  // Record whether each application changed the behaviour, so a memory that did
-  // not affect a decision is never counted as an influential memory.
+  // Record whether each application changed the behaviour. Only the effective
+  // memory that actually caused the change is marked, so a memory that did not
+  // affect a decision is never counted as an influential memory.
   for (const app of safeguardApplications) {
-    if (app.applicable && behaviourChange?.changed) app.changedBehaviour = true;
+    if (
+      app.applicable &&
+      behaviourChange?.changed &&
+      app.memoryId === behaviourChange.changedByMemoryId &&
+      app.version === behaviourChange.changedByMemoryVersion
+    ) {
+      app.changedBehaviour = true;
+    }
   }
 
   await deps.store.saveIncident({
@@ -329,9 +344,32 @@ export async function runSubmissionPipeline(
   // record for transparency but is never written as a standing safeguard, so it
   // cannot silently become a permanent rule.
   const learnedSafeguards: SafeguardMemory[] = [];
-  const existingSafeguards = recalled
+  const recalledSafeguards = recalled
     .map((r) => r.safeguardMemory)
     .filter((m): m is NonNullable<typeof m> => Boolean(m));
+  // Consult the durable record index as well as recall, so a correction versions
+  // correctly even when the prior version was not returned by recall. Recall is
+  // best-effort and bounded; the durable index is the record of what was learned.
+  const durablePriors = await deps.store
+    .listSafeguardRecords(500)
+    .then((records) =>
+      records.flatMap((rec) =>
+        (rec.learnedSafeguards ?? []).map((m) => ({
+          memory_id: m.memoryId,
+          version: m.version,
+          corrective_rule: m.correctiveRule,
+        })),
+      ),
+    )
+    .catch(() => []);
+  const existingSafeguards: PriorSafeguard[] = [
+    ...recalledSafeguards.map((m) => ({
+      memory_id: m.memory_id,
+      version: m.version,
+      corrective_rule: m.corrective_rule,
+    })),
+    ...durablePriors,
+  ];
   const learned = learnSafeguard({
     incident: storedIncident,
     diagnosis: investigation.diagnosis,

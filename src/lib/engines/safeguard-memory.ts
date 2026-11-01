@@ -40,12 +40,94 @@ import { PATTERN_ACTION, PATTERN_SEVERITY } from "@/lib/engines/rule-engine";
 import { classifyRecurrence } from "@/lib/engines/recurrence";
 import type { RecalledLesson } from "@/lib/adapters/memory";
 
-/** Deterministic identity of a safeguard: one memory per domain + failure category. */
+/** Deterministic base identity of a safeguard: one base per domain + failure category. */
 export function safeguardMemoryId(domain: string, failureCategory: string): string {
   return `safeguard-${domain}-${failureCategory}`;
 }
 
+/**
+ * The versioned identity of a safeguard, `base@vN`.
+ *
+ * The base id is stable across versions so a recurrence is recognised, while the
+ * versioned id is unique per version so provenance and supersession are
+ * unambiguous and a version can never reference itself.
+ */
+export function versionedMemoryId(memory: {
+  memory_id: string;
+  version: number;
+}): string {
+  return `${memory.memory_id}@v${memory.version}`;
+}
+
+/**
+ * Resolve which version of each safeguard is *effective* from the records that
+ * were recalled.
+ *
+ * Walrus Memory is append-only from the application's point of view: a
+ * correction is a new record that names its predecessor, and the predecessor's
+ * blob is left untouched. Supersession is therefore derived here, at recall
+ * time, rather than by mutating the old record:
+ *
+ *   - an explicit `supersedes` edge (from an *authoritative, active* record)
+ *     retires the exact predecessor version it names;
+ *   - within a base identity, only the highest active authoritative version is
+ *     effective;
+ *   - a non-authoritative correction cannot retire an authoritative safeguard.
+ *
+ * If an older version is recalled without its newer sibling, it remains
+ * effective — the system cannot know about a version it did not retrieve. That
+ * limitation is reported honestly by the callers rather than papered over.
+ */
+export function resolveEffectiveSafeguards(records: SafeguardMemoryRecord[]): {
+  /** base memory_id -> the effective record for that identity. */
+  effective: Map<string, SafeguardMemoryRecord>;
+  /** versioned ids retired by a valid superseder, whether or not recalled. */
+  retired: Set<string>;
+} {
+  const retired = new Set<string>();
+  for (const r of records) {
+    if (!r.supersedes) continue;
+    // Only a record that is itself enforceable may retire another. A weak
+    // correction is recorded but never retires an authoritative safeguard.
+    if (!(r.authoritative && r.status === "active")) continue;
+    retired.add(r.supersedes);
+  }
+
+  const byBase = new Map<string, SafeguardMemoryRecord[]>();
+  for (const r of records) {
+    const list = byBase.get(r.memory_id);
+    if (list) list.push(r);
+    else byBase.set(r.memory_id, [r]);
+  }
+
+  const effective = new Map<string, SafeguardMemoryRecord>();
+  for (const [base, group] of byBase) {
+    const candidates = group.filter(
+      (r) =>
+        r.status === "active" &&
+        r.authoritative &&
+        !retired.has(versionedMemoryId(r)),
+    );
+    if (candidates.length === 0) continue;
+    const highest = candidates.reduce((a, b) => (b.version > a.version ? b : a));
+    effective.set(base, highest);
+  }
+
+  return { effective, retired };
+}
+
 export type SafeguardDisposition = "created" | "duplicate" | "superseded";
+
+/**
+ * The minimal prior-safeguard identity `learnSafeguard` needs to decide whether a
+ * new finding is a duplicate or a correction. Kept narrow so callers can supply
+ * priors from both recall and the durable record index without a full record.
+ */
+export interface PriorSafeguard {
+  memory_id: string;
+  version: number;
+  corrective_rule: string;
+}
 
 export interface LearnedSafeguard {
   record: SafeguardMemoryRecord;
@@ -66,8 +148,11 @@ export interface LearnInput {
   recommendation: SafeguardRecommendation;
   activatedRule?: SafeguardRule | null;
   proposedRule?: SafeguardRule | null;
-  /** Prior memories for the same category, as recalled. Drives duplicate/supersede. */
-  existing?: SafeguardMemoryRecord[];
+  /**
+   * Prior memories for the same category, as recalled or read from the durable
+   * record index. Drives duplicate/supersede; the highest version wins.
+   */
+  existing?: PriorSafeguard[];
   /** The memory backend the write will go to. */
   backend: string;
   now?: string;
@@ -186,7 +271,15 @@ export function learnSafeguard(input: LearnInput): LearnedSafeguard | null {
         "operation's outcome."
       : undefined;
 
-  const prior = input.existing?.find((m) => m.memory_id === memoryId);
+  // The prior is the highest-version memory for this category, whether it came
+  // from recall or the durable index, so an out-of-order or partial recall can
+  // never make a new version reuse an older one's number.
+  const prior = input.existing
+    ?.filter((m) => m.memory_id === memoryId)
+    .reduce<PriorSafeguard | undefined>(
+      (best, m) => (!best || m.version > best.version ? m : best),
+      undefined,
+    );
   let version = 1;
   let disposition: SafeguardDisposition = "created";
   let supersedes: string | undefined;
@@ -197,7 +290,9 @@ export function learnSafeguard(input: LearnInput): LearnedSafeguard | null {
     } else {
       disposition = "superseded";
       version = prior.version + 1;
-      supersedes = prior.memory_id;
+      // Name the exact predecessor identity, not the bare base id, so the
+      // correction never appears to supersede itself.
+      supersedes = versionedMemoryId(prior);
     }
   }
 
@@ -249,6 +344,7 @@ export function learnSafeguard(input: LearnInput): LearnedSafeguard | null {
     supportBasis: record.support_basis,
     status: record.status,
     ...(record.supersedes ? { supersedes: record.supersedes } : {}),
+    baseMemoryId: memoryId,
     createdAt: record.created_at ?? now,
     walrus: {
       backend: input.backend,
@@ -336,6 +432,13 @@ export function evaluateSafeguardApplications(
   recalled: RecalledLesson[],
   context: ApplicabilityContext,
 ): SafeguardApplication[] {
+  // Resolve which version is effective for each base identity from the recalled
+  // records, so a superseded version is never enforced alongside its successor.
+  const recalledRecords = recalled
+    .map((r) => r.safeguardMemory)
+    .filter((m): m is SafeguardMemoryRecord => Boolean(m));
+  const { effective, retired } = resolveEffectiveSafeguards(recalledRecords);
+
   return recalled.map((r) => {
     const record = r.safeguardMemory;
     const lesson = r.record;
@@ -370,15 +473,30 @@ export function evaluateSafeguardApplications(
           "a structured record.";
 
     if (record) {
+      const version = record.version;
       const applies = safeguardApplies(record, context);
+      const effectiveRecord = effective.get(record.memory_id);
+      const isEffective = effectiveRecord === record;
+      const superseded =
+        retired.has(versionedMemoryId(record)) ||
+        (effectiveRecord !== undefined && effectiveRecord.version > record.version);
+      const applicable = applies.applicable && isEffective;
+      const applicabilityBasis = !applies.applicable
+        ? applies.basis
+        : superseded
+          ? `Version ${version} has been superseded by ` +
+            `${effectiveRecord ? versionedMemoryId(effectiveRecord) : "a later version"}; ` +
+            "only the effective version is enforced."
+          : applies.basis;
       return {
         memoryId: record.memory_id,
+        version,
         blobId: r.blobId,
         relation: verdict.relation,
         relevance,
-        applicable: applies.applicable,
-        applicabilityBasis: applies.basis,
-        ...(applies.applicable
+        applicable,
+        applicabilityBasis,
+        ...(applicable
           ? {
               contributedRule: record.corrective_rule,
               addedVerification: record.required_checks[0],
@@ -446,13 +564,19 @@ export function safeguardToRule(memory: SafeguardMemoryRecord): SafeguardRule {
  * ------------------------------------------------------------------ */
 
 export interface BehaviourChangeInput {
+  /** The engine's decision with the legacy lessons retained but no memory applied. */
   beforeDecision: BehaviourChange["beforeDecision"];
+  /** The engine's decision with the applicable safeguard enforced. */
   afterDecision: BehaviourChange["afterDecision"];
-  /** The checks the applicable memories require. */
-  appliedChecks: string[];
+  /** The verification checks the before arm required (always empty today). */
+  beforeChecks?: string[];
+  /** The verification checks the after arm required. */
+  afterChecks: string[];
   /** The first applicable safeguard's rule, when one applied. */
   appliedRule?: string;
   appliedMemoryId?: string;
+  /** The exact version of the applied memory. */
+  appliedMemoryVersion?: number;
   /** Number of recalled records that were retrieved but did not apply. */
   retrievedNotApplicable: number;
 }
@@ -460,26 +584,33 @@ export interface BehaviourChangeInput {
 /**
  * Compute the honest before/after of the applicable safeguards.
  *
- * A change is reported when the decision differs, or when the decision is
- * REQUIRE_VERIFICATION (the safeguard is what forces the extra checks). When the
- * evidence already established the outcome — VERIFIED_SUCCESS allows, or
- * VERIFIED_FAILURE blocks — the safeguard adds nothing and no change is claimed.
+ * Both arms are produced by the *same* deterministic engine over *identical*
+ * inputs — the same evidence, the same legacy `recalledLessons`, the same rules
+ * — and differ only in whether the applicable safeguard memory is enforced.
+ * Because the legacy corrective-lesson path can also escalate an UNKNOWN
+ * decision, the decision alone is not sufficient evidence of the memory's
+ * effect. A change is therefore attributed to the memory only when the memory
+ * moves the decision, or when it adds a required verification check the before
+ * arm did not require.
  */
 export function computeBehaviourChange(input: BehaviourChangeInput): BehaviourChange {
   const {
     beforeDecision,
     afterDecision,
-    appliedChecks,
+    afterChecks,
     appliedRule,
     appliedMemoryId,
+    appliedMemoryVersion,
     retrievedNotApplicable,
   } = input;
+  const beforeChecks = input.beforeChecks ?? [];
 
   const decisionChanged = beforeDecision !== afterDecision;
-  // Checks are only "added" when the safeguard is what forces verification.
-  const addedRequiredChecks =
-    afterDecision === "REQUIRE_VERIFICATION" ? appliedChecks : [];
-  const changed = decisionChanged || addedRequiredChecks.length > 0;
+  const addedRequiredChecks = afterChecks.filter((c) => !beforeChecks.includes(c));
+  // Attribution: only the memory's own contribution counts. A decision the
+  // before arm already reached — via a legacy lesson or an active rule — is not
+  // a memory-caused change, even though the memory is enforced.
+  const attributableToMemory = decisionChanged || addedRequiredChecks.length > 0;
 
   let explanation: string;
   if (decisionChanged) {
@@ -487,8 +618,10 @@ export function computeBehaviourChange(input: BehaviourChangeInput): BehaviourCh
       ? ` It also adds ${addedRequiredChecks.length} required verification check(s).`
       : "";
     explanation =
-      `With no memory applied the decision engine concluded ${beforeDecision}; ` +
-      `with the applicable safeguard enforced it concludes ${afterDecision}.` +
+      `The legacy corrective lessons, evidence, and rules were held constant; ` +
+      `only the safeguard-memory mechanism differed. Without it the engine ` +
+      `concluded ${beforeDecision}; with the effective safeguard memory enforced ` +
+      `it concludes ${afterDecision}.` +
       checksNote +
       (retrievedNotApplicable > 0
         ? ` ${retrievedNotApplicable} other retrieved record(s) did not apply and ` +
@@ -496,10 +629,11 @@ export function computeBehaviourChange(input: BehaviourChangeInput): BehaviourCh
         : "");
   } else if (addedRequiredChecks.length > 0) {
     explanation =
-      `The decision is unchanged (${beforeDecision} either way), but the ` +
-      `applicable safeguard adds ${addedRequiredChecks.length} required ` +
-      "verification check(s) that would not otherwise be required. The check(s) " +
-      "strengthen the investigation without altering its verdict." +
+      `The decision is unchanged (${beforeDecision} either way, with the legacy ` +
+      `lessons held constant), but the applicable safeguard adds ` +
+      `${addedRequiredChecks.length} required verification check(s) the engine ` +
+      "would not otherwise require. The check(s) strengthen the investigation " +
+      "without altering its verdict." +
       (retrievedNotApplicable > 0
         ? ` ${retrievedNotApplicable} other retrieved record(s) did not apply.`
         : "");
@@ -510,20 +644,31 @@ export function computeBehaviourChange(input: BehaviourChangeInput): BehaviourCh
       "record(s) were retrieved but did not meet the applicability conditions.";
   } else {
     explanation =
-      `The applicable safeguard did not change the outcome: the evidence alone ` +
-      `already establishes ${afterDecision}, so the safeguard is redundant here. ` +
-      "This is recorded honestly rather than counted as an influence.";
+      `The applicable safeguard did not change the decision or add a required ` +
+      `check: the engine reaches ${afterDecision} with the legacy lessons alone, ` +
+      "so the safeguard is redundant here. This is recorded honestly rather than " +
+      "counted as a memory-caused influence.";
   }
 
   return {
-    changed,
+    changed: attributableToMemory,
     beforeDecision,
     afterDecision,
-    beforeRequiredChecks: [],
-    afterRequiredChecks: addedRequiredChecks,
+    beforeRequiredChecks: beforeChecks,
+    afterRequiredChecks: afterChecks,
     addedRequiredChecks,
-    ...(changed && appliedRule ? { changedByRule: appliedRule } : {}),
-    ...(changed && appliedMemoryId ? { changedByMemoryId: appliedMemoryId } : {}),
+    attributableToMemory,
+    comparisonBasis:
+      "Both arms run the same decision engine over identical evidence, " +
+      "identical recalled corrective lessons, and identical active rules; only " +
+      "the applicable safeguard memory differs.",
+    ...(attributableToMemory && appliedRule ? { changedByRule: appliedRule } : {}),
+    ...(attributableToMemory && appliedMemoryId
+      ? { changedByMemoryId: appliedMemoryId }
+      : {}),
+    ...(attributableToMemory && appliedMemoryVersion
+      ? { changedByMemoryVersion: appliedMemoryVersion }
+      : {}),
     explanation,
   };
 }

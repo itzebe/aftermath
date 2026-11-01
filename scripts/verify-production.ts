@@ -85,8 +85,10 @@ export interface LearningLoopShape {
   }>;
   behaviourChanges?: Array<{
     changed?: boolean;
+    attributableToMemory?: boolean;
     beforeDecision?: string;
     afterDecision?: string;
+    addedRequiredChecks?: string[];
     changedByMemoryId?: string;
   }>;
   impact?: {
@@ -151,9 +153,18 @@ export function assessLearning(lp: LearningLoopShape | null): Check[] {
     detail: `impact.investigationsInfluenced=${impact.investigationsInfluenced} vs ${influenced.length} evidenced change(s)`,
   });
   checks.push({
-    name: "no behaviour change without a changed decision",
-    ok: changes.every((c) => !c.changed || c.beforeDecision !== c.afterDecision),
-    detail: `${changes.filter((c) => c.changed).length} changed behaviour(s), each with before != after`,
+    name: "no behaviour change without a memory-caused effect",
+    // A change is claimed only when the memory moved the decision or added a
+    // required check the before arm did not require. A change that does neither
+    // is the attribution error the learning loop must never make.
+    ok: changes.every(
+      (c) =>
+        !c.changed ||
+        (c.attributableToMemory === true &&
+          ((c.beforeDecision ?? "") !== (c.afterDecision ?? "") ||
+            (c.addedRequiredChecks?.length ?? 0) > 0)),
+    ),
+    detail: `${changes.filter((c) => c.changed).length} changed behaviour(s), each attributed to the memory`,
   });
   checks.push({
     name: "persisted memories are recall-verified",

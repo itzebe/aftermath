@@ -216,6 +216,14 @@ export const SafeguardDecisionSchema = z.object({
    * that was merely retrieved is not.
    */
   applicableMemoryIds: z.array(z.string()).optional(),
+  /**
+   * The verification checks the *enforced* safeguard memories require for this
+   * decision. Exposed so the learning loop can measure the memory's own
+   * contribution (the checks the engine would not otherwise require) instead of
+   * inferring it from the final decision, which the legacy lesson path can also
+   * produce.
+   */
+  requiredChecks: z.array(z.string()).optional(),
   evidenceReferences: z.array(z.string()),
   retrievedMemoryIds: z.array(z.string()),
   missingPreconditions: z.array(z.string()),
@@ -678,8 +686,20 @@ export const SafeguardMemorySchema = z.object({
   supportBasis: z.string().min(1).max(2000),
   /** Lifecycle. A superseded memory is retained for provenance but not enforced. */
   status: z.enum(["active", "superseded", "retired"]),
-  /** The memory id this one corrects, when new evidence overturned an older one. */
+  /**
+   * The exact memory identity of the predecessor this version corrects, in
+   * `memoryId@vN` form. Distinct from `memoryId` so a version never references
+   * itself, and so the effective-version resolver can retire it.
+   */
   supersedes: z.string().max(200).optional(),
+  /** Stable base identity shared by every version of this safeguard. */
+  baseMemoryId: z.string().min(1).optional(),
+  /**
+   * Whether this is the effective (highest active authoritative) version for its
+   * base identity. Derived at recall time; the decision engine only ever
+   * receives the effective version.
+   */
+  effective: z.boolean().optional(),
   createdAt: z.string(),
   /** Walrus persistence reference: the blob id, once a write completed. */
   walrus: z.object({
@@ -723,6 +743,11 @@ export const SafeguardMemoryRecordSchema = z.object({
   authoritative: z.boolean(),
   support_basis: z.string().min(1),
   status: z.enum(["active", "superseded", "retired"]),
+  /**
+   * The predecessor this version corrects, as `memory_id@vN`. The base id is
+   * reused across versions, so this must name the exact prior identity — never
+   * the bare base id, which would make the record appear to supersede itself.
+   */
   supersedes: z.string().optional(),
   /**
    * Excluded from the serialized memory text so a retry is byte-identical (the
@@ -743,6 +768,8 @@ export type SafeguardMemoryRecord = z.infer<typeof SafeguardMemoryRecordSchema>;
  */
 export const SafeguardApplicationSchema = z.object({
   memoryId: z.string().min(1),
+  /** The exact version of the memory evaluated, so provenance is unambiguous. */
+  version: z.number().int().positive().optional(),
   blobId: z.string().min(1),
   /** How the record was returned: by similarity, or as a confirmed recurrence. */
   relation: MemoryRelationSchema,
@@ -784,6 +811,17 @@ export const BehaviourChangeSchema = z.object({
   changedByRule: z.string().max(4000).optional(),
   /** The applied memory that caused the change, when one did. */
   changedByMemoryId: z.string().max(200).optional(),
+  /** The exact version of the applied memory that caused the change. */
+  changedByMemoryVersion: z.number().int().positive().optional(),
+  /**
+   * What the two arms held constant. Both arms use identical evidence, identical
+   * legacy `recalledLessons`, and identical rules; only the safeguard-memory
+   * mechanism differs. Stated so the comparison cannot be mistaken for a claim
+   * that the legacy lesson path was absent.
+   */
+  comparisonBasis: z.string().max(2000).optional(),
+  /** True only when the change is attributable to the safeguard-memory mechanism. */
+  attributableToMemory: z.boolean().optional(),
   /**
    * An honest statement of what the comparison shows — and, where the system
    * cannot reliably establish what would have happened, the limitation.
