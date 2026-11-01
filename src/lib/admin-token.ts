@@ -1,41 +1,31 @@
 "use client";
 
 /**
- * Client-side holder for the administrator token.
+ * In-memory holder for the administrator token, used only by the admin console.
  *
- * The write and destructive endpoints now require `AFTERMATH_ADMIN_TOKEN`. The
- * operator enters that same value once in the app frame; it is kept in
- * `sessionStorage` (cleared when the tab closes) and attached as a bearer token
- * to the gated calls this app makes on the operator's behalf. It is never sent
- * anywhere except to this application's own API, and never rendered back.
+ * The value lives in a module-level variable for the lifetime of the page. It is
+ * never written to `localStorage`, `sessionStorage`, cookies, or any other
+ * browser-readable persistent storage, so a reload or a navigation away from the
+ * console discards it and the operator re-authenticates. That is the narrowest
+ * lifetime that still lets the console make its gated calls.
  *
- * A session-only, in-browser copy is the right trade-off for a single-operator
- * tool: it is not persisted to disk, not shared between tabs, and not embedded
- * in a server-rendered page.
+ * The token is attached only to this application's own API requests (see
+ * `adminHeaders`) and is never rendered back into the page.
  */
 
-const KEY = "aftermath.adminToken";
+let token: string | null = null;
 
 const EVENT = "aftermath:admin-token";
 
 export function getAdminToken(): string {
-  if (typeof window === "undefined") return "";
-  try {
-    return window.sessionStorage.getItem(KEY) ?? "";
-  } catch {
-    return "";
-  }
+  return token ?? "";
 }
 
-export function setAdminToken(token: string): void {
-  if (typeof window === "undefined") return;
-  try {
-    if (token) window.sessionStorage.setItem(KEY, token);
-    else window.sessionStorage.removeItem(KEY);
-  } catch {
-    // Storage can be unavailable (private mode); the token simply stays unset.
+export function setAdminToken(next: string): void {
+  token = next || null;
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(EVENT));
   }
-  window.dispatchEvent(new Event(EVENT));
 }
 
 export function clearAdminToken(): void {
@@ -43,19 +33,14 @@ export function clearAdminToken(): void {
 }
 
 export function hasAdminToken(): boolean {
-  return getAdminToken().length > 0;
+  return token !== null && token.length > 0;
 }
 
-/** Subscribe to token changes, so the header and forms re-render in step. */
+/** Subscribe to token changes, so the console re-renders in step. */
 export function onAdminTokenChange(listener: () => void): () => void {
   if (typeof window === "undefined") return () => {};
   window.addEventListener(EVENT, listener);
-  // `storage` fires for changes made in another tab; keep those in sync too.
-  window.addEventListener("storage", listener);
-  return () => {
-    window.removeEventListener(EVENT, listener);
-    window.removeEventListener("storage", listener);
-  };
+  return () => window.removeEventListener(EVENT, listener);
 }
 
 /**
@@ -66,6 +51,6 @@ export function onAdminTokenChange(listener: () => void): () => void {
 export function adminHeaders(
   extra: Record<string, string> = {},
 ): Record<string, string> {
-  const token = getAdminToken();
-  return token ? { ...extra, authorization: `Bearer ${token}` } : { ...extra };
+  const current = getAdminToken();
+  return current ? { ...extra, authorization: `Bearer ${current}` } : { ...extra };
 }

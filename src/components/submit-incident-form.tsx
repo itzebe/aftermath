@@ -8,13 +8,14 @@ import { Notice } from "@/components/ui";
 import { adminHeaders } from "@/lib/admin-token";
 
 /**
- * The incident submission form — the product's front door.
+ * The incident submission form — the admin console's primary operation.
  *
  * It shows the pipeline's stages as they genuinely happen (validate, parse,
  * look up, diagnose, retrieve, propose, verify, preserve) and then renders the
  * resulting Safeguard Record. A transient dependency failure is surfaced as a
  * retryable condition with no verdict recorded, never as a completed
- * investigation.
+ * investigation. It is mounted only in the admin console, because a submission
+ * writes a Safeguard Record and therefore requires the administrator token.
  */
 
 const STAGES = [
@@ -258,8 +259,12 @@ export function SubmitIncidentForm({ sample }: { sample?: string }) {
               {error.error === "unauthorized" ? (
                 <>
                   {" "}
-                  Enter the administrator token in the header (the{" "}
-                  <span className="mono">Admin</span> control) and try again.
+                  Your administrator session is missing or no longer valid. Sign
+                  in again from the{" "}
+                  <Link href="/admin" className="link-quiet">
+                    admin console
+                  </Link>{" "}
+                  and retry.
                 </>
               ) : null}
               {error.error === "admin_disabled" ? (

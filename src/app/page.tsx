@@ -1,17 +1,10 @@
 import Link from "next/link";
 import { getOverview } from "@/lib/service";
-import { SubmitIncidentForm } from "@/components/submit-incident-form";
-import { Pill } from "@/components/ui";
+import { Notice, Pill } from "@/components/ui";
 import { ChainDiagram } from "@/components/chain-diagram";
 import { HeroVisual } from "@/components/hero-visual";
 
 export const dynamic = "force-dynamic";
-
-const SAMPLE = `2026-03-01T10:00:00Z ERROR checkout-service
-POST /v1/charge returned 503 Service Unavailable
-retrying (attempt 2/3)...
-2026-03-01T10:00:07Z WARN checkout-service charge status: unknown
-2026-03-01T10:00:08Z INFO agent "the charge completed successfully"`;
 
 const PRINCIPLES = [
   {
@@ -87,7 +80,28 @@ export default async function HomePage() {
             executed, and never interpolated into a command or a query.
           </p>
         </div>
-        <SubmitIncidentForm sample={SAMPLE} />
+        <div className="panel flex flex-col gap-4 p-6 md:flex-row md:items-center md:justify-between md:p-8">
+          <p className="max-w-prose text-[0.875rem] leading-relaxed text-paper-300">
+            Investigations write a Safeguard Record to Walrus Memory, so they are
+            performed by the operator from the admin console rather than by any
+            visitor.
+          </p>
+          <Link href="/admin" className="action primary shrink-0">
+            Operator sign-in
+          </Link>
+        </div>
+        <div className="mt-4">
+          <Notice tone="info" title="What a Safeguard Record contains">
+            Every record is a connected argument: the incident, the evidence with
+            its verbatim spans, the hypotheses, the proposed safeguard, how far it
+            is verified, and the memory it was preserved as. Browse the published
+            records from the{" "}
+            <Link href="/records" className="link-quiet">
+              Safeguard Records
+            </Link>{" "}
+            view.
+          </Notice>
+        </div>
       </section>
 
       {/* ---- how it works -------------------------------------------- */}
