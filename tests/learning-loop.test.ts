@@ -478,6 +478,28 @@ describe("learning loop view model", () => {
     expect(applied?.originalIncidentId).toBe(first.incidentId);
   });
 
+  it("traces an application written before the origin field existed", async () => {
+    // The production failure mode: a record persisted by an earlier build has an
+    // application with no `originalIncidentId`, and it recalled a safeguard that
+    // a *different* record learned. The view must still resolve the origin from
+    // the learning record, or the retrieval entry is untraceable.
+    const d = deps();
+    const first = await runSubmissionPipeline({ text: FIRST }, d);
+    const second = await runSubmissionPipeline({ text: SECOND }, d);
+
+    const legacySecond = {
+      ...second,
+      safeguardApplications: (second.safeguardApplications ?? []).map((a) => {
+        const { originalIncidentId: _drop, ...rest } = a;
+        return rest;
+      }),
+    };
+    const loop = buildLearningLoop([first, legacySecond]);
+
+    const applied = loop.retrieval.find((r) => r.applicable && r.changedBehaviour);
+    expect(applied?.originalIncidentId).toBe(first.incidentId);
+  });
+
   it("keeps test fixtures separate from production evidence", async () => {
     const d = deps();
     await runSubmissionPipeline(
