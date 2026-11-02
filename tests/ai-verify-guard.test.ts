@@ -34,6 +34,7 @@ function config(token: string | null): AftermathConfig {
     },
     publicReadGlobalLimit: { read: 1200, heavy: 600, status: 600 },
     rateLimitSalt: "test-salt",
+    rateLimitRetentionMs: 120_000,
     bodyLimitBytes: 65_536,
     dbPath: ":memory:",
     harnessDir: "/tmp/h",

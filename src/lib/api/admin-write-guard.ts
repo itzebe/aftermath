@@ -71,6 +71,9 @@ export function adminWriteLimiter(
     resolveStore: buildStore,
     globalMaxRequests: policy.maxRequests * ADMIN_GLOBAL_BACKSTOP_FACTOR,
     globalScope: endpoint,
+    // Retention is derived from the configured windows so the sweep can never
+    // drop a counter whose window is still active (F5).
+    retentionMs: config.rateLimitRetentionMs,
   });
 }
 

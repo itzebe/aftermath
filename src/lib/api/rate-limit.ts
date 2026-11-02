@@ -66,11 +66,15 @@ export interface RateLimitStore {
 }
 
 /**
- * How long a counter row is retained after its window begins. Only genuinely
- * stale rows are removed, so the sweep can never drop a window that any bucket
- * could still be counting within, whatever its configured window length.
+ * Fallback counter retention, used only when a caller does not supply one.
+ *
+ * The real value is derived from the configured windows (see
+ * `AftermathConfig.rateLimitRetentionMs`) and passed to the limiter, so the
+ * sweep never drops a window that is still counting. This constant is a
+ * conservative default for a bare unit-test limiter; production always supplies
+ * the derived value.
  */
-const COUNTER_RETENTION_MS = 10 * 60_000;
+const DEFAULT_COUNTER_RETENTION_MS = 10 * 60_000;
 
 /** Postgres/SQLite implementation over the shared `Db` façade. */
 export class DbRateLimitStore implements RateLimitStore {
@@ -220,6 +224,13 @@ export interface SharedRateLimiterOptions {
    * on something the caller cannot influence.
    */
   globalScope?: string;
+  /**
+   * How long a counter row is kept after its window begins before the sweep may
+   * drop it. Must exceed the longest configured window for any bucket sharing
+   * the store, so the sweep can never delete an active counter. Defaults to
+   * {@link DEFAULT_COUNTER_RETENTION_MS} when omitted.
+   */
+  retentionMs?: number;
   /** Injectable clock for deterministic tests. */
   now?: () => number;
 }
@@ -252,6 +263,7 @@ export class SharedRateLimiter {
   private readonly now: () => number;
   private readonly globalMaxRequests?: number;
   private readonly globalScope?: string;
+  private readonly retentionMs: number;
   /** Throttles the opportunistic sweep so it runs on a small fraction of hits. */
   private nextSweepAt = 0;
   private static readonly SWEEP_INTERVAL_MS = 60_000;
@@ -260,6 +272,7 @@ export class SharedRateLimiter {
     this.now = options.now ?? (() => Date.now());
     this.globalMaxRequests = options.globalMaxRequests;
     this.globalScope = options.globalScope;
+    this.retentionMs = options.retentionMs ?? DEFAULT_COUNTER_RETENTION_MS;
   }
 
   /**
@@ -273,7 +286,7 @@ export class SharedRateLimiter {
     if (!sweep || now < this.nextSweepAt) return;
     this.nextSweepAt = now + SharedRateLimiter.SWEEP_INTERVAL_MS;
     void Promise.resolve()
-      .then(() => sweep.call(this.options.store, now - COUNTER_RETENTION_MS))
+      .then(() => sweep.call(this.options.store, now - this.retentionMs))
       .catch(() => {});
   }
 
@@ -354,6 +367,12 @@ export interface LimiterRegistryOptions {
   globalMaxRequests?: number;
   /** Stable bucket id for the global counter key. */
   globalScope?: string;
+  /**
+   * Counter retention, passed through to the limiter. It must exceed the longest
+   * configured window for any bucket sharing the store; the caller derives it
+   * from config so the sweep can never drop an active counter.
+   */
+  retentionMs?: number;
 }
 
 /**
@@ -385,6 +404,7 @@ export function limiterFor(
         ? { globalMaxRequests: options.globalMaxRequests }
         : {}),
       ...(options.globalScope !== undefined ? { globalScope: options.globalScope } : {}),
+      ...(options.retentionMs !== undefined ? { retentionMs: options.retentionMs } : {}),
       ...(now ? { now } : {}),
     });
     limiters.set(key, limiter);

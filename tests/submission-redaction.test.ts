@@ -129,6 +129,40 @@ describe("F1 — a submitted credential is never persisted", () => {
   });
 });
 
+describe("F1 — an idempotency key is redacted without breaking dedup", () => {
+  it("redacts a secret-bearing idempotency key but keeps the record identity", async () => {
+    const { submissionId } = await import("@/lib/engines/submission-pipeline");
+    const rawKey = "idem-A1b2A1b2A1b2A1b2A1b2A1b2A1b2A1b2";
+    const text = "2026-03-05T00:00:00Z ERROR svc returned 500";
+
+    const res = await submitPOST(
+      jsonReq(
+        "http://test/api/incidents/submit",
+        { text, idempotencyKey: rawKey },
+        IP.submit,
+      ),
+    );
+    expect(res.status).toBe(200);
+    const { record } = (await res.json()) as {
+      record: { recordId: string; submission: { idempotencyKey?: string } };
+    };
+
+    // The served idempotency key is redacted; the raw value is gone.
+    expect(record.submission.idempotencyKey).toBeDefined();
+    expect(record.submission.idempotencyKey).not.toContain(rawKey);
+    expect(record.submission.idempotencyKey).toContain("[possible-secret]");
+
+    // The stored payload is redacted too.
+    const { runtime } = await import("@/lib/runtime");
+    const stored = await runtime().store.getSafeguardRecord(record.recordId);
+    expect(stored?.submission.idempotencyKey).not.toContain(rawKey);
+
+    // Identity is derived from the *raw* submission, so it is unchanged: the
+    // redaction never alters which record this is.
+    expect(record.recordId).toBe(submissionId({ text, idempotencyKey: rawKey }));
+  });
+});
+
 describe("F1 — a historical record cannot expose a credential", () => {
   it("redacts on read even when the stored payload still holds the raw value", async () => {
     const { runtime } = await import("@/lib/runtime");

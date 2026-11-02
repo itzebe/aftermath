@@ -55,6 +55,9 @@ export function publicReadLimiter(
     // forwarding header cannot mint an unlimited number of per-client buckets.
     globalMaxRequests: config.publicReadGlobalLimit[BUCKET_POLICY[bucket]],
     globalScope: bucket,
+    // Retention is derived from the configured windows so the sweep can never
+    // drop a counter whose window is still active (F5).
+    retentionMs: config.rateLimitRetentionMs,
   });
 }
 

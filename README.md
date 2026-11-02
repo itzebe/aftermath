@@ -67,10 +67,17 @@ Incident -> Evidence -> Hypothesis -> Safeguard -> Verification -> Memory
 ```
 
 - **Incident** — the submitted text, treated strictly as data: parsed with
-  regular expressions, never executed. Credential-shaped strings (API keys,
-  tokens, `password=`/`secret:` assignments, connection strings, private keys)
-  are redacted before the submission is persisted and again before any record is
-  served, so a pasted secret never reaches durable storage or a client.
+  regular expressions, never executed. Credential-shaped strings are redacted
+  before the submission is persisted and again before any record is served. The
+  redaction covers recognisable provider formats (API keys, JWTs, `Basic`/Bearer
+  credentials, connection strings, private-key blocks), labelled assignments
+  (`password=`/`secret:`) and their loose forms (`password hunter2secret`), and
+  unlabelled high-entropy tokens (marked `[possible-secret]` when uncertain).
+  Identifiers the investigation needs — Sui digests, labelled hashes, labelled
+  UUIDs, slugs — are deliberately preserved. It is **not** perfect detection: a
+  short, low-entropy secret pasted with no label and no distinguishing format is
+  indistinguishable from ordinary prose. The boundary is stated in
+  `docs/SUBMISSION.md` and pinned by tests.
 - **Evidence** — observed facts (each with its verbatim span), confirmed facts,
   hypotheses, unknowns, and next checks, kept strictly separate. A submission is
   material, not proof, so with no connected source the assessment is `UNKNOWN`.

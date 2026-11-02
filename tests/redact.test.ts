@@ -108,6 +108,114 @@ describe("redact", () => {
   });
 });
 
+/**
+ * The exact examples the adversarial review showed were *not* redacted before.
+ * Each is a real gap that was closed; a regression here would re-open it.
+ */
+describe("redact — previously leaked forms (F1)", () => {
+  const PASSWORD = "hunter2secret";
+  const JWT =
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9." +
+    "eyJzdWIiOiIxMjM0NTY3ODkwIn0." +
+    "SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+  const BASIC = "dXNlcjpwYXNzd29yZA==";
+
+  it("redacts a bare password-shaped word with no key context", () => {
+    expect(redact(PASSWORD)).toBe("[possible-secret]");
+  });
+
+  it("redacts `password hunter2secret` (space-separated, no `=`)", () => {
+    const out = redact(`password ${PASSWORD}`);
+    expect(out).not.toContain(PASSWORD);
+    expect(out).toBe("password [redacted-secret]");
+  });
+
+  it("redacts `secret hunter2secret`", () => {
+    const out = redact(`secret ${PASSWORD}`);
+    expect(out).not.toContain(PASSWORD);
+    expect(out).toBe("secret [redacted-secret]");
+  });
+
+  it("redacts `token hunter2secret`", () => {
+    expect(redact(`token ${PASSWORD}`)).not.toContain(PASSWORD);
+  });
+
+  it("redacts the copula form `the password is hunter2secret`", () => {
+    const out = redact(`the password is ${PASSWORD}`);
+    expect(out).not.toContain(PASSWORD);
+    expect(out).toBe("the password is [redacted-secret]");
+  });
+
+  it("redacts HTTP Basic credentials", () => {
+    const out = redact(`Authorization: Basic ${BASIC}`);
+    expect(out).not.toContain(BASIC);
+    expect(out).toContain("[redacted-basic-auth]");
+  });
+
+  it("redacts a bare JWT", () => {
+    const out = redact(`session ${JWT}`);
+    expect(out).not.toContain(JWT);
+    expect(out).toBe("session [redacted-jwt]");
+  });
+
+  it("leaves the prose `the password is required` readable", () => {
+    // The copula form must not fire on a non-secret complement.
+    const prose = "the password is required before the request proceeds";
+    expect(redact(prose)).toBe(prose);
+  });
+
+  it("leaves `Basic authentication` readable (no credential-shaped payload)", () => {
+    const prose = "Basic authentication is enabled on this endpoint";
+    expect(redact(prose)).toBe(prose);
+  });
+});
+
+/**
+ * Evidence the product must preserve: identifiers and hashes are not secrets.
+ * Over-redaction here would corrupt the record the investigation reasons over.
+ */
+describe("redact — evidence preserved (F1)", () => {
+  it("keeps a labelled hash/digest intact", () => {
+    const hash = "a".repeat(64);
+    expect(redact(`sha256 hash ${hash}`)).toContain(hash);
+    expect(redact(`tx hash 0x${"1".repeat(64)}`)).toContain("1".repeat(64));
+  });
+
+  it("keeps a UUID the surrounding text labels as an identifier", () => {
+    const uuid = "550e8400-e29b-41d4-a716-446655440000";
+    expect(redact(`request id ${uuid}`)).toContain(uuid);
+    expect(redact(`trace: ${uuid}`)).toContain(uuid);
+  });
+
+  it("keeps a Sui transaction digest (base58, 43-44 chars)", () => {
+    // The digest is the reference Tatum looks up; redacting it would break
+    // finance verification, so it is a deliberate exception.
+    const digest = "5Kd3Nb9XoPqRsTuVwXyZ1a2b3c4d5e6f7g8h9iJkLmN";
+    expect(redact(`digest ${digest}`)).toContain(digest);
+  });
+
+  it("keeps ordinary identifiers and slugs", () => {
+    for (const value of [
+      "aftermath-7tij",
+      "checkout-service",
+      "v1.2.3",
+      "deadbeef",
+      "0x1a2b3c4d5e6f",
+    ]) {
+      expect(redact(`the ${value} endpoint`)).toContain(value);
+    }
+  });
+
+  it("still redacts a bare 64-hex value (key-or-hash is ambiguous)", () => {
+    expect(redact(`tx 0x${"1".repeat(64)}`)).toBe("tx [redacted-hex-key]");
+  });
+
+  it("still redacts a bare UUID (it is also a provider-key shape)", () => {
+    // The ambiguity is resolved conservatively and documented.
+    expect(redact("550e8400-e29b-41d4-a716-446655440000")).toBe("[redacted-uuid]");
+  });
+});
+
 describe("redactSubmission", () => {
   it("redacts every free-text field and preserves the rest", () => {
     const sub = {
@@ -130,6 +238,19 @@ describe("redactSubmission", () => {
       text: "key ghp_" + "C".repeat(36),
     });
     expect(redactSubmission(redacted)).toEqual(redacted);
+  });
+
+  it("redacts an idempotency key that carries a credential", () => {
+    const sub = {
+      text: "routine incident",
+      idempotencyKey: `idem-${"A1b2".repeat(8)}`,
+    };
+    const out = redactSubmission(sub);
+    expect(out.idempotencyKey).not.toContain("A1b2".repeat(8));
+    expect(out.idempotencyKey).toContain("[possible-secret]");
+    // A benign key is preserved so a caller's own idempotency still round-trips.
+    const benign = redactSubmission({ text: "x", idempotencyKey: "retry-42" });
+    expect(benign.idempotencyKey).toBe("retry-42");
   });
 });
 

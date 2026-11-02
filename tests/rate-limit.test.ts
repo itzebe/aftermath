@@ -260,6 +260,89 @@ describe("bounded state (cleanup)", () => {
 });
 
 /**
+ * Counter retention (F5).
+ *
+ * A fixed retention shorter than a configurable window let the sweep delete a
+ * counter whose window was still active, resetting it mid-flight and handing a
+ * caller a fresh allowance. Retention is now derived from the longest
+ * configured window, and these pin that property against both stores.
+ */
+describe("counter retention (F5)", () => {
+  it("derives retention strictly greater than the longest configured window", async () => {
+    const { loadConfig } = await import("@/lib/config");
+    const original = process.env.AFTERMATH_RL_PUBLIC_READ_WINDOW_MS;
+    try {
+      // A window far longer than the old fixed 10-minute retention.
+      process.env.AFTERMATH_RL_PUBLIC_READ_WINDOW_MS = String(45 * 60_000);
+      const config = loadConfig();
+      expect(config.publicReadLimit.read.windowMs).toBe(45 * 60_000);
+      expect(config.rateLimitRetentionMs).toBeGreaterThan(45 * 60_000);
+    } finally {
+      if (original === undefined) delete process.env.AFTERMATH_RL_PUBLIC_READ_WINDOW_MS;
+      else process.env.AFTERMATH_RL_PUBLIC_READ_WINDOW_MS = original;
+    }
+  });
+
+  it("does not delete an active long window when swept with the derived retention", async () => {
+    const { store, cleanup } = await sqliteStore();
+    try {
+      const windowMs = 30 * 60_000; // 30 minutes, three times the old retention
+      const now = 1_700_000_000_000;
+      // The window began 20 minutes ago — still active for a 30-minute window.
+      const windowStart = now - 20 * 60_000;
+      const key = "long-window-client";
+      await store.hit(key, windowStart);
+      await store.hit(key, windowStart);
+
+      // A sweep using the derived retention (2 * windowMs = 60 min) must leave
+      // the row: its window began well inside the retention horizon.
+      await store.sweep(now - 2 * windowMs);
+      expect(await store.hit(key, windowStart)).toBe(3);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it("demonstrates the defect it fixes: a 10-minute cutoff resets a 30-minute window", async () => {
+    const { store, cleanup } = await sqliteStore();
+    try {
+      const now = 1_700_000_000_000;
+      // Same active 30-minute window, begun 20 minutes ago.
+      const windowStart = now - 20 * 60_000;
+      const key = "victim";
+      await store.hit(key, windowStart);
+      await store.hit(key, windowStart);
+      // The old fixed retention: the row's window began >10 min ago, so the
+      // sweep drops it and the next hit starts the window over.
+      await store.sweep(now - 10 * 60_000);
+      expect(await store.hit(key, windowStart)).toBe(1);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it("uses the limiter's configured retention for the sweep cutoff", async () => {
+    const sweeps: number[] = [];
+    const store: RateLimitStore = {
+      hit: () => Promise.resolve(1),
+      sweep: (cutoff) => {
+        sweeps.push(cutoff);
+        return Promise.resolve();
+      },
+    };
+    const limiter = new SharedRateLimiter({
+      policy: POLICY,
+      store,
+      fallback: new FixedWindowRateLimiter(POLICY),
+      retentionMs: 30 * 60_000,
+      now: at(10_000_000),
+    });
+    await limiter.check("k");
+    expect(sweeps[0]).toBe(10_000_000 - 30 * 60_000);
+  });
+});
+
+/**
  * The same limiter over real PostgreSQL.
  *
  * The SQLite suite proves the statement's logic; this proves the *Postgres*
@@ -318,5 +401,34 @@ maybePg("DbRateLimitStore over PostgreSQL", () => {
     // The stale row is gone (its window is re-created fresh), the live one stays.
     expect(await store.hit(stale, now - 60 * 60_000)).toBe(1);
     expect(await store.hit(live, windowStart)).toBe(2);
+  });
+
+  it("keeps an active long window when swept with the derived retention (F5)", async () => {
+    const store = new DbRateLimitStore(db);
+    const key = uniqueKey();
+    const windowMs = 30 * 60_000;
+    const now = Date.now();
+    // The window began 20 minutes ago — still active for a 30-minute window.
+    const windowStart = now - 20 * 60_000;
+    await store.hit(key, windowStart);
+    await store.hit(key, windowStart);
+    // The derived retention for a 30-minute window is 60 minutes; the row is
+    // newer than that cutoff, so the sweep must not touch it.
+    await store.sweep(now - 2 * windowMs);
+    expect(await store.hit(key, windowStart)).toBe(3);
+  });
+
+  it("resets an active long window under the old fixed 10-minute cutoff (F5)", async () => {
+    const store = new DbRateLimitStore(db);
+    const key = uniqueKey();
+    const now = Date.now();
+    // Same active 30-minute window, begun 20 minutes ago.
+    const windowStart = now - 20 * 60_000;
+    await store.hit(key, windowStart);
+    await store.hit(key, windowStart);
+    // A cutoff of now - 10min is *after* the window start, so the still-active
+    // row is deleted and the next hit starts the window over — the defect.
+    await store.sweep(now - 10 * 60_000);
+    expect(await store.hit(key, windowStart)).toBe(1);
   });
 });
