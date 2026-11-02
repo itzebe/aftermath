@@ -209,7 +209,12 @@ test("a rate-limited read endpoint degrades gracefully, not into a crash", async
   const pageErrors: string[] = [];
   page.on("pageerror", (e) => pageErrors.push(e.message));
   await page.goto("/incidents");
-  await expect(page.getByText(/rate_limited/i)).toBeVisible();
+  // The message must also be announced: it is an async status change, so it has
+  // to live in a live region, not just be painted (WCAG 2.2 SC 4.1.3). Filter by
+  // text because Next's route announcer is also `role="alert"`.
+  await expect(
+    page.getByRole("alert").filter({ hasText: /rate_limited/i }),
+  ).toBeVisible();
   await expect(page.getByText(/client-side exception/i)).toHaveCount(0);
   expect(pageErrors).toEqual([]);
 });

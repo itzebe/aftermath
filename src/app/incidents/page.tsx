@@ -78,7 +78,7 @@ export default function IncidentsPage() {
       <div>
         <PageHeader eyebrow="System" title="Incident Explorer" />
         <Panel>
-          <p className="text-[0.875rem] text-signal-bad">{error}</p>
+          <p role="alert" className="text-[0.875rem] text-signal-bad">{error}</p>
         </Panel>
       </div>
     );

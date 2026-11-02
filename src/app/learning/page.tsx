@@ -54,7 +54,7 @@ export default function LearningPage() {
       <div>
         <PageHeader eyebrow="Learning loop" title="Learning Loop" />
         <Panel>
-          <p className="text-[0.875rem] text-signal-bad">{error}</p>
+          <p role="alert" className="text-[0.875rem] text-signal-bad">{error}</p>
         </Panel>
       </div>
     );

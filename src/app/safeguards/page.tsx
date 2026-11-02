@@ -54,7 +54,7 @@ export default function SafeguardsPage() {
       <div>
         <PageHeader eyebrow="System" title="Safeguards" />
         <Panel>
-          <p className="text-[0.875rem] text-signal-bad">{error}</p>
+          <p role="alert" className="text-[0.875rem] text-signal-bad">{error}</p>
         </Panel>
       </div>
     );
