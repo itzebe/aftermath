@@ -94,7 +94,7 @@ PASS  Tatum Sui adapter configured      Tatum Sui Mainnet gRPC
 PASS  Tatum Sui gateway healthy         reachable and authenticated
 PASS  >= 10 completed Mainnet writes    167 completed
 PASS  >= 10 recall-verified writes      166 recall-verified
-FAIL  recall query returns memories     HTTP 401 (needs the operator token)
+PASS  recall query returns memories     5 result(s) from memwal-mainnet (live=true)
 PASS  learning retrieval entries traceable
 PASS  memories applied counter agrees
 PASS  influenced investigations have a behaviour change
@@ -102,9 +102,12 @@ PASS  no uninfluential memory counted
 PASS  no behaviour change without a memory-caused effect
 PASS  persisted memories are recall-verified
 
-27 of 28 checks passed. 1 failed: the recall-query check requires
-AFTERMATH_ADMIN_TOKEN, which this environment does not hold. It is reported as a
-failure with an explicit reason, not silently skipped.
+All 28 checks passed against https://aftermath-7tij.vercel.app.
+
+The recall-query check is administrator-only. It passes when
+AFTERMATH_ADMIN_TOKEN is set (as it was for this run). Without the token the
+check is reported as an explicit failure, never silently skipped — a read-only
+run without the token scores 27/28.
 ```
 
 **Suite results (fresh):**
@@ -116,7 +119,7 @@ failure with an explicit reason, not silently skipped.
 | `next build` | pass |
 | `vitest run` | **587 passed, 40 skipped** |
 | `playwright test` | **16 passed, 0 failed** (was 4 failed / 11 passed) |
-| `verify:prod` | 27/28 read-only |
+| `verify:prod` | **28/28** (with `AFTERMATH_ADMIN_TOKEN`) |
 
 The four previously-failing E2E tests are now fixed, not weakened: the isolated
 database is seeded by a real scenario run, and the operator tests sign in on
@@ -259,8 +262,9 @@ final links.
 
 1. **No fresh narrated demo video.** No TTS/microphone in this environment; the
    Mission 9 recording is silent with burned-in captions.
-2. **`verify:prod` is 27/28 read-only.** The recall-query check needs
-   `AFTERMATH_ADMIN_TOKEN`; it is reported as a failure, not skipped.
+2. **`verify:prod` needs `AFTERMATH_ADMIN_TOKEN` for its recall check.** With
+   the token, 28/28 pass; without it, that one check is reported as an explicit
+   failure rather than skipped (27/28).
 3. **Medium article not re-verified.** Medium blocks this environment's IP
    (HTTP 403). The URL is provided by the operator; it is neither confirmed nor
    contradicted here.

@@ -324,9 +324,9 @@ admin token; it is not needed for any of the steps above.
   general-purpose platforms.
 - The evaluation metrics describe the controlled scenarios, not production
   reliability.
-- The standalone `npm run verify:prod` passes **27/28** read-only; the
-  recall-query check needs the operator token and is reported as a failure with
-  an explicit reason rather than silently skipped.
+- The standalone `npm run verify:prod` passes **28/28** with the operator token
+  set. Without it, the recall-query check is reported as a failure with an
+  explicit reason rather than silently skipped.
 
 ---
 
