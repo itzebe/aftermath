@@ -179,7 +179,7 @@ a dependency being briefly unavailable is never mistaken for a verified failure.
   memory-retrieval relevance. These describe the controlled scenarios, not
   production reliability.
 - Checks: `typecheck` clean, `lint` clean, unit suite **587 passed / 40
-  skipped**, `verify:prod` **27/28 read-only** (the recall-query check needs the operator token; it passes when run by the operator), live `verify:ai` **`ran=true`**.
+  skipped**, `verify:prod` **28/28 passed** (with `AFTERMATH_ADMIN_TOKEN` set; without it the recall-query check is reported as a failure, 27/28), live `verify:ai` **`ran=true`**.
 
 **Demo URL:** <https://aftermath-7tij.vercel.app/>
 **Repository:** <https://github.com/itzebe/aftermath>
@@ -271,7 +271,7 @@ completed but whose follow-up recall was rate-limited is not silently promoted â
 **the 167 completed writes are not all recall-verified.**
 
 The standalone check `npm run verify:prod` includes the memory checks and passes
-**27/28 read-only**; the recall-query check requires `AFTERMATH_ADMIN_TOKEN` and is reported as a failure with an explicit reason rather than silently skipped. `verify:ai` is read-only.
+**28/28** with `AFTERMATH_ADMIN_TOKEN` set. Without the token, the recall-query check requires it and is reported as a failure with an explicit reason rather than silently skipped (27/28). `verify:ai` is read-only.
 
 ## Learning integrity â€” a failure in our own metrics, corrected
 
@@ -402,8 +402,8 @@ npm run typecheck     # clean
 npm run lint          # clean
 npm test              # hermetic unit + integration suite
 npm run verify:prod   # 28 checks against the deployed application
-                      # (27 pass read-only; the recall-query check needs
-                      #  AFTERMATH_ADMIN_TOKEN and is reported honestly)
+                      # (all 28 pass with AFTERMATH_ADMIN_TOKEN set; without it
+                      #  the recall-query check reports an explicit failure)
 AFTERMATH_AI_VERIFY_TOKEN=<token> npm run verify:ai   # read-only live AI check
 ```
 
