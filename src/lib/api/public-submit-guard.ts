@@ -5,6 +5,7 @@ import { clientIpKey } from "@/lib/api/verify-guard";
 import {
   DbRateLimitStore,
   limiterFor,
+  rateLimitKey,
   unavailableRateLimitStore,
   type RateLimitStore,
   type SharedRateLimiter,
@@ -179,7 +180,15 @@ export async function guardIncidentSubmission(
     if (admin.ok) return { ok: true, anonymous: false };
   }
 
-  const verdict = await publicSubmitLimiter(config).check(clientIpKey(request));
+  const limiter = publicSubmitLimiter(config);
+  // Hash the client address before it reaches the persisted counter table, so
+  // no raw caller address is written to the shared database.
+  const key = rateLimitKey(
+    limiter.bucketId ?? "public:incidents/submit",
+    clientIpKey(request),
+    config.rateLimitSalt,
+  );
+  const verdict = await limiter.check(key);
   if (!verdict.allowed) {
     return {
       ok: false,

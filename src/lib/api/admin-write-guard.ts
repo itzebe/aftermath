@@ -9,6 +9,7 @@ import {
 import {
   DbRateLimitStore,
   limiterFor,
+  rateLimitKey,
   unavailableRateLimitStore,
   type RateLimitStore,
   type SharedRateLimiter,
@@ -124,7 +125,13 @@ export async function guardAdminWrite(
   }
 
   if (options.limiter && options.rateLimit !== false) {
-    const verdict = await options.limiter.check(clientIpKey(request));
+    // Hash the client address before it reaches the counter table, exactly as
+    // the public-read guard does. The counter key is persisted, so a raw `ip:`
+    // key would put every caller's address at rest in the shared database; the
+    // salt keeps the mapping from being reversible by anyone who reads it.
+    const bucket = options.limiter.bucketId ?? "admin";
+    const key = rateLimitKey(bucket, clientIpKey(request), config.rateLimitSalt);
+    const verdict = await options.limiter.check(key);
     if (!verdict.allowed) {
       return {
         ok: false,
