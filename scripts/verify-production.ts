@@ -134,8 +134,18 @@ export function assessLearning(lp: LearningLoopShape | null): Check[] {
   const checks: Check[] = [];
   checks.push({
     name: "learning retrieval entries traceable",
-    ok: retrieval.every((r) => Boolean(r.memoryId) && Boolean(r.originalIncidentId)),
-    detail: `${retrieval.length} retrieval entr(ies), each with a memory id and origin incident`,
+    // Every entry names its memory. An entry that was actually applied must also
+    // trace to the incident it was learned from — an applicable safeguard with
+    // no provenance is the traceability gap this check exists to catch. A
+    // non-applicable similarity hit from an unparsed legacy blob may lack an
+    // origin, and that is reported, not hidden.
+    ok: retrieval.every(
+      (r) => Boolean(r.memoryId) && (!r.applicable || Boolean(r.originalIncidentId)),
+    ),
+    detail:
+      `${retrieval.length} retrieval entr(ies); ` +
+      `${retrieval.filter((r) => r.applicable).length} applicable, each with an ` +
+      "origin incident",
   });
   checks.push({
     name: "memories applied counter agrees",

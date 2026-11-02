@@ -24,6 +24,7 @@ function config(adminToken: string | null, limits?: AftermathConfig["adminRateLi
     ai: { provider: "none", model: "openai/gpt-oss-120b", apiKey: null, timeoutMs: 20000, maxOutputTokens: 8192 },
     aiVerify: { token: null, maxRequests: 3, windowMs: 60_000 },
     adminToken,
+    publicSubmission: { enabled: false },
     adminRateLimit: limits ?? {
       "incidents/submit": { maxRequests: 5, windowMs: 60_000 },
       "scenarios/run": { maxRequests: 1, windowMs: 60_000 },

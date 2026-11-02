@@ -783,6 +783,15 @@ export const SafeguardApplicationSchema = z.object({
   contributedRule: z.string().max(4000).optional(),
   /** The verification requirement the memory added, when it was applied. */
   addedVerification: z.string().max(1000).optional(),
+  /**
+   * The incident the recalled memory originated from.
+   *
+   * It is carried on the application itself so a retrieval entry stays
+   * traceable to its source incident even when the memory was learned in an
+   * earlier record than the one that recalled it — the earlier record is not in
+   * hand when a later investigation builds its retrieval list.
+   */
+  originalIncidentId: z.string().max(200).optional(),
   /** Whether applying it changed the investigation's decision or requirements. */
   changedBehaviour: z.boolean(),
   /** Whether the memory is authoritative (only these may be enforced). */

@@ -31,7 +31,7 @@ import {
   type IncidentInputDraft,
   type Investigation,
 } from "@/lib/schemas";
-import { redactSubmission } from "@/lib/util/redact";
+import { redactServed, redactSubmission } from "@/lib/util/redact";
 
 /** Cap how many of each fact kind we keep, so a huge paste stays readable. */
 const MAX_FACTS_PER_KIND = 6;
@@ -977,7 +977,14 @@ export function investigateSubmission(input: {
     hasActual,
   });
 
-  const aiAnalysis = input.aiAnalysis ?? null;
+  // The AI reading is derived from the material, but its text is *model-supplied*
+  // free text: a model can echo a credential that appeared in a span, invent one,
+  // or reproduce one from a prompt. Redact it at the same boundary as the
+  // submission so the persisted record and the returned record are clean without
+  // relying on the read path. `redactServed` is key-aware, so the analysis's own
+  // enum and boolean fields (availability, ran, grounded, injectionDetected)
+  // survive while every free-text value is stripped. `redactServed` is idempotent.
+  const aiAnalysis = input.aiAnalysis ? redactServed(input.aiAnalysis) : null;
 
   return InvestigationSchema.parse({
     // The method reflects reality: `model` only when a model actually ran and

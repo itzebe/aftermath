@@ -459,6 +459,25 @@ describe("learning loop view model", () => {
     expect(loop.behaviourChanges.some((b) => b.changed)).toBe(true);
   });
 
+  it("traces every applicable retrieval entry to an origin incident", async () => {
+    // The recall happens in a later record than the one that learned the
+    // safeguard, so the origin can only be resolved if the application (or the
+    // cross-record index) carries it. This pins that provenance is complete.
+    const d = deps();
+    const first = await runSubmissionPipeline({ text: FIRST }, d);
+    await runSubmissionPipeline({ text: SECOND }, d);
+    const loop = buildLearningLoop(await d.store.listSafeguardRecords());
+
+    const applicable = loop.retrieval.filter((r) => r.applicable);
+    expect(applicable.length).toBeGreaterThan(0);
+    for (const r of applicable) {
+      expect(r.originalIncidentId).toBeTruthy();
+    }
+    // The applied safeguard traces back to the first incident, not the second.
+    const applied = applicable.find((r) => r.changedBehaviour);
+    expect(applied?.originalIncidentId).toBe(first.incidentId);
+  });
+
   it("keeps test fixtures separate from production evidence", async () => {
     const d = deps();
     await runSubmissionPipeline(

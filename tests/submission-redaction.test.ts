@@ -222,6 +222,42 @@ describe("F1 — a historical record cannot expose a credential", () => {
   });
 });
 
+describe("F1 — the submit response itself is redacted", () => {
+  it("returns a redacted record even for the operator's own submission", async () => {
+    const res = await submitPOST(
+      jsonReq(
+        "http://test/api/incidents/submit",
+        {
+          text: "2026-03-07T00:00:00Z ERROR svc returned 503",
+          expectedBehavior: `password ${STRUCTURED_SECRETS.password}`,
+        },
+        "198.51.100.41",
+      ),
+    );
+    expect(res.status).toBe(200);
+    const blob = JSON.stringify(await res.json());
+    expect(blob).not.toContain(STRUCTURED_SECRETS.password);
+  });
+});
+
+describe("public submission stays admin-gated when safety controls are absent", () => {
+  it("rejects an anonymous submission when public submission is disabled", async () => {
+    // The test environment has no live Walrus backend and no shared index, and
+    // the feature flag is unset, so anonymous submission must fail closed.
+    const res = await submitPOST(
+      new Request("http://test/api/incidents/submit", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-real-ip": "198.51.100.50" },
+        body: JSON.stringify({ text: "2026-03-08T00:00:00Z ERROR svc returned 500" }),
+      }),
+    );
+    expect(res.status).toBe(401);
+    const body = (await res.json()) as { error: string; record?: unknown };
+    expect(body.error).toBe("unauthorized");
+    expect(body.record).toBeUndefined();
+  });
+});
+
 describe("F2 — the public record routes are rate-limited", () => {
   it("caps /api/records and returns 429 past the limit", async () => {
     const ip = "198.51.100.20";

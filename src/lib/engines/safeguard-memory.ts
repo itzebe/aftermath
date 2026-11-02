@@ -596,6 +596,7 @@ export function evaluateSafeguardApplications(
         relevance,
         applicable,
         applicabilityBasis,
+        originalIncidentId: record.origin_incident_id,
         ...(applicable
           ? {
               contributedRule: record.corrective_rule,
@@ -624,6 +625,7 @@ export function evaluateSafeguardApplications(
           "match the recalled lesson."
         : "The recalled lesson does not share both the domain and the failure " +
           "pattern of this investigation, so it does not apply.",
+      ...(lesson?.incident_id ? { originalIncidentId: lesson.incident_id } : {}),
       ...(applicable && lesson ? { contributedRule: lesson.corrective_rule } : {}),
       changedBehaviour: false,
       authoritative: false,
