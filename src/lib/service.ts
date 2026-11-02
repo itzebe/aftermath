@@ -1,12 +1,15 @@
 import { runtime } from "@/lib/runtime";
 import { loadConfig, relayerNetwork } from "@/lib/config";
-import { maskSecret } from "@/lib/util/redact";
+import { maskSecret, redactServed, redactSubmission } from "@/lib/util/redact";
 import { runAllScenarios, type DemoRunResult } from "@/lib/demos/runner";
 import { runDemoBatch, type BatchResult } from "@/lib/demos/resumable-runner";
 import { evaluate, type EvaluationMetrics, type ScenarioOutcome } from "@/lib/engines/evaluation";
 import { runSubmissionPipeline, submissionId } from "@/lib/engines/submission-pipeline";
+import { buildLearningLoop, type LearningLoop } from "@/lib/engines/learning-loop";
 import { runAiInvestigation } from "@/lib/engines/ai-investigation";
 import { resolveModelClient, AiAnalysisCache } from "@/lib/adapters/model-factory";
+import { TtlCache } from "@/lib/api/cache";
+import type { BackendHealth, MemoryStatus } from "@/lib/adapters/memory";
 import type { AiAnalysis } from "@/lib/schemas";
 import type {
   IncidentInputDraft,
@@ -306,15 +309,64 @@ export async function getDemoProgress(): Promise<{
 }
 
 export async function getIncidents(limit = 200) {
-  return runtime().store.listIncidents(limit);
+  // Public read: the stored Incident carries `intendedOutcome`, which is derived
+  // from the untrusted `expectedBehavior`. Redact in depth at the boundary so a
+  // credential pasted into the submission cannot be served from here.
+  const incidents = await runtime().store.listIncidents(limit);
+  return redactServed(incidents);
 }
 
 export async function getRules() {
-  return runtime().store.listRules();
+  // Public read. Rules carry only derived, structured text, but redacting the
+  // boundary uniformly means a rule statement echoing submission prose cannot
+  // leak a credential either.
+  return redactServed(await runtime().store.listRules());
 }
 
-export async function getMemoryWrites(limit = 500) {
-  return runtime().store.listMemoryWrites(limit);
+export async function getMemoryWrites(limit = 200) {
+  // Public read. A receipt's `text` is the exact payload sent to the memory
+  // backend; redact it here so the ledger cannot echo a credential.
+  return redactServed(await runtime().store.listMemoryWrites(limit));
+}
+
+/**
+ * How long live Walrus availability/status results are reused.
+ *
+ * These are live upstream calls. A 10-second window means the memory page (and
+ * the overview) make at most one set of calls per window per instance rather
+ * than one per visitor, while a status change is still visible almost
+ * immediately. The maximum expected staleness is therefore ~10s on the
+ * availability and status fields. Only a *successful* call is cached: if the
+ * adapter throws, nothing is stored, so an upstream outage is reported rather
+ * than masked.
+ */
+const MEMORY_STATUS_TTL_MS = 10_000;
+
+/**
+ * The live memory backend health, cached for {@link MEMORY_STATUS_TTL_MS}.
+ *
+ * The returned objects are the adapter's own honest values — a degraded or
+ * unauthenticated status is cached as-is, never rewritten to a fabricated
+ * healthy one.
+ */
+export async function getMemoryStatus(): Promise<{
+  health: BackendHealth;
+  status: MemoryStatus;
+  cached: boolean;
+}> {
+  const rt = runtime();
+  const { value, cached } = await readCache.getOrLoad(
+    "memory-status",
+    MEMORY_STATUS_TTL_MS,
+    async () => {
+      const [health, status] = await Promise.all([
+        rt.memory.adapter.validateMemoryAvailability(),
+        rt.memory.adapter.status(),
+      ]);
+      return { health, status };
+    },
+  );
+  return { ...value, cached };
 }
 
 export async function getEvaluation(): Promise<EvaluationMetrics | null> {
@@ -340,9 +392,11 @@ export async function getLastRun(): Promise<DemoRunResult | null> {
 
 export async function resetAll(): Promise<void> {
   await runtime().store.reset();
-  // The overview aggregates the tables just cleared; drop the cache so the next
-  // read reflects the reset immediately rather than after the TTL.
+  // The overview and the cached read views aggregate the tables just cleared;
+  // drop the caches so the next read reflects the reset immediately rather than
+  // after the TTL.
   resetOverviewCache();
+  resetReadCaches();
 }
 
 /* ------------------------------------------------------------------ *
@@ -375,7 +429,7 @@ export async function submitIncident(
   await rt.durable.migrate();
   const config = loadConfig();
   const recordId = submissionId(submission);
-  return runSubmissionPipeline(submission, {
+  const record = await runSubmissionPipeline(submission, {
     resolveEvidence: (domain) => rt.resolveSubmissionEvidence(domain),
     memory: rt.memory.adapter,
     store: rt.store,
@@ -399,20 +453,98 @@ export async function submitIncident(
       return analysis;
     },
   });
+  // A new record changes the learning history and every derived view; drop the
+  // cached read views so the next read reflects it immediately rather than
+  // after the TTL.
+  readCache.clear();
+  return record;
 }
 
 export async function getSafeguardRecords(limit = 100): Promise<SafeguardRecord[]> {
-  return runtime().store.listSafeguardRecords(limit);
+  const records = await runtime().store.listSafeguardRecords(limit);
+  return records.map(withRedactedRecord);
 }
 
 export async function getSafeguardRecord(
   recordId: string,
 ): Promise<SafeguardRecord | null> {
-  return runtime().store.getSafeguardRecord(recordId);
+  const record = await runtime().store.getSafeguardRecord(recordId);
+  return record ? withRedactedRecord(record) : null;
+}
+
+/**
+ * Redact a record at the read boundary, in depth.
+ *
+ * The submission field is redacted on its own terms (it holds the raw pasted
+ * material). The rest of the record is deep-redacted with {@link redactServed},
+ * which strips credential-shaped strings from every free-text value while
+ * leaving identity, reference, timestamp, and enum fields intact. That protects
+ * the *derived* copies of the untrusted fields — `intendedOutcome`,
+ * `investigation.categories.confirmedFacts` (value and source), `summarise`,
+ * and the memory-write payload text — which a record written before this
+ * boundary existed may still hold raw.
+ *
+ * A record's own ids, evidence references, and transaction digests survive,
+ * because redaction is key-aware and those keys are on the preserve list.
+ */
+function withRedactedRecord(record: SafeguardRecord): SafeguardRecord {
+  const { submission, ...rest } = record;
+  return {
+    ...(redactServed(rest) as Omit<SafeguardRecord, "submission">),
+    submission: redactSubmission(submission),
+  };
 }
 
 export async function countSafeguardRecords(): Promise<number> {
   return runtime().store.countSafeguardRecords();
+}
+
+/**
+ * How long the learning-loop view model is reused.
+ *
+ * Building it loads up to {@link LEARNING_LOOP_RECORD_LIMIT} records and derives
+ * every view, so a short cache turns a page refresh loop into one rebuild per
+ * window. Fifteen seconds keeps a freshly-learned safeguard visible almost
+ * immediately while bounding the work an anonymous caller can trigger.
+ */
+const LEARNING_LOOP_TTL_MS = 15_000;
+const LEARNING_LOOP_RECORD_LIMIT = 500;
+
+const readCache = new TtlCache();
+
+/** Drop every cached read view. Exported for tests and after a reset. */
+export function resetReadCaches(): void {
+  readCache.clear();
+}
+
+/**
+ * The learning-loop view model, derived from the durable Safeguard Records.
+ *
+ * Read-only and anonymous: it exposes the learning history, the retrieval
+ * trail, the visible behaviour changes, the learning impact, and the provenance
+ * of every claim — all computed from records the engine actually produced.
+ *
+ * Cached for {@link LEARNING_LOOP_TTL_MS}. Only a successful build is cached; a
+ * store failure propagates so the route reports it instead of serving a stale
+ * success.
+ */
+export async function getLearningLoop(): Promise<LearningLoop> {
+  const rt = runtime();
+  const { value } = await readCache.getOrLoad(
+    "learning-loop",
+    LEARNING_LOOP_TTL_MS,
+    async () =>
+      buildLearningLoop(
+        // The view model surfaces `investigation.summary` and safeguard text on
+        // a public route, so the records it reads pass through the same read
+        // boundary. Metrics are computed from structured fields, which the
+        // boundary preserves, so the counts are unchanged.
+        (await rt.store.listSafeguardRecords(LEARNING_LOOP_RECORD_LIMIT)).map(
+          withRedactedRecord,
+        ),
+      ),
+  );
+  return value;
 }
 
 export type { IncidentInputDraft };

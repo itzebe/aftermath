@@ -94,12 +94,59 @@ export interface AftermathConfig {
    */
   adminToken: string | null;
   /**
-   * Per-endpoint fixed-window request caps, keyed by the endpoint id the route
-   * passes to `adminLimiter`. These bound a holder of the admin token and blunt
-   * accidental client loops. They are process-local; see the note on
-   * multi-instance deployments.
+   * Per-endpoint fixed-window request caps for the administrator write
+   * endpoints, keyed by the endpoint id the route passes to
+   * `adminWriteLimiter`. These bound a holder of the admin token and blunt
+   * accidental client loops. They are enforced through a *shared* counter (the
+   * durable database), so the cap holds across serverless instances and cold
+   * starts, not per-instance.
    */
   adminRateLimit: Record<string, { maxRequests: number; windowMs: number }>;
+  /**
+   * Anonymous read caps, per bucket, for the public read endpoints.
+   *
+   * These are enforced through a *shared* counter (the durable database), not a
+   * module-level Map, so the cap holds across serverless instances and cold
+   * starts. Expensive endpoints (those that call Walrus or Tatum, or rebuild a
+   * large view model) get a tighter cap than cheap ones. The buckets are coarse
+   * on purpose so a shared NAT egress address does not exhaust a single
+   * visitor's allowance.
+   */
+  publicReadLimit: {
+    read: { maxRequests: number; windowMs: number };
+    heavy: { maxRequests: number; windowMs: number };
+    status: { maxRequests: number; windowMs: number };
+  };
+  /**
+   * A non-rotatable ceiling for each public read bucket, shared across every
+   * client. The per-client cap above is keyed on a forwarding header, which a
+   * caller can rotate when the app is reached without the trusted platform
+   * proxy; this global cap cannot be rotated, so it is the backstop that keeps a
+   * spoofing burst bounded. It is set well above the per-client cap so ordinary
+   * traffic never meets it.
+   */
+  publicReadGlobalLimit: {
+    read: number;
+    heavy: number;
+    status: number;
+  };
+  /**
+   * Salt for hashing a client address into a rate-limit counter key, so the
+   * address itself is never stored. Falls back to a fixed development value;
+   * a deployment should set `AFTERMATH_RATE_LIMIT_SALT`.
+   */
+  rateLimitSalt: string;
+  /**
+   * How long a rate-limit counter row is kept after its window begins, before
+   * the opportunistic sweep may drop it.
+   *
+   * It is derived from the *actual* configured windows — strictly greater than
+   * the longest one — so the sweep can never delete a counter whose window is
+   * still active, whatever the operator configures. A fixed retention shorter
+   * than a long window would let the sweep reset that window mid-flight and
+   * hand a caller a fresh allowance, defeating the cap.
+   */
+  rateLimitRetentionMs: number;
   /**
    * Maximum accepted request body, in bytes. Enforced before the body is read
    * or parsed, so an oversized payload is rejected without being buffered.
@@ -209,6 +256,59 @@ export function resolveDataBaseDir(
 
 export function loadConfig(): AftermathConfig {
   const dataBaseDir = resolveDataBaseDir();
+
+  // Every configurable rate-limit window, read once. The longest of them sets
+  // the counter retention, so the sweep can never delete a window that is still
+  // counting (see `rateLimitRetentionMs`).
+  const aiVerifyWindowMs = positiveInt("AFTERMATH_AI_VERIFY_WINDOW_MS", 60_000);
+  const adminRateLimit: AftermathConfig["adminRateLimit"] = {
+    "incidents/submit": {
+      maxRequests: positiveInt("AFTERMATH_RL_SUBMIT_MAX", 5),
+      windowMs: positiveInt("AFTERMATH_RL_SUBMIT_WINDOW_MS", 60_000),
+    },
+    "scenarios/run": {
+      maxRequests: positiveInt("AFTERMATH_RL_SCENARIOS_MAX", 1),
+      windowMs: positiveInt("AFTERMATH_RL_SCENARIOS_WINDOW_MS", 60_000),
+    },
+    "memory-verify": {
+      maxRequests: positiveInt("AFTERMATH_RL_MEMORY_MAX", 5),
+      windowMs: positiveInt("AFTERMATH_RL_MEMORY_WINDOW_MS", 60_000),
+    },
+    reset: {
+      maxRequests: positiveInt("AFTERMATH_RL_RESET_MAX", 2),
+      windowMs: positiveInt("AFTERMATH_RL_RESET_WINDOW_MS", 60_000),
+    },
+  };
+  const publicReadLimit: AftermathConfig["publicReadLimit"] = {
+    // Cheap, bounded reads (rules, config, incidents, records, evaluation).
+    read: {
+      maxRequests: positiveInt("AFTERMATH_RL_PUBLIC_READ_MAX", 120),
+      windowMs: positiveInt("AFTERMATH_RL_PUBLIC_READ_WINDOW_MS", 60_000),
+    },
+    // Reads that rebuild a large view model (the learning loop).
+    heavy: {
+      maxRequests: positiveInt("AFTERMATH_RL_PUBLIC_HEAVY_MAX", 60),
+      windowMs: positiveInt("AFTERMATH_RL_PUBLIC_HEAVY_WINDOW_MS", 60_000),
+    },
+    // Reads that make a live upstream call (memory ledger, overview).
+    status: {
+      maxRequests: positiveInt("AFTERMATH_RL_PUBLIC_STATUS_MAX", 60),
+      windowMs: positiveInt("AFTERMATH_RL_PUBLIC_STATUS_WINDOW_MS", 60_000),
+    },
+  };
+
+  // A counter is only safe to drop once its window has certainly ended. Two full
+  // windows of slack guarantee that: a row whose window began just before the
+  // retention horizon is still comfortably newer than the cutoff the sweep
+  // computes. This holds whatever the operator configures, so a window longer
+  // than any fixed constant can no longer be reset mid-flight by the sweep.
+  const longestWindowMs = Math.max(
+    aiVerifyWindowMs,
+    ...Object.values(adminRateLimit).map((p) => p.windowMs),
+    ...Object.values(publicReadLimit).map((p) => p.windowMs),
+  );
+  const rateLimitRetentionMs = 2 * longestWindowMs;
+
   return {
     memory: {
       serverUrl:
@@ -255,27 +355,22 @@ export function loadConfig(): AftermathConfig {
     aiVerify: {
       token: optional("AFTERMATH_AI_VERIFY_TOKEN"),
       maxRequests: positiveInt("AFTERMATH_AI_VERIFY_MAX", 5),
-      windowMs: positiveInt("AFTERMATH_AI_VERIFY_WINDOW_MS", 60_000),
+      windowMs: aiVerifyWindowMs,
     },
     adminToken: optional("AFTERMATH_ADMIN_TOKEN"),
-    adminRateLimit: {
-      "incidents/submit": {
-        maxRequests: positiveInt("AFTERMATH_RL_SUBMIT_MAX", 5),
-        windowMs: positiveInt("AFTERMATH_RL_SUBMIT_WINDOW_MS", 60_000),
-      },
-      "scenarios/run": {
-        maxRequests: positiveInt("AFTERMATH_RL_SCENARIOS_MAX", 1),
-        windowMs: positiveInt("AFTERMATH_RL_SCENARIOS_WINDOW_MS", 60_000),
-      },
-      "memory-verify": {
-        maxRequests: positiveInt("AFTERMATH_RL_MEMORY_MAX", 5),
-        windowMs: positiveInt("AFTERMATH_RL_MEMORY_WINDOW_MS", 60_000),
-      },
-      reset: {
-        maxRequests: positiveInt("AFTERMATH_RL_RESET_MAX", 2),
-        windowMs: positiveInt("AFTERMATH_RL_RESET_WINDOW_MS", 60_000),
-      },
+    adminRateLimit,
+    publicReadLimit,
+    // The shared, non-rotatable ceiling per bucket. Deliberately an order of
+    // magnitude above the per-client cap: it exists to bound a key-spoofing
+    // burst, not ordinary traffic.
+    publicReadGlobalLimit: {
+      read: positiveInt("AFTERMATH_RL_PUBLIC_READ_GLOBAL_MAX", 1_200),
+      heavy: positiveInt("AFTERMATH_RL_PUBLIC_HEAVY_GLOBAL_MAX", 600),
+      status: positiveInt("AFTERMATH_RL_PUBLIC_STATUS_GLOBAL_MAX", 600),
     },
+    rateLimitSalt:
+      optional("AFTERMATH_RATE_LIMIT_SALT") ?? "aftermath-public-read",
+    rateLimitRetentionMs,
     bodyLimitBytes: clampPositiveInt(
       "AFTERMATH_BODY_LIMIT_BYTES",
       DEFAULT_BODY_LIMIT_BYTES,

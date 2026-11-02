@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { runScenarioBatch, getDemoProgress } from "@/lib/service";
 import { storeUnavailable } from "@/lib/api/errors";
 import { loadConfig } from "@/lib/config";
-import { adminLimiter, guardAdminRequest } from "@/lib/api/verify-guard";
+import { adminWriteLimiter, guardAdminWrite } from "@/lib/api/admin-write-guard";
+import { guardPublicRead } from "@/lib/api/public-read-guard";
 import { readJsonWithinLimit } from "@/lib/api/body-limit";
 
 export const runtime = "nodejs";
@@ -21,16 +22,17 @@ export const maxDuration = 300;
  * Body (optional): { "restart": boolean, "budgetMs": number }
  *
  * Administrator-only, because a batch performs real Mainnet writes and
- * `restart:true` additionally clears simulated audit and workflow state. A
- * storage failure is reported as an explicit failure; a batch is never
- * presented as a completed run.
+ * `restart:true` additionally clears simulated audit and workflow state. The
+ * rate limit is enforced through a shared, atomic counter so it holds across
+ * serverless instances. A storage failure is reported as an explicit failure; a
+ * batch is never presented as a completed run.
  */
 export async function POST(request: Request) {
   const config = loadConfig();
 
   // Gate the token first, before touching the body: an unauthenticated caller
   // must not be able to make the server read a request body at all.
-  const tokenGuard = guardAdminRequest(request, config, { rateLimit: false });
+  const tokenGuard = await guardAdminWrite(request, config, { rateLimit: false });
   if (!tokenGuard.ok) return tokenGuard.response;
 
   // The body must be read before the limiter can know whether `restart` was
@@ -46,8 +48,8 @@ export async function POST(request: Request) {
   // still requires the admin token, but is exempt from the per-minute cap: an
   // operator holding the token may need to restart a wedged job immediately.
   // Every non-restart batch is rate-limited.
-  const guard = guardAdminRequest(request, config, {
-    limiter: adminLimiter("scenarios/run", config),
+  const guard = await guardAdminWrite(request, config, {
+    limiter: adminWriteLimiter("scenarios/run", config),
     rateLimit: !restart,
   });
   if (!guard.ok) return guard.response;
@@ -65,11 +67,23 @@ export async function POST(request: Request) {
   }
 }
 
-/** Current progress of the demonstration, for the UI to resume/continue. */
-export async function GET() {
+/**
+ * Current progress of the demonstration, for the UI to resume/continue.
+ *
+ * It reads the durable demo-job state, so it is behind the shared read cap like
+ * the other public read endpoints: an anonymous caller cannot poll it in a tight
+ * loop to add database load. The cap is charged before the store is touched.
+ */
+export async function GET(request: Request) {
+  const guard = await guardPublicRead(request, loadConfig(), "public-read");
+  if (!guard.ok) return guard.response;
+
   try {
     const progress = await getDemoProgress();
-    return NextResponse.json(progress ?? { jobId: null, total: 0, completed: 0, remaining: 0 });
+    return NextResponse.json(
+      progress ?? { jobId: null, total: 0, completed: 0, remaining: 0 },
+      { headers: guard.headers },
+    );
   } catch (err) {
     return storeUnavailable(err);
   }

@@ -15,12 +15,16 @@
 
 import { createHash } from "node:crypto";
 import { randomUUID } from "node:crypto";
+import { redactSubmission } from "@/lib/util/redact";
 import {
   SafeguardRecordSchema,
   type AiAnalysis,
+  type BehaviourChange,
   type EvidenceAssessment,
   type IncidentSubmission,
   type RecalledMemory,
+  type SafeguardApplication,
+  type SafeguardMemory,
   type SafeguardRecord,
   type SafeguardRule,
 } from "@/lib/schemas";
@@ -30,6 +34,12 @@ import type { AuditStore } from "@/lib/db/audit-store";
 import { incidentToMemoryText, lessonToMemoryText } from "@/lib/adapters/memory";
 import { proposeRule, validateRule } from "@/lib/engines/rule-engine";
 import { decide, policyVersionFor } from "@/lib/engines/decision-engine";
+import {
+  computeBehaviourChange,
+  evaluateSafeguardApplications,
+  learnSafeguard,
+  type PriorSafeguard,
+} from "@/lib/engines/safeguard-memory";
 import {
   extractSignals,
   investigateSubmission,
@@ -92,11 +102,17 @@ export async function runSubmissionPipeline(
   const recordId = submissionId(submission);
   const incidentId = recordId;
 
+  // The submission is untrusted and may carry a credential pasted in by
+  // accident. Redact it once, here, and store only the redacted form: the
+  // investigation reads the raw material through its own redacting boundary,
+  // but nothing durable or served should retain a secret-shaped value.
+  const storedSubmission = redactSubmission(submission);
+
   // Stage A/B: rule-based parse. The authoritative lookup is folded in first so
   // the investigation reflects what a connected source actually returned.
-  const signals = extractSignals(submission.text);
+  const signals = extractSignals(storedSubmission.text);
   const preliminary = investigateSubmission({
-    submission,
+    submission: storedSubmission,
     authoritativeLookup: {
       attempted: false,
       verified: false,
@@ -117,7 +133,11 @@ export async function runSubmissionPipeline(
   const incidentInput = submissionToIncidentInput({
     investigation: preliminary,
     executionId: recordId,
-    intendedOutcome: submission.expectedBehavior ?? "Resolve the reported incident",
+    // Derive the intended outcome from the *redacted* submission: a credential
+    // pasted into `expectedBehavior` must not reach the stored Incident (and
+    // from there the public incident response and the Walrus payload).
+    intendedOutcome:
+      storedSubmission.expectedBehavior ?? "Resolve the reported incident",
     signals,
   });
   const incident = IncidentSchema.parse({
@@ -158,16 +178,59 @@ export async function runSubmissionPipeline(
   const recalled = await deps.memory.recallRelevantLessons(recallQuery, {
     limit: 5,
   });
+  const hasAuthoritativeReference =
+    investigation.domain === "finance" && signals.digests.length > 0;
   const recalledMemories: RecalledMemory[] = dedupeRecalled(
     recalled.map((r) =>
       describeRecall(r, {
         domain: investigation.domain,
         pattern: investigation.diagnosis.pattern,
-        hasAuthoritativeReference:
-          investigation.domain === "finance" && signals.digests.length > 0,
+        hasAuthoritativeReference,
       }),
     ),
   );
+
+  // Consult the durable record index (the record of what was actually learned)
+  // once, before applicability is decided. Recall is best-effort and bounded, so
+  // it can omit the newest version of a safeguard; the index tells us the
+  // highest version that exists per base identity, which lets an obsolete
+  // recalled version be detected even when its successor was not recalled.
+  const durableSafeguardRecords = await deps.store
+    .listSafeguardRecords(500)
+    .catch(() => []);
+  const knownLatest = new Map<string, number>();
+  for (const rec of durableSafeguardRecords) {
+    for (const m of rec.learnedSafeguards ?? []) {
+      const current = knownLatest.get(m.memoryId);
+      if (current === undefined || m.version > current) {
+        knownLatest.set(m.memoryId, m.version);
+      }
+    }
+  }
+
+  // Stage C2: decide, per recalled record, why it is relevant and whether it
+  // actually applies. Only an applicable, authoritative safeguard is enforced;
+  // a record that was merely retrieved is recorded and never changes anything.
+  const safeguardApplications: SafeguardApplication[] = evaluateSafeguardApplications(
+    recalled,
+    {
+      domain: investigation.domain,
+      actionType: investigation.actionType,
+      pattern: investigation.diagnosis.pattern,
+      hasAuthoritativeReference,
+      ...(knownLatest.size > 0 ? { knownLatest } : {}),
+    },
+  );
+  const appliedSafeguards = recalled
+    .map((r) => r.safeguardMemory)
+    .filter((m): m is NonNullable<typeof m> => Boolean(m))
+    .filter((m) =>
+      // Match the exact version, not just the base id: a superseded version
+      // shares the base id but must never be enforced.
+      safeguardApplications.some(
+        (a) => a.memoryId === m.memory_id && a.version === m.version && a.applicable,
+      ),
+    );
 
   // Stage D: propose and validate the safeguard against the shared rule engine.
   const storedIncident = { ...incident, currentStatus: "diagnosed" as const };
@@ -205,10 +268,19 @@ export async function runSubmissionPipeline(
     assertedSuccess,
   });
 
-  const decision = decide({
+  // Stage E2: the memory-informed decision.
+  //
+  // Both arms are the *same* deterministic engine over *identical* inputs: the
+  // same evidence, the same recalled lessons (the legacy corrective-lesson path
+  // is held constant — it is a pre-existing mechanism, not the safeguard
+  // memory), the same active rules. The single difference is whether the
+  // applicable safeguard memories are enforced. That isolation is what makes the
+  // reported change attributable to the safeguard memory rather than to a
+  // decision the engine would already have reached.
+  const decideInput = {
     domain: investigation.domain,
     actionType: investigation.actionType,
-    mode: "claim",
+    mode: "claim" as const,
     assertedSuccess,
     assessment,
     applicableRules: priorActiveRules.filter(
@@ -217,7 +289,40 @@ export async function runSubmissionPipeline(
     recalledLessons: recalled,
     preconditions: [],
     policyVersion: policyVersionFor(priorActiveRules),
+  };
+  const decisionBeforeMemory = decide({
+    ...decideInput,
+    appliedSafeguards: [],
   });
+  const decision = decide({ ...decideInput, appliedSafeguards });
+
+  const behaviourChange: BehaviourChange | undefined = appliedSafeguards.length
+    ? computeBehaviourChange({
+        beforeDecision: decisionBeforeMemory.decision,
+        afterDecision: decision.decision,
+        beforeChecks: decisionBeforeMemory.requiredChecks ?? [],
+        afterChecks: decision.requiredChecks ?? [],
+        appliedRule: appliedSafeguards[0]?.corrective_rule,
+        appliedMemoryId: appliedSafeguards[0]?.memory_id,
+        appliedMemoryVersion: appliedSafeguards[0]?.version,
+        retrievedNotApplicable: safeguardApplications.filter((a) => !a.applicable)
+          .length,
+      })
+    : undefined;
+
+  // Record whether each application changed the behaviour. Only the effective
+  // memory that actually caused the change is marked, so a memory that did not
+  // affect a decision is never counted as an influential memory.
+  for (const app of safeguardApplications) {
+    if (
+      app.applicable &&
+      behaviourChange?.changed &&
+      app.memoryId === behaviourChange.changedByMemoryId &&
+      app.version === behaviourChange.changedByMemoryVersion
+    ) {
+      app.changedBehaviour = true;
+    }
+  }
 
   await deps.store.saveIncident({
     incident: storedIncident,
@@ -261,6 +366,71 @@ export async function runSubmissionPipeline(
     });
   }
 
+  // Stage F2: learn and persist a Safeguard Memory.
+  //
+  // This is the durable artefact of the learning loop. It is created only for an
+  // actionable diagnosis, and it is only *persisted to the memory backend* when
+  // the finding is authoritative — an unverified observation is retained on the
+  // record for transparency but is never written as a standing safeguard, so it
+  // cannot silently become a permanent rule.
+  const learnedSafeguards: SafeguardMemory[] = [];
+  const recalledSafeguards = recalled
+    .map((r) => r.safeguardMemory)
+    .filter((m): m is NonNullable<typeof m> => Boolean(m));
+  // Consult the durable record index as well as recall, so a correction versions
+  // correctly even when the prior version was not returned by recall. Recall is
+  // best-effort and bounded; the durable index is the record of what was learned.
+  const durablePriors: PriorSafeguard[] = durableSafeguardRecords.flatMap((rec) =>
+    (rec.learnedSafeguards ?? []).map((m) => ({
+      memory_id: m.memoryId,
+      version: m.version,
+      corrective_rule: m.correctiveRule,
+    })),
+  );
+  const existingSafeguards: PriorSafeguard[] = [
+    ...recalledSafeguards.map((m) => ({
+      memory_id: m.memory_id,
+      version: m.version,
+      corrective_rule: m.corrective_rule,
+    })),
+    ...durablePriors,
+  ];
+  const learned = learnSafeguard({
+    incident: storedIncident,
+    diagnosis: investigation.diagnosis,
+    assessment,
+    investigation,
+    recommendation,
+    activatedRule,
+    proposedRule,
+    existing: existingSafeguards,
+    backend: deps.memory.backend,
+  });
+  if (learned) {
+    if (learned.record.authoritative && learned.disposition !== "duplicate") {
+      const safeguardWrite = await deps.memory.rememberSafeguard(learned.record, {
+        onAccepted: async (receipt) => {
+          await deps.store.saveMemoryWrite(receipt, {
+            incidentId,
+            ...(activatedRule?.ruleId ? { ruleId: activatedRule.ruleId } : {}),
+          });
+        },
+      });
+      await deps.store.saveMemoryWrite(safeguardWrite, {
+        incidentId,
+        ...(activatedRule?.ruleId ? { ruleId: activatedRule.ruleId } : {}),
+      });
+      learned.memory.walrus = {
+        ...(safeguardWrite.blobId ? { blobId: safeguardWrite.blobId } : {}),
+        ...(safeguardWrite.namespace ? { namespace: safeguardWrite.namespace } : {}),
+        backend: safeguardWrite.backend,
+        persisted: safeguardWrite.state === "completed",
+        recallVerified: safeguardWrite.recallVerified,
+      };
+    }
+    learnedSafeguards.push(learned.memory);
+  }
+
   // Report persistence and recall as separate outcomes, as required.
   const recallVerified =
     Boolean(lessonWrite?.recallVerified) || incidentWrite.recallVerified;
@@ -269,7 +439,7 @@ export async function runSubmissionPipeline(
     recordId,
     incidentId,
     createdAt: new Date().toISOString(),
-    submission,
+    submission: storedSubmission,
     investigation,
     recommendation,
     proposedRule,
@@ -278,6 +448,9 @@ export async function runSubmissionPipeline(
     decision,
     verification,
     recalledMemories,
+    learnedSafeguards,
+    safeguardApplications,
+    ...(behaviourChange ? { behaviourChange } : {}),
     memory: {
       incident: incidentWrite,
       lesson: lessonWrite,

@@ -4,7 +4,7 @@ import { IncidentSubmissionSchema } from "@/lib/schemas";
 import { storeUnavailable } from "@/lib/api/errors";
 import { classifyTransient } from "@/lib/util/transient";
 import { loadConfig } from "@/lib/config";
-import { adminLimiter, guardAdminRequest } from "@/lib/api/verify-guard";
+import { adminWriteLimiter, guardAdminWrite } from "@/lib/api/admin-write-guard";
 import { readJsonWithinLimit } from "@/lib/api/body-limit";
 
 export const runtime = "nodejs";
@@ -16,17 +16,19 @@ export const maxDuration = 120;
  *
  * This is an administrator-only operation: it spends free-tier model quota on
  * every request, so it is gated by the shared admin token and a per-client rate
- * limit (both fail closed — see `verify-guard`). The body is size-checked before
- * it is parsed, then validated before anything else happens. The submitted
- * material is treated strictly as data: it is parsed with regular expressions,
- * never executed, and never interpolated into a command, a query, or a shell. A
- * transient failure of a dependency (the memory relayer, Tatum) is reported as
- * a retryable condition, never as a verdict about the incident.
+ * limit (both fail closed — see `admin-write-guard`). The limit is enforced
+ * through a shared, atomic counter, so it holds across serverless instances.
+ * The body is size-checked before it is parsed, then validated before anything
+ * else happens. The submitted material is treated strictly as data: it is
+ * parsed with regular expressions, never executed, and never interpolated into
+ * a command, a query, or a shell. A transient failure of a dependency (the
+ * memory relayer, Tatum) is reported as a retryable condition, never as a
+ * verdict about the incident.
  */
 export async function POST(request: Request) {
   const config = loadConfig();
-  const guard = guardAdminRequest(request, config, {
-    limiter: adminLimiter("incidents/submit", config),
+  const guard = await guardAdminWrite(request, config, {
+    limiter: adminWriteLimiter("incidents/submit", config),
   });
   if (!guard.ok) return guard.response;
 

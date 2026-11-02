@@ -3,7 +3,7 @@ import { z } from "zod";
 import { runtime as appRuntime } from "@/lib/runtime";
 import { redact } from "@/lib/util/redact";
 import { loadConfig } from "@/lib/config";
-import { adminLimiter, guardAdminRequest } from "@/lib/api/verify-guard";
+import { adminWriteLimiter, guardAdminWrite } from "@/lib/api/admin-write-guard";
 import { readJsonWithinLimit } from "@/lib/api/body-limit";
 
 export const runtime = "nodejs";
@@ -21,12 +21,13 @@ const BodySchema = z.object({
  * Used by the Memory screen to demonstrate that stored lessons are retrievable.
  *
  * Administrator-only: each call reaches the Walrus Memory relayer, so it is
- * gated by the admin token and a per-client rate limit.
+ * gated by the admin token and a per-client rate limit enforced through a
+ * shared, atomic counter.
  */
 export async function POST(request: Request) {
   const config = loadConfig();
-  const guard = guardAdminRequest(request, config, {
-    limiter: adminLimiter("memory-verify", config),
+  const guard = await guardAdminWrite(request, config, {
+    limiter: adminWriteLimiter("memory-verify", config),
   });
   if (!guard.ok) return guard.response;
 

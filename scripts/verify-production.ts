@@ -71,6 +71,110 @@ export interface OverviewShape {
 }
 
 /**
+ * The subset of `/api/learning` this verifier reads. Loose for the same reason
+ * as `OverviewShape`: a stale deployment may omit the block entirely, and that
+ * omission is a finding rather than a reason to throw.
+ */
+export interface LearningLoopShape {
+  retrieval?: Array<{
+    memoryId?: string;
+    applicable?: boolean;
+    changedBehaviour?: boolean;
+    originalIncidentId?: string;
+    blobId?: string;
+  }>;
+  behaviourChanges?: Array<{
+    changed?: boolean;
+    attributableToMemory?: boolean;
+    beforeDecision?: string;
+    afterDecision?: string;
+    addedRequiredChecks?: string[];
+    changedByMemoryId?: string;
+  }>;
+  impact?: {
+    totalVerifiedSafeguards?: number;
+    safeguardsPersisted?: number;
+    memoriesRecalled?: number;
+    memoriesApplied?: number;
+    investigationsInfluenced?: number;
+    verificationRequirementsStrengthened?: number;
+    demonstratedRepeatPreventions?: number;
+  };
+  provenance?: Array<{ memoryId?: string; persisted?: boolean; recallVerified?: boolean }>;
+}
+
+/**
+ * Check that the learning loop reports an internally consistent story.
+ *
+ * The honesty rules, pinned without network access:
+ *   - an investigation is counted as influenced only if a retrieved memory both
+ *     applied and changed behaviour, and every such memory has a behaviour
+ *     change behind it;
+ *   - `memoriesApplied` counts exactly the applicable retrievals;
+ *   - a memory counted as persisted must be recall-verified, so no write is
+ *     claimed that cannot be read back;
+ *   - every retrieval and provenance entry carries a memory id and the origin
+ *     incident, so a claim can be traced.
+ */
+export function assessLearning(lp: LearningLoopShape | null): Check[] {
+  if (!lp) {
+    return [{ name: "GET /api/learning parsed", ok: false, detail: "no payload" }];
+  }
+  const retrieval = lp.retrieval ?? [];
+  const changes = lp.behaviourChanges ?? [];
+  const provenance = lp.provenance ?? [];
+  const impact = lp.impact ?? {};
+
+  const applied = retrieval.filter((r) => r.applicable);
+  const influenced = retrieval.filter((r) => r.applicable && r.changedBehaviour);
+  const changedIds = new Set(
+    changes.filter((c) => c.changed).map((c) => c.changedByMemoryId).filter(Boolean),
+  );
+
+  const checks: Check[] = [];
+  checks.push({
+    name: "learning retrieval entries traceable",
+    ok: retrieval.every((r) => Boolean(r.memoryId) && Boolean(r.originalIncidentId)),
+    detail: `${retrieval.length} retrieval entr(ies), each with a memory id and origin incident`,
+  });
+  checks.push({
+    name: "memories applied counter agrees",
+    ok: (impact.memoriesApplied ?? -1) === applied.length,
+    detail: `impact.memoriesApplied=${impact.memoriesApplied} vs ${applied.length} applicable retrieval(s)`,
+  });
+  checks.push({
+    name: "influenced investigations have a behaviour change",
+    ok: influenced.every((r) => changedIds.has(r.memoryId as string)),
+    detail: `${influenced.length} influenced retrieval(s), each backed by a changed behaviour`,
+  });
+  checks.push({
+    name: "no uninfluential memory counted",
+    ok: (impact.investigationsInfluenced ?? -1) <= influenced.length,
+    detail: `impact.investigationsInfluenced=${impact.investigationsInfluenced} vs ${influenced.length} evidenced change(s)`,
+  });
+  checks.push({
+    name: "no behaviour change without a memory-caused effect",
+    // A change is claimed only when the memory moved the decision or added a
+    // required check the before arm did not require. A change that does neither
+    // is the attribution error the learning loop must never make.
+    ok: changes.every(
+      (c) =>
+        !c.changed ||
+        (c.attributableToMemory === true &&
+          ((c.beforeDecision ?? "") !== (c.afterDecision ?? "") ||
+            (c.addedRequiredChecks?.length ?? 0) > 0)),
+    ),
+    detail: `${changes.filter((c) => c.changed).length} changed behaviour(s), each attributed to the memory`,
+  });
+  checks.push({
+    name: "persisted memories are recall-verified",
+    ok: provenance.every((p) => !p.persisted || p.recallVerified),
+    detail: `${provenance.filter((p) => p.persisted).length} persisted memory(ies), each recall-verified`,
+  });
+  return checks;
+}
+
+/**
  * Turn a parsed `/api/overview` payload into checks.
  *
  * Pure and exported so the honesty rules — a missing persistence block fails,
@@ -202,12 +306,14 @@ async function main(): Promise<number> {
     "/",
     "/incidents",
     "/safeguards",
+    "/learning",
     "/memory",
     "/evaluation",
     "/api/overview",
     "/api/config",
     "/api/incidents",
     "/api/rules",
+    "/api/learning",
     "/api/memory",
     "/api/evaluation",
   ]) {
@@ -273,6 +379,23 @@ async function main(): Promise<number> {
         ? `${recallBody?.count ?? 0} result(s) from ${recallBody?.backend} (live=${recallBody?.isLive})`
         : `HTTP ${recall.status} — ${JSON.stringify(recall.body).slice(0, 200)}`,
   });
+
+  // 4. The learning loop must report an internally consistent story. This is a
+  //    read-only consistency check, not a claim about what is deployed: it
+  //    asserts the impact counters agree with the entries they summarise and
+  //    that no investigation is counted as influenced without a changed
+  //    behaviour behind it.
+  const learning = await getJson(`${base}/api/learning`);
+  const lp = learning.body as LearningLoopShape | null;
+  if (learning.status !== 200 || !lp) {
+    checks.push({
+      name: "GET /api/learning parsed",
+      ok: false,
+      detail: `HTTP ${learning.status}`,
+    });
+  } else {
+    checks.push(...assessLearning(lp));
+  }
 
   // Report.
   console.log("");

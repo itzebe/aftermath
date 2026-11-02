@@ -19,6 +19,7 @@ import {
   validateRule,
 } from "@/lib/engines/rule-engine";
 import { decide, policyVersionFor, type Precondition } from "@/lib/engines/decision-engine";
+import { evaluateSafeguardApplications } from "@/lib/engines/safeguard-memory";
 import type { AuditStore } from "@/lib/db/audit-store";
 
 export interface PipelineDeps {
@@ -95,6 +96,20 @@ export class IncidentPipeline {
       limit: 5,
     });
 
+    // The durable index is the record of what was actually learned; recall is
+    // best-effort and may omit the newest version. Using the index as an
+    // independent bound lets an obsolete recalled version be detected (and not
+    // enforced) even when its successor was not recalled.
+    const knownLatest = new Map<string, number>();
+    for (const rec of await this.deps.store.listSafeguardRecords(500).catch(() => [])) {
+      for (const m of rec.learnedSafeguards ?? []) {
+        const current = knownLatest.get(m.memoryId);
+        if (current === undefined || m.version > current) {
+          knownLatest.set(m.memoryId, m.version);
+        }
+      }
+    }
+
     // 3b. Snapshot the rule set as it stands *before* this incident can
     //     activate a new rule. A lesson learned from an incident governs
     //     subsequent actions, never retroactively the incident that produced it.
@@ -121,6 +136,25 @@ export class IncidentPipeline {
       domain: incident.domain,
       actionType: incident.actionType,
     });
+    // Applicable safeguard memories are enforced exactly like active rules; a
+    // record that was merely retrieved is not enforced.
+    const applications = evaluateSafeguardApplications(recalled, {
+      domain: incident.domain,
+      actionType: incident.actionType,
+      pattern: diagnosis.pattern,
+      hasAuthoritativeReference: incident.evidenceReferences.length > 0,
+      ...(knownLatest.size > 0 ? { knownLatest } : {}),
+    });
+    const appliedSafeguards = recalled
+      .map((r) => r.safeguardMemory)
+      .filter((m): m is NonNullable<typeof m> => Boolean(m))
+      .filter((m) =>
+        // Match the exact version: a superseded version shares the base id but
+        // must never be enforced.
+        applications.some(
+          (a) => a.memoryId === m.memory_id && a.version === m.version && a.applicable,
+        ),
+      );
     const decision = decide({
       domain: incident.domain,
       actionType: incident.actionType,
@@ -129,6 +163,7 @@ export class IncidentPipeline {
       assessment,
       applicableRules: applicable,
       recalledLessons: recalled,
+      appliedSafeguards,
       preconditions: options.preconditions ?? [],
       policyVersion: policyVersionFor(priorActiveRules),
     });

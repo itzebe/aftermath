@@ -3,8 +3,10 @@ import {
   MemWalMemoryAdapter,
   type MemWalClientLike,
 } from "@/lib/adapters/memwal-memory";
+import { safeguardMemoryToMemoryText } from "@/lib/adapters/memory";
 import type { AftermathConfig } from "@/lib/config";
-import { CorrectiveLessonRecordSchema } from "@/lib/schemas";
+import { CorrectiveLessonRecordSchema, SafeguardMemoryRecordSchema } from "@/lib/schemas";
+import type { SafeguardMemoryRecord } from "@/lib/schemas";
 
 /**
  * The live adapter's logic is tested at the network boundary, which is the only
@@ -33,6 +35,14 @@ function config(overrides: Partial<AftermathConfig["memory"]> = {}): AftermathCo
       "memory-verify": { maxRequests: 5, windowMs: 60_000 },
       reset: { maxRequests: 2, windowMs: 60_000 },
     },
+    publicReadLimit: {
+      read: { maxRequests: 120, windowMs: 60_000 },
+      heavy: { maxRequests: 60, windowMs: 60_000 },
+      status: { maxRequests: 60, windowMs: 60_000 },
+    },
+    publicReadGlobalLimit: { read: 1200, heavy: 600, status: 600 },
+    rateLimitSalt: "test-salt",
+    rateLimitRetentionMs: 120_000,
     bodyLimitBytes: 65_536,
     dbPath: ":memory:",
     harnessDir: "/tmp/aftermath-harness",
@@ -58,6 +68,37 @@ function lesson() {
   });
 }
 
+function safeguardMemory(overrides: Partial<SafeguardMemoryRecord> = {}): SafeguardMemoryRecord {
+  return SafeguardMemoryRecordSchema.parse({
+    type: "safeguard_memory",
+    memory_id: "safeguard-finance-unsupported_completion_claim",
+    version: 1,
+    origin_incident_id: "inc-1",
+    domain: "finance",
+    action_type: "report_sui_transaction_success",
+    failure_category: "unsupported_completion_claim",
+    verified_failure: "claimed a Sui transaction succeeded without a record",
+    evidence: ["incident:inc-1", "sui_tx_digest:unresolvable"],
+    corrective_rule: "Require Tatum verification before accepting a success claim.",
+    applies_when: [
+      "domain=finance",
+      "actionType=report_sui_transaction_success",
+      "failureCategory=unsupported_completion_claim",
+    ],
+    required_checks: ["Resolve the digest through Tatum gRPC."],
+    action: "BLOCK",
+    severity: "high",
+    confidence: 0.9,
+    limitations: [],
+    authoritative: true,
+    support_basis: "grounded in observed facts",
+    status: "active",
+    created_at: new Date().toISOString(),
+    provenance: "simulated",
+    ...overrides,
+  });
+}
+
 interface StubOptions {
   healthOk?: boolean;
   status?: "pending" | "running" | "uploaded" | "done" | "failed" | "not_found";
@@ -72,6 +113,8 @@ interface StubOptions {
   authProbe?: "ok" | "auth" | "upstream" | "network";
   /** Memory count the relayer reports for the configured namespace. */
   namespaceMemoryCount?: number;
+  /** Text the recall returns for the matching blob. */
+  recallText?: string;
 }
 
 function authError(kind: "auth" | "upstream" | "network"): Error {
@@ -123,7 +166,7 @@ function stubClient(opts: StubOptions = {}) {
       const finds = opts.recallFindsBlob ?? true;
       return {
         results: finds
-          ? [{ blob_id: blobId, text: "whatever", distance: 0.1 }]
+          ? [{ blob_id: blobId, text: opts.recallText ?? "whatever", distance: 0.1 }]
           : [{ blob_id: "some-other-blob", text: "unrelated", distance: 0.9 }],
       };
     }),
@@ -279,6 +322,34 @@ describe("MemWalMemoryAdapter idempotency", () => {
     await adapter(client).rememberIncident(incident);
     expect(calls.idempotencyKeys[0]).toBe("incident:inc-42");
   });
+
+  it("keys a safeguard by its content, so a retry is idempotent", async () => {
+    const { client, calls } = stubClient();
+    const a = adapter(client);
+    const retry = safeguardMemory();
+    await a.rememberSafeguard(retry);
+    await a.rememberSafeguard(retry);
+    expect(calls.idempotencyKeys[0]).toBe(calls.idempotencyKeys[1]);
+    expect(calls.idempotencyKeys[0]).toMatch(/^safeguard:[0-9a-f]{32}$/);
+  });
+
+  it("gives a corrected safeguard a new key rather than reusing the old one", async () => {
+    const { client, calls } = stubClient();
+    const a = adapter(client);
+    await a.rememberSafeguard(safeguardMemory());
+    await a.rememberSafeguard(
+      safeguardMemory({ corrective_rule: "A corrected rule.", version: 2 }),
+    );
+    expect(calls.idempotencyKeys[0]).not.toBe(calls.idempotencyKeys[1]);
+  });
+
+  it("refuses to attempt a safeguard write when credentials are already rejected", async () => {
+    const { client, calls } = stubClient({ authProbe: "auth" });
+    const receipt = await adapter(client).rememberSafeguard(safeguardMemory());
+    expect(receipt.state).toBe("failed");
+    expect(receipt.error).toMatch(/credentials rejected/i);
+    expect(calls.remember).toBe(0);
+  });
 });
 
 describe("MemWalMemoryAdapter recall", () => {
@@ -318,6 +389,30 @@ describe("MemWalMemoryAdapter recall", () => {
     };
     const hits = await adapter(client).recallRelevantLessons("anything");
     expect(hits[0].record).toBeUndefined();
+    expect(hits[0].safeguardMemory).toBeUndefined();
+  });
+
+  it("round-trips a safeguard memory through write text and recall", async () => {
+    const memory = safeguardMemory();
+    const text = safeguardMemoryToMemoryText(memory);
+    const hits = await adapter(
+      stubClient({ recallText: text }).client,
+    ).recallRelevantLessons("require verification");
+    expect(hits).toHaveLength(1);
+    expect(hits[0].safeguardMemory?.memory_id).toBe(memory.memory_id);
+    expect(hits[0].safeguardMemory?.required_checks).toEqual(memory.required_checks);
+    expect(hits[0].safeguardMemory?.authoritative).toBe(true);
+  });
+
+  it("does not enforce a safeguard whose recalled text fails validation", async () => {
+    const text = [
+      "safeguard_memory:finance:unsupported_completion_claim",
+      JSON.stringify({ type: "safeguard_memory", memory_id: "broken" }),
+    ].join("\n");
+    const hits = await adapter(
+      stubClient({ recallText: text }).client,
+    ).recallRelevantLessons("anything");
+    expect(hits[0].safeguardMemory).toBeUndefined();
   });
 });
 

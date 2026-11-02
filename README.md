@@ -67,8 +67,17 @@ Incident -> Evidence -> Hypothesis -> Safeguard -> Verification -> Memory
 ```
 
 - **Incident** — the submitted text, treated strictly as data: parsed with
-  regular expressions, never executed, credential-shaped strings redacted before
-  storage.
+  regular expressions, never executed. Credential-shaped strings are redacted
+  before the submission is persisted and again before any record is served. The
+  redaction covers recognisable provider formats (API keys, JWTs, `Basic`/Bearer
+  credentials, connection strings, private-key blocks), labelled assignments
+  (`password=`/`secret:`) and their loose forms (`password hunter2secret`), and
+  unlabelled high-entropy tokens (marked `[possible-secret]` when uncertain).
+  Identifiers the investigation needs — Sui digests, labelled hashes, labelled
+  UUIDs, slugs — are deliberately preserved. It is **not** perfect detection: a
+  short, low-entropy secret pasted with no label and no distinguishing format is
+  indistinguishable from ordinary prose. The boundary is stated in
+  `docs/SUBMISSION.md` and pinned by tests.
 - **Evidence** — observed facts (each with its verbatim span), confirmed facts,
   hypotheses, unknowns, and next checks, kept strictly separate. A submission is
   material, not proof, so with no connected source the assessment is `UNKNOWN`.
@@ -152,6 +161,102 @@ Underneath, the same seven-stage engine the product was built on still runs:
 
 The finance demonstration is **read-only**. No transaction is ever broadcast and
 no wallet key or seed phrase is ever requested.
+
+## The learning loop
+
+Storing a memory is not learning. Retrieving one is not learning. The product
+only learns when a memory it wrote *changes what a later investigation does*.
+That loop is implemented, persisted, and visible.
+
+```
+investigate → learn a safeguard → persist to Walrus → recall → change behaviour → verify
+```
+
+A **Safeguard Memory** is a structured, durable record of one verified failure:
+its failure category, the verified description, the supporting evidence, the
+root cause where established, a corrective rule, the conditions under which the
+rule applies, the required verification checks, a confidence and limitations,
+the originating incident, a timestamp, and its Walrus reference.
+
+The loop runs inside the real pipelines (`pipeline.ts`, `submission-pipeline.ts`)
+and the real decision engine (`decision-engine.ts`), not in a separate
+demonstration path:
+
+1. **Learn.** After a diagnosis, `learnSafeguard` builds a memory — but only a
+   *sufficiently supported* finding becomes authoritative. Authority is granted
+   when the material supplies a machine-checkable observed fact, or an
+   authoritative source was consulted, or a verified outcome exists. An
+   unsupported observation is retained on the record for transparency but is
+   never persisted and never enforced, so it cannot silently become a permanent
+   rule.
+2. **Persist.** An authoritative safeguard is written through the existing Walrus
+   Memory Mainnet adapter with a content-hashed idempotency key, so a retry
+   dedupes and a corrected rule is a new version rather than a rejected reuse.
+   The receipt is durable; the persistence state is reported honestly.
+3. **Recall.** Each new incident recalls history, and every recalled record is
+   evaluated for *applicability* — domain, failure category, action type, and
+   the memory's own status. A record that was merely retrieved is recorded with
+   `applicable: false` and never influences the decision.
+4. **Change behaviour.** Applicable, authoritative safeguards are converted to
+   enforceable rules and passed to the decision engine. The engine is run twice
+   for the same investigation — once with the applicable safeguards held out,
+   once with them enforced, every other input held constant — and the difference
+   is the behaviour change. A safeguard can move the verdict itself (an
+   `UNKNOWN` success claim becomes `REQUIRE_VERIFICATION` when the memory is the
+   only applicable prior) and it always adds its required checks. In the shipped
+   demonstration the legacy corrective-lesson path already escalates the same
+   claim to `REQUIRE_VERIFICATION`, so there the memory's contribution is the
+   added verification, not the verdict — and the record reports exactly that
+   rather than claiming a verdict change it did not cause.
+5. **Verify.** The record stores which memory was retrieved, why it was relevant,
+   whether it applied, which rule it contributed, and whether it changed the
+   investigation. A safeguard that changed nothing is never counted as an
+   influence, and a "prevented" claim requires a memory learned from an *earlier*
+   record to have changed a *later* one.
+
+The **Learning Loop** page (`/learning`) and `GET /api/learning` expose the
+whole cycle: learning history, memory retrieval, the before/after behaviour
+change, measured learning impact, and provenance linking every claim back to its
+origin incident and Walrus blob. Both are public and read-only.
+
+Reproduce the loop end to end:
+
+```bash
+npm run learning:demo
+```
+
+The demonstration runs two clearly labelled TEST FIXTURE incidents through the
+real pipeline: the first learns and persists a safeguard; the second recalls it
+and refuses to accept the success claim, adding the safeguard's required
+verification checks. Both arms conclude `REQUIRE_VERIFICATION` — the legacy
+corrective-lesson path already escalates the claim, so the demo reports
+`verdict changed: false` with `attributable to memory: yes` for the checks it
+added, rather than overstating a verdict change. The engine *can* move the
+verdict when the memory is the only applicable prior; that case is pinned by a
+unit test. With Mainnet credentials configured the safeguard is written to
+Walrus Memory Mainnet; without them the simulated backend is used and labelled
+as such.
+
+### Public access
+
+The learning loop is **read-only public**. `/learning`, `GET /api/learning`, and
+every Safeguard Record are anonymous — a visitor can see the whole cycle without
+a token.
+
+Triggering a *new* investigation is not yet open to anonymous visitors. Incident
+submission (`POST /api/incidents/submit`) is administrator-gated because every
+request spends free-tier model quota, and the scenario runner writes to Walrus
+Mainnet. This is stated plainly rather than presented as finished public
+self-service.
+
+The integration points for opening it up are already in place and need no change
+to the loop itself: `submitIncident` / `runSubmissionPipeline` are pure of the
+transport, recall and safeguard evaluation run inside them, and the submission
+schema is validated before any work. A public path would add a stricter
+anonymous rate limit and a quota guard at `POST /api/incidents/submit` while
+keeping the same pipeline, the same recall, and the same eligibility rules.
+
+---
 
 ## Honest state
 
@@ -562,6 +667,9 @@ src/
       model-factory.ts    Client resolution + bounded AI-analysis cache
     engines/
       pipeline.ts         The seven-stage pipeline
+      submission-pipeline.ts Public submission pipeline (investigate → learn → decide)
+      safeguard-memory.ts The learning loop core: learn, applicability, behaviour change
+      learning-loop.ts    The Learning Loop view model (history, recall, impact, provenance)
       diagnosis.ts        Deterministic failure diagnosis
       rule-engine.ts      Corrective rule lifecycle
       decision-engine.ts  Safeguard decision engine

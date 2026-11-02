@@ -5,6 +5,7 @@ import { TatumSuiAdapter } from "@/lib/adapters/tatum-sui";
 import { TatumSuiGrpcAdapter } from "@/lib/adapters/tatum-sui-grpc";
 import { TatumSuiGraphqlAdapter } from "@/lib/adapters/tatum-sui-graphql";
 import { loadConfig } from "@/lib/config";
+import { SafeguardMemoryRecordSchema } from "@/lib/schemas";
 import { buildSuiVerifier, runFinanceEvidenceCases } from "@/lib/demos/finance";
 
 /**
@@ -229,6 +230,79 @@ maybe("live smoke: finance evidence cases over the real ledger", () => {
       expect(unavailable?.simulated).toBe(true);
       expect(unavailable?.status).toBe("UNKNOWN");
       verifier.close?.();
+    },
+    90_000,
+  );
+});
+
+/**
+ * The safeguard memory write path against the real relayer. This is the one
+ * claim a mocked boundary cannot support: that a learned safeguard is durably
+ * written to Walrus Memory Mainnet under a real blob id and recalled back as a
+ * structured record. It runs only with live credentials, and it fails loudly —
+ * a safeguard that is not persisted must not be reported as persisted.
+ */
+const hasWalrusCreds = (() => {
+  const m = loadConfig().memory;
+  return Boolean(m.privateKey && m.accountId && !m.forceSimulated);
+})();
+
+maybe("live smoke: safeguard memory on Walrus Mainnet", () => {
+  it.runIf(hasWalrusCreds)(
+    "persists a learned safeguard and recalls it as a structured record",
+    async () => {
+      const config = loadConfig();
+      const adapter = new MemWalMemoryAdapter({
+        ...config,
+        memory: { ...config.memory, namespace: "aftermath-smoke" },
+      });
+      const record = SafeguardMemoryRecordSchema.parse({
+        type: "safeguard_memory",
+        memory_id: "safeguard-smoke-unsupported_completion_claim",
+        version: 1,
+        origin_incident_id: "smoke-incident",
+        domain: "incident",
+        action_type: "validate_reported_success",
+        failure_category: "unsupported_completion_claim",
+        verified_failure:
+          "A success claim was made with no authoritative verification record.",
+        evidence: ["incident:smoke-incident", "smoke:evidence"],
+        corrective_rule:
+          "Require authoritative transaction verification before accepting a success claim.",
+        applies_when: [
+          "domain=incident",
+          "actionType=validate_reported_success",
+          "failureCategory=unsupported_completion_claim",
+        ],
+        required_checks: ["Capture the authoritative record of the outcome."],
+        action: "BLOCK",
+        severity: "high",
+        confidence: 0.8,
+        limitations: ["Smoke-scoped."],
+        authoritative: true,
+        support_basis: "Grounded in an observed fact.",
+        status: "active",
+        created_at: new Date().toISOString(),
+        provenance: "simulated",
+      });
+      try {
+        const receipt = await adapter.rememberSafeguard(record);
+        // A failed write must never be dressed up as a persisted safeguard.
+        expect(receipt.state).toBe("completed");
+        expect(receipt.blobId).toBeTruthy();
+
+        const hits = await adapter.recallRelevantLessons(record.corrective_rule, {
+          limit: 5,
+        });
+        const recalled = hits.find(
+          (h) => h.safeguardMemory?.memory_id === record.memory_id,
+        );
+        expect(recalled).toBeDefined();
+        expect(recalled!.safeguardMemory!.authoritative).toBe(true);
+        expect(recalled!.safeguardMemory!.corrective_rule).toBe(record.corrective_rule);
+      } finally {
+        adapter.destroy();
+      }
     },
     90_000,
   );

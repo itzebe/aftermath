@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { decide, policyVersionFor } from "@/lib/engines/decision-engine";
-import { EvidenceAssessmentSchema, SafeguardRuleSchema } from "@/lib/schemas";
-import type { EvidenceStatus, SafeguardRule } from "@/lib/schemas";
+import {
+  EvidenceAssessmentSchema,
+  SafeguardMemoryRecordSchema,
+  SafeguardRuleSchema,
+} from "@/lib/schemas";
+import type { EvidenceStatus, SafeguardMemoryRecord, SafeguardRule } from "@/lib/schemas";
 import type { RecalledLesson } from "@/lib/adapters/memory";
 
 function assessment(status: EvidenceStatus) {
@@ -217,6 +221,146 @@ describe("decision engine — recalled lessons escalate, never override", () => 
       recalledLessons: [lessonHit],
     });
     expect(d.decision).toBe("BLOCK");
+  });
+});
+
+describe("decision engine — applicable safeguard memories are enforced", () => {
+  const memoryRecord = (
+    overrides: Partial<SafeguardMemoryRecord> = {},
+  ): SafeguardMemoryRecord =>
+    SafeguardMemoryRecordSchema.parse({
+      type: "safeguard_memory",
+      memory_id: "safeguard-finance-unsupported_completion_claim",
+      version: 1,
+      origin_incident_id: "inc-prior",
+      domain: "finance",
+      action_type: "report_sui_transaction_success",
+      failure_category: "unsupported_completion_claim",
+      verified_failure: "claimed success without a record",
+      evidence: ["incident:inc-prior"],
+      corrective_rule: "Require authoritative verification before accepting success.",
+      applies_when: ["domain=finance", "actionType=report_sui_transaction_success"],
+      required_checks: ["Capture the authoritative record."],
+      action: "BLOCK",
+      severity: "high",
+      confidence: 0.9,
+      limitations: [],
+      authoritative: true,
+      support_basis: "grounded",
+      status: "active",
+      provenance: "simulated",
+      ...overrides,
+    });
+
+  it("escalates UNKNOWN to REQUIRE_VERIFICATION when an applicable memory is enforced", () => {
+    const without = decide({
+      ...base,
+      assessment: assessment("UNKNOWN"),
+      applicableRules: [],
+      appliedSafeguards: [],
+    });
+    const withMemory = decide({
+      ...base,
+      assessment: assessment("UNKNOWN"),
+      applicableRules: [],
+      appliedSafeguards: [memoryRecord()],
+    });
+    expect(without.decision).toBe("UNKNOWN");
+    expect(withMemory.decision).toBe("REQUIRE_VERIFICATION");
+    expect(withMemory.applicableMemoryIds).toContain(
+      "safeguard-finance-unsupported_completion_claim@v1",
+    );
+    // The memory's required checks are exposed, so the learning loop can measure
+    // the memory's own contribution rather than inferring it from the verdict.
+    expect(withMemory.requiredChecks).toEqual(["Capture the authoritative record."]);
+  });
+
+  it("never lets a memory convert UNKNOWN into success", () => {
+    const d = decide({
+      ...base,
+      assessment: assessment("UNKNOWN"),
+      applicableRules: [],
+      appliedSafeguards: [memoryRecord()],
+    });
+    expect(d.decision).not.toBe("ALLOW");
+  });
+
+  it("does not let a memory override VERIFIED_SUCCESS", () => {
+    const d = decide({
+      ...base,
+      assessment: assessment("VERIFIED_SUCCESS"),
+      applicableRules: [],
+      appliedSafeguards: [memoryRecord()],
+    });
+    expect(d.decision).toBe("ALLOW");
+  });
+
+  it("does not let a memory override VERIFIED_FAILURE", () => {
+    const d = decide({
+      ...base,
+      assessment: assessment("VERIFIED_FAILURE"),
+      applicableRules: [],
+      appliedSafeguards: [memoryRecord()],
+    });
+    expect(d.decision).toBe("BLOCK");
+  });
+
+  it("does not enforce a non-authoritative memory", () => {
+    const d = decide({
+      ...base,
+      assessment: assessment("UNKNOWN"),
+      applicableRules: [],
+      appliedSafeguards: [memoryRecord({ authoritative: false })],
+    });
+    expect(d.decision).toBe("UNKNOWN");
+    expect(d.applicableMemoryIds ?? []).toHaveLength(0);
+  });
+
+  it("does not enforce a superseded memory", () => {
+    const d = decide({
+      ...base,
+      assessment: assessment("UNKNOWN"),
+      applicableRules: [],
+      appliedSafeguards: [memoryRecord({ status: "superseded" })],
+    });
+    expect(d.decision).toBe("UNKNOWN");
+  });
+
+  it("records the enforcement in the decision trace", () => {
+    const d = decide({
+      ...base,
+      assessment: assessment("UNKNOWN"),
+      applicableRules: [],
+      appliedSafeguards: [memoryRecord()],
+    });
+    expect(d.trace.some((t) => t.step === "applicable_safeguards")).toBe(true);
+  });
+
+  it("does not enforce a safeguard memory in preflight mode", () => {
+    // A memory answers "may this outcome be accepted?", not "may this action
+    // run?". Preflight authority belongs to preconditions and active rules.
+    const d = decide({
+      ...base,
+      mode: "preflight",
+      assertedSuccess: false,
+      assessment: assessment("UNKNOWN"),
+      applicableRules: [],
+      appliedSafeguards: [memoryRecord()],
+    });
+    expect(d.decision).toBe("UNKNOWN");
+    expect(d.applicableMemoryIds ?? []).toHaveLength(0);
+  });
+
+  it("lists each enforced version once, as memory_id@vN", () => {
+    const d = decide({
+      ...base,
+      assessment: assessment("UNKNOWN"),
+      applicableRules: [],
+      appliedSafeguards: [memoryRecord(), memoryRecord()],
+    });
+    expect(d.applicableMemoryIds).toEqual([
+      "safeguard-finance-unsupported_completion_claim@v1",
+    ]);
   });
 });
 

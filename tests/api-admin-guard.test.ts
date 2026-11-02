@@ -30,6 +30,14 @@ function config(adminToken: string | null, limits?: AftermathConfig["adminRateLi
       "memory-verify": { maxRequests: 5, windowMs: 60_000 },
       reset: { maxRequests: 2, windowMs: 60_000 },
     },
+    publicReadLimit: {
+      read: { maxRequests: 120, windowMs: 60_000 },
+      heavy: { maxRequests: 60, windowMs: 60_000 },
+      status: { maxRequests: 60, windowMs: 60_000 },
+    },
+    publicReadGlobalLimit: { read: 1200, heavy: 600, status: 600 },
+    rateLimitSalt: "test-salt",
+    rateLimitRetentionMs: 120_000,
     bodyLimitBytes: 65_536,
     dbPath: ":memory:",
     harnessDir: "/tmp/h",
@@ -93,6 +101,20 @@ describe("admin access control", () => {
 describe("clientIpKey", () => {
   it("prefers x-real-ip", () => {
     expect(clientIpKey(req({ "x-real-ip": "203.0.113.7" }))).toBe("ip:203.0.113.7");
+  });
+
+  it("prefers x-vercel-forwarded-for over a spoofed x-forwarded-for", () => {
+    // The platform sets x-vercel-forwarded-for from the real connection; a
+    // client-supplied x-forwarded-for must not be able to override it.
+    expect(
+      clientIpKey(
+        req({
+          "x-vercel-forwarded-for": "203.0.113.50",
+          "x-forwarded-for": "1.2.3.4",
+          "x-real-ip": "1.2.3.4",
+        }),
+      ),
+    ).toBe("ip:203.0.113.50");
   });
 
   it("uses the right-most forwarded-for entry, not the client-controlled left one", () => {

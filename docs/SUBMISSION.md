@@ -78,12 +78,40 @@ grounded by verbatim span; uncertainty stays explicit; a safeguard is proposed,
 then tested, and only ever called *validated* with proof.
 
 **Architecture.** A seven-stage pipeline. Incident intake (regex, never
-execution; credential-shaped strings redacted) → evidence verification against a
+execution; credential-shaped strings redacted before storage and again on read)
+→ evidence verification against a
 connected authoritative source → rule-based failure diagnosis → corrective-rule
 engine → Walrus Memory adapter → safeguard decision engine → learning
 evaluation. Durable audit index in PostgreSQL; a resumable, bounded-batch runner
 for the demonstration because the full run makes many real Mainnet writes and
 cannot fit in one serverless request.
+
+**Credential redaction — the actual boundary.** A submitted incident is
+untrusted and often carries a token by accident, so it is redacted at two
+boundaries: before it is persisted, and again before any record is served (so a
+record written before the rule existed is still protected). The rule set is:
+
+- *Recognisable formats* — provider API keys (`sk-`, `AIza`, `ghp_`,
+  `github_pat_`, `AKIA`/`ASIA`, `xox*`, Tatum), JSON Web Tokens, HTTP
+  `Basic`/`Bearer` credentials, PEM private-key blocks, connection strings, and
+  bare 64-hex values (a 32-byte key is exactly that shape).
+- *Labelled values* — anything after `password`/`secret`/`token`/`api_key` and
+  friends, in both the assignment form (`password=x`) and the loose form
+  (`password hunter2secret`, `the password is x`).
+- *Unlabelled high-entropy tokens* — a long token mixing case and digits, or a
+  short token that mixes a secret word with a digit, is marked
+  `[possible-secret]` (the marker is deliberately honest: the match is a
+  heuristic, not a certainty).
+
+The redaction **preserves evidence**: a Sui transaction digest (base58, 43-44
+chars), a hash or UUID the surrounding text labels as such, and ordinary slugs
+are left intact, because destroying them would break the verification the
+product depends on. A bare UUID or bare 64-hex value is ambiguous (it is also a
+key shape), so it is conservatively redacted — a deliberate, documented
+trade-off. This is **not** perfect detection and is not described as such: a
+short, low-entropy secret pasted with no label and no distinguishing format is
+indistinguishable from ordinary prose. The behaviour is pinned by
+`tests/redact.test.ts`.
 
 **Walrus integration (specific).** The live adapter talks to the Mainnet relayer
 `https://relayer.memory.walrus.xyz`, namespace `aftermath`. Each write is

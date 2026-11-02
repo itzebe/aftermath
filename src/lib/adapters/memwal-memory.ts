@@ -1,10 +1,16 @@
 import { MemWal } from "@mysten-incubation/memwal";
 import { createHash } from "node:crypto";
-import type { CorrectiveLessonRecord, Incident } from "@/lib/schemas";
+import type {
+  CorrectiveLessonRecord,
+  Incident,
+  SafeguardMemoryRecord,
+} from "@/lib/schemas";
 import {
   incidentToMemoryText,
   lessonToMemoryText,
   parseLessonFromMemoryText,
+  parseSafeguardMemoryFromMemoryText,
+  safeguardMemoryToMemoryText,
   type BackendHealth,
   type MemoryAdapter,
   type MemoryBackendId,
@@ -422,6 +428,23 @@ export class MemWalMemoryAdapter implements MemoryAdapter {
   }
 
   /**
+   * Persist a Safeguard Memory.
+   *
+   * The idempotency key is the content hash of the exact text, exactly as for a
+   * lesson: a true retry dedupes at the relayer, while a genuinely different
+   * safeguard (a corrected rule, a new version) is written rather than rejected
+   * as a reused key.
+   */
+  rememberSafeguard(
+    memory: SafeguardMemoryRecord,
+    options?: WriteOptions,
+  ): Promise<MemoryWriteReceipt> {
+    const text = safeguardMemoryToMemoryText(memory);
+    const contentHash = createHash("sha256").update(text).digest("hex").slice(0, 32);
+    return this.writeText("lesson", text, `safeguard:${contentHash}`, options);
+  }
+
+  /**
    * Resolve a write that was accepted but never observed to complete.
    *
    * `waitForRememberJob` is safe to re-poll with the same job id: the SDK's own
@@ -521,6 +544,7 @@ export class MemWalMemoryAdapter implements MemoryAdapter {
       distance: r.distance,
       createdAt: r.created_at,
       record: parseLessonFromMemoryText(r.text),
+      safeguardMemory: parseSafeguardMemoryFromMemoryText(r.text),
       provenance: this.provenance,
     }));
   }

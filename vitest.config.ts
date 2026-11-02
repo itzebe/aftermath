@@ -23,5 +23,13 @@ export default defineConfig({
     environmentMatchGlobs: [["tests/**/*.dom.test.tsx", "jsdom"]],
     globals: true,
     testTimeout: 30000,
+    /**
+     * The PostgreSQL-gated suites each call `reset()` on the one database named
+     * by `AFTERMATH_TEST_DATABASE_URL`. Run in parallel, one file's reset wipes
+     * the rows another file is asserting on. Running files serially when — and
+     * only when — a test database is configured keeps those suites honest
+     * without slowing the default (SQLite, no URL) run.
+     */
+    fileParallelism: !process.env.AFTERMATH_TEST_DATABASE_URL,
   },
 });

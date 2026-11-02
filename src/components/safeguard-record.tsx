@@ -1,7 +1,10 @@
 import type {
   AiAnalysis,
+  BehaviourChange,
   ExtractedFact,
   MemoryRelation,
+  SafeguardApplication,
+  SafeguardMemory,
   SafeguardRecord,
   VerificationState,
 } from "@/lib/schemas";
@@ -356,6 +359,208 @@ function AiReading({ ai }: { ai: AiAnalysis }) {
 }
 
 
+const DECISION_TONE: Record<string, Tone> = {
+  ALLOW: "ok",
+  BLOCK: "bad",
+  REQUIRE_VERIFICATION: "warn",
+  UNKNOWN: "unknown",
+};
+
+/**
+ * The learning-loop node of the record: what this investigation learned, what it
+ * recalled, and — where a memory applied — the precise behaviour change. Rendered
+ * only when the record actually carries learning-loop data, so older records are
+ * unaffected.
+ */
+function LearningNode({ record }: { record: SafeguardRecord }) {
+  const learned: SafeguardMemory[] = record.learnedSafeguards ?? [];
+  const applications: SafeguardApplication[] = record.safeguardApplications ?? [];
+  const change: BehaviourChange | undefined = record.behaviourChange;
+  if (learned.length === 0 && applications.length === 0 && !change) return null;
+
+  const applied = applications.filter((a) => a.applicable);
+  const influenced = Boolean(change?.attributableToMemory);
+  const verdictChanged =
+    Boolean(change) && change!.beforeDecision !== change!.afterDecision;
+
+  return (
+    <ChainNode
+      index={7}
+      title="Learning loop"
+      tone={influenced ? "ok" : applied.length > 0 ? "warn" : "neutral"}
+      state={
+        <div className="flex flex-wrap gap-2">
+          <Pill tone={learned.length > 0 ? "info" : "neutral"}>
+            {learned.length} safeguard(s) learned
+          </Pill>
+          <Pill tone={applied.length > 0 ? "warn" : "neutral"}>
+            {applied.length} applied
+          </Pill>
+          <Pill tone={influenced ? "ok" : "neutral"}>
+            {verdictChanged
+              ? "verdict changed"
+              : influenced
+                ? "requirements strengthened"
+                : "no behaviour change"}
+          </Pill>
+        </div>
+      }
+    >
+      {learned.length > 0 ? (
+        <div>
+          <div className="label mb-1">Safeguards learned from this incident</div>
+          <ul className="space-y-2">
+            {learned.map((m) => (
+              <li
+                key={`${m.memoryId}@v${m.version}`}
+                className="rounded border hairline bg-[#0a0d12] px-3 py-2"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="mono text-[0.6875rem] text-paper-500">
+                    {m.memoryId}@v{m.version}
+                  </span>
+                  <Pill tone={m.authoritative ? "ok" : "warn"}>
+                    {m.authoritative ? "authoritative" : "unverified · not enforced"}
+                  </Pill>
+                  <Pill
+                    tone={
+                      m.walrus.recallVerified
+                        ? "ok"
+                        : m.walrus.persisted
+                          ? "warn"
+                          : "unknown"
+                    }
+                  >
+                    {m.walrus.recallVerified
+                      ? "Walrus · recall verified"
+                      : m.walrus.persisted
+                        ? "Walrus · stored"
+                        : "not persisted"}
+                  </Pill>
+                </div>
+                <p className="mt-1.5 text-[0.8125rem] leading-relaxed text-paper-200">
+                  {m.correctiveRule}
+                </p>
+                <div className="mt-1.5 text-[0.6875rem] leading-relaxed text-paper-500">
+                  <span className="mono text-paper-600">basis:</span>{" "}
+                  {m.supportBasis}
+                </div>
+                {m.walrus.blobId ? (
+                  <div className="mono mt-1 break-all text-[0.6875rem] text-paper-600">
+                    Walrus blob {m.walrus.blobId} · backend {m.walrus.backend}
+                  </div>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {applications.length > 0 ? (
+        <div>
+          <div className="label mb-1">
+            Recalled memories and their applicability
+          </div>
+          <ul className="space-y-2">
+            {applications.map((a) => (
+              <li
+                key={`${a.memoryId}-${a.blobId}`}
+                className="rounded border hairline bg-[#0a0d12] px-3 py-2"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <Pill tone={RELATION_TONE[a.relation]}>
+                    {RELATION_LABEL[a.relation]}
+                  </Pill>
+                  <Pill tone={a.applicable ? "ok" : "neutral"}>
+                    {a.applicable ? "applied" : "not applied"}
+                  </Pill>
+                  <Pill tone={a.authoritative ? "info" : "warn"}>
+                    {a.authoritative ? "authoritative" : "not authoritative"}
+                  </Pill>
+                  <span className="mono text-[0.6875rem] text-paper-500">
+                    {a.memoryId}
+                  </span>
+                </div>
+                <div className="mt-1 text-[0.75rem] leading-relaxed text-paper-300">
+                  {a.relevance}
+                </div>
+                <div className="mt-1 text-[0.6875rem] leading-relaxed text-paper-500">
+                  <span className="mono text-paper-600">applicability:</span>{" "}
+                  {a.applicabilityBasis}
+                </div>
+                {a.contributedRule ? (
+                  <div className="mt-1 text-[0.75rem] leading-relaxed text-paper-200">
+                    <span className="mono text-[0.6875rem] text-paper-600">
+                      contributed rule:
+                    </span>{" "}
+                    {a.contributedRule}
+                  </div>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {change ? (
+        <div>
+          <div className="label mb-1">Behaviour change</div>
+          <div className="grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
+            <div className="rounded border hairline bg-[#0a0d12] px-3 py-2">
+              <div className="label">Before memory</div>
+              <div className="mt-1.5">
+                <Pill tone={DECISION_TONE[change.beforeDecision] ?? "neutral"}>
+                  {change.beforeDecision.replace(/_/g, " ")}
+                </Pill>
+              </div>
+              <div className="mt-1 text-[0.6875rem] leading-relaxed text-paper-600">
+                The same engine with the applicable safeguard held out.
+              </div>
+            </div>
+            <div className="hidden justify-center sm:flex" aria-hidden>
+              <span className="mono text-paper-600">→</span>
+            </div>
+            <div
+              className={`rounded border px-3 py-2 ${
+                change.changed
+                  ? "border-signal-ok/40 bg-signal-ok/[0.05]"
+                  : "border hairline bg-[#0a0d12]"
+              }`}
+            >
+              <div className="label">After memory</div>
+              <div className="mt-1.5">
+                <Pill tone={DECISION_TONE[change.afterDecision] ?? "neutral"}>
+                  {change.afterDecision.replace(/_/g, " ")}
+                </Pill>
+              </div>
+              <div className="mt-1 text-[0.6875rem] leading-relaxed text-paper-600">
+                The same engine with the applicable safeguard enforced.
+              </div>
+            </div>
+          </div>
+          {change.addedRequiredChecks.length > 0 ? (
+            <div className="mt-2">
+              <div className="label mb-1">Verification requirements added</div>
+              <Bullets items={change.addedRequiredChecks} />
+            </div>
+          ) : null}
+          {change.changedByRule ? (
+            <div className="mt-2 rounded border hairline bg-[#0a0d12] px-3 py-2">
+              <div className="label">The rule that changed it</div>
+              <div className="mt-0.5 text-[0.8125rem] leading-relaxed text-paper-200">
+                {change.changedByRule}
+              </div>
+            </div>
+          ) : null}
+          <p className="mt-2 text-[0.75rem] leading-relaxed text-paper-500">
+            {change.explanation}
+          </p>
+        </div>
+      ) : null}
+    </ChainNode>
+  );
+}
+
 export function SafeguardRecordView({ record }: { record: SafeguardRecord }) {
   const { investigation, recommendation, verification, memory } = record;
   const c = investigation.categories;
@@ -706,6 +911,8 @@ export function SafeguardRecordView({ record }: { record: SafeguardRecord }) {
               )}
             </div>
           </ChainNode>
+
+          <LearningNode record={record} />
         </ol>
       </div>
     </article>

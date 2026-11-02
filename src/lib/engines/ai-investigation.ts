@@ -197,6 +197,18 @@ export async function runAiInvestigation(input: {
   // a token by accident; the model never needs it.
   const material = redact(input.text);
   const bounded = boundMaterial(material);
+  // The structured context fields are untrusted too: redact them before they are
+  // placed in the user message, so a credential pasted into `expectedBehavior`,
+  // `actualBehavior`, or `service` is never sent to the model.
+  const context = {
+    ...(input.service ? { service: redact(input.service) } : {}),
+    ...(input.expectedBehavior
+      ? { expectedBehavior: redact(input.expectedBehavior) }
+      : {}),
+    ...(input.actualBehavior
+      ? { actualBehavior: redact(input.actualBehavior) }
+      : {}),
+  };
   const injectionDetected = detectInjection(material);
 
   if (!client.isConfigured) {
@@ -209,7 +221,7 @@ export async function runAiInvestigation(input: {
     result = await client.complete({
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: buildUserMessage(bounded, input) },
+        { role: "user", content: buildUserMessage(bounded, context) },
       ],
       jsonSchema: { name: "incident_analysis", schema: RESPONSE_SCHEMA },
       maxOutputTokens,

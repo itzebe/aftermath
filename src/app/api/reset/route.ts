@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { resetAll } from "@/lib/service";
 import { withStore } from "@/lib/api/errors";
 import { loadConfig } from "@/lib/config";
-import { adminLimiter, guardAdminRequest } from "@/lib/api/verify-guard";
+import { adminWriteLimiter, guardAdminWrite } from "@/lib/api/admin-write-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,13 +12,14 @@ export const dynamic = "force-dynamic";
  *
  * This is destructive — it deletes the incident, decision, rule, and memory-write
  * ledger rows — so it requires the administrator token and fails closed when no
- * token is configured. It never touches on-chain state; Walrus blobs are
- * immutable and are not removed here.
+ * token is configured. Its rate limit is enforced through a shared, atomic
+ * counter so it holds across serverless instances. It never touches on-chain
+ * state; Walrus blobs are immutable and are not removed here.
  */
 export async function POST(request: Request) {
   const config = loadConfig();
-  const guard = guardAdminRequest(request, config, {
-    limiter: adminLimiter("reset", config),
+  const guard = await guardAdminWrite(request, config, {
+    limiter: adminWriteLimiter("reset", config),
   });
   if (!guard.ok) return guard.response;
 

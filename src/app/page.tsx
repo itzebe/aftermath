@@ -158,8 +158,11 @@ export default async function HomePage() {
               illustrative.
             </p>
             <div className="mt-5 flex flex-wrap items-center gap-3">
+              <Link href="/learning" className="link-quiet text-[0.875rem]">
+                Open the Learning Loop →
+              </Link>
               <Link href="/lab" className="link-quiet text-[0.875rem]">
-                Open the Evaluation Lab →
+                Evaluation Lab →
               </Link>
               <Link href="/records" className="link-quiet text-[0.875rem]">
                 Browse Safeguard Records →

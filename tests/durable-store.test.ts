@@ -147,7 +147,12 @@ maybe("durable audit store across instances", () => {
     );
 
     const record = await runSubmissionPipeline(
-      { text: "2026-03-01T10:00:00Z ERROR checkout-service returned 503" },
+      {
+        text:
+          "2026-03-01T10:00:00Z ERROR checkout-service\n" +
+          "POST /v1/charge returned 503 Service Unavailable after retry (attempt 2/3)\n" +
+          "the agent reported success",
+      },
       {
         store: writer,
         memory: new SimulatedMemoryAdapter("aftermath-test"),
@@ -158,6 +163,9 @@ maybe("durable audit store across instances", () => {
     // The reader process never saw the write; the record must come from the DB.
     const seen = await reader.getSafeguardRecord(record.recordId);
     expect(seen).not.toBeNull();
+    // The input asserts a success the evidence does not support, so the
+    // pipeline derives a rule and genuinely executes it (test_executed), while
+    // never claiming the single incident proves a repeat was prevented.
     expect(seen!.verification.state).toBe("test_executed");
     expect(seen!.provenance).toBe("simulated");
 

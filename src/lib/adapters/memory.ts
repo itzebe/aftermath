@@ -1,10 +1,12 @@
-import type {
-  CorrectiveLessonRecord,
-  Incident,
-  MemoryBackendId,
-  MemoryWriteReceipt,
-  MemoryWriteState,
-  Provenance,
+import {
+  SafeguardMemoryRecordSchema,
+  type CorrectiveLessonRecord,
+  type Incident,
+  type MemoryBackendId,
+  type MemoryWriteReceipt,
+  type MemoryWriteState,
+  type Provenance,
+  type SafeguardMemoryRecord,
 } from "@/lib/schemas";
 
 // The receipt shape is defined once in schemas.ts (so the Safeguard Record can
@@ -18,6 +20,12 @@ export interface RecalledLesson {
   createdAt?: string;
   /** Parsed lesson record, when the text is a valid corrective_lesson JSON. */
   record?: CorrectiveLessonRecord;
+  /**
+   * Parsed safeguard-memory record, when the text is a valid safeguard_memory
+   * JSON. A recalled memory carries full applicability conditions, so the engine
+   * can evaluate it rather than merely display it.
+   */
+  safeguardMemory?: SafeguardMemoryRecord;
   provenance: Provenance;
 }
 
@@ -124,6 +132,15 @@ export interface MemoryAdapter {
 
   rememberIncident(incident: Incident, options?: WriteOptions): Promise<MemoryWriteReceipt>;
   rememberLesson(lesson: CorrectiveLessonRecord, options?: WriteOptions): Promise<MemoryWriteReceipt>;
+  /**
+   * Persist a Safeguard Memory — the structured safeguard a verified failure
+   * produced. Its text carries the full applicability conditions and required
+   * checks so a later recall can evaluate it, not merely display it.
+   */
+  rememberSafeguard(
+    memory: SafeguardMemoryRecord,
+    options?: WriteOptions,
+  ): Promise<MemoryWriteReceipt>;
 
   /** Poll a previously accepted write until it completes or fails. */
   waitForWriteCompletion(jobId: string): Promise<MemoryWriteReceipt>;
@@ -182,6 +199,20 @@ export function lessonToMemoryText(lesson: CorrectiveLessonRecord): string {
   ].join("\n");
 }
 
+/**
+ * Canonical text form of a Safeguard Memory. Like a lesson, the structured
+ * record is embedded as JSON so it round-trips through recall unchanged, and
+ * `created_at` is excluded from the hashed body so a retry is byte-identical.
+ */
+export function safeguardMemoryToMemoryText(memory: SafeguardMemoryRecord): string {
+  const { created_at: _ignored, ...stable } = memory;
+  return [
+    `safeguard_memory:${memory.domain}:${memory.failure_category}`,
+    memory.corrective_rule,
+    JSON.stringify(stable),
+  ].join("\n");
+}
+
 export function incidentToMemoryText(incident: Incident): string {
   const evidence = incident.evidenceReferences
     .map((e) => `${e.kind}:${e.ref}`)
@@ -210,6 +241,38 @@ export function incidentToMemoryText(incident: Incident): string {
 export function parseLessonFromMemoryText(
   text: string,
 ): CorrectiveLessonRecord | undefined {
+  const parsed = parseEmbeddedJson(text);
+  if (parsed && parsed.type === "corrective_lesson") {
+    return parsed as CorrectiveLessonRecord;
+  }
+  return undefined;
+}
+
+/**
+ * Extract an embedded Safeguard Memory from recalled memory text.
+ *
+ * A record with the `safeguard_memory` type is returned only when it validates
+ * against `SafeguardMemoryRecordSchema`. Validation here is structural — the
+ * engine still decides applicability and authority from the record's own
+ * fields, so a malformed or partial record can never be enforced.
+ */
+export function parseSafeguardMemoryFromMemoryText(
+  text: string,
+): SafeguardMemoryRecord | undefined {
+  const parsed = parseEmbeddedJson(text);
+  if (!parsed || parsed.type !== "safeguard_memory") return undefined;
+  const result = SafeguardMemoryRecordSchema.safeParse(parsed);
+  return result.success ? result.data : undefined;
+}
+
+/**
+ * Pull the embedded JSON object out of memory text.
+ *
+ * Two candidate slices are tried: from the first `{` to the end, and from the
+ * first `{` to the last `}`. The second tolerates trailing prose after the
+ * object, which the relayer's text form can carry.
+ */
+function parseEmbeddedJson(text: string): Record<string, unknown> | undefined {
   const start = text.indexOf("{");
   if (start === -1) return undefined;
   const candidates = [text.slice(start)];
@@ -217,9 +280,9 @@ export function parseLessonFromMemoryText(
   if (lastBrace > start) candidates.push(text.slice(start, lastBrace + 1));
   for (const candidate of candidates) {
     try {
-      const parsed = JSON.parse(candidate);
-      if (parsed && parsed.type === "corrective_lesson") {
-        return parsed as CorrectiveLessonRecord;
+      const parsed = JSON.parse(candidate) as unknown;
+      if (parsed && typeof parsed === "object") {
+        return parsed as Record<string, unknown>;
       }
     } catch {
       // try the next candidate slice

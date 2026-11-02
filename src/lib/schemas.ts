@@ -210,6 +210,20 @@ export const SafeguardDecisionSchema = z.object({
   decision: DecisionSchema,
   reason: z.string().min(1),
   applicableRuleIds: z.array(z.string()),
+  /**
+   * Applicable safeguard memories that were *enforced* for this decision. Only
+   * memories whose applicability conditions matched are listed here; a memory
+   * that was merely retrieved is not.
+   */
+  applicableMemoryIds: z.array(z.string()).optional(),
+  /**
+   * The verification checks the *enforced* safeguard memories require for this
+   * decision. Exposed so the learning loop can measure the memory's own
+   * contribution (the checks the engine would not otherwise require) instead of
+   * inferring it from the final decision, which the legacy lesson path can also
+   * produce.
+   */
+  requiredChecks: z.array(z.string()).optional(),
   evidenceReferences: z.array(z.string()),
   retrievedMemoryIds: z.array(z.string()),
   missingPreconditions: z.array(z.string()),
@@ -618,6 +632,218 @@ export const RecalledMemorySchema = z.object({
 export type RecalledMemory = z.infer<typeof RecalledMemorySchema>;
 
 /**
+ * A Safeguard Memory — the durable record a verified failure leaves behind so a
+ * later investigation can be changed by it.
+ *
+ * This is the "learn" stage of the learning loop, made a first-class record
+ * rather than a side effect of a lesson write. Every field the brief requires is
+ * present: identity, origin incident, failure category, verified description,
+ * supporting evidence, root cause (where established), the corrective rule, the
+ * conditions under which it applies, the verification checks it requires,
+ * confidence and limitations, a creation timestamp, and the Walrus persistence
+ * reference.
+ *
+ * A memory is authoritative only when `authoritative` is true, which the engine
+ * sets only for a sufficiently-supported, verified finding. An unverified
+ * observation may still be recorded (`authoritative: false`) but it is never
+ * enforced and never silently becomes a permanent rule.
+ */
+export const SafeguardMemorySchema = z.object({
+  type: z.literal("safeguard_memory"),
+  /** Deterministic identity: domain + failure category, so a recurrence reuses it. */
+  memoryId: z.string().min(1),
+  version: z.number().int().positive(),
+  /** The incident this safeguard was learned from. */
+  originIncidentId: z.string().min(1),
+  domain: DomainSchema,
+  actionType: z.string().min(1).max(120),
+  failureCategory: FailurePatternSchema,
+  /** What verified failure was observed, stated from the evidence. */
+  verifiedFailureDescription: z.string().min(1).max(4000),
+  /** The evidence supporting the finding, as a traceable reference. */
+  evidence: z.array(z.string().min(1).max(1000)).min(1),
+  /** The root cause, when the evidence actually establishes one. */
+  rootCause: z.string().max(2000).optional(),
+  /** The corrective rule the memory enforces. */
+  correctiveRule: z.string().min(1).max(4000),
+  /** Conditions under which the rule applies. */
+  appliesWhen: z.array(z.string().min(1).max(300)).min(1),
+  /** The verification checks the rule requires. */
+  requiredChecks: z.array(z.string().min(1).max(600)).min(1),
+  /** The decision the rule forces when it applies and evidence is insufficient. */
+  action: z.enum(["BLOCK", "REQUIRE_VERIFICATION"]),
+  severity: SeveritySchema,
+  /** Confidence in the finding, 0..1. A hypothesis-with-evidence, not certainty. */
+  confidence: z.number().min(0).max(1),
+  /** Known limits of the finding, so it is not over-applied. */
+  limitations: z.array(z.string().min(1).max(600)),
+  /**
+   * Whether this finding is sufficiently supported to be enforced. Only an
+   * `authoritative` memory may change a subsequent investigation's decision.
+   */
+  authoritative: z.boolean(),
+  /** Why the memory is (or is not) authoritative, stated for the reader. */
+  supportBasis: z.string().min(1).max(2000),
+  /** Lifecycle. A superseded memory is retained for provenance but not enforced. */
+  status: z.enum(["active", "superseded", "retired"]),
+  /**
+   * The exact memory identity of the predecessor this version corrects, in
+   * `memoryId@vN` form. Distinct from `memoryId` so a version never references
+   * itself, and so the effective-version resolver can retire it.
+   */
+  supersedes: z.string().max(200).optional(),
+  /** Stable base identity shared by every version of this safeguard. */
+  baseMemoryId: z.string().min(1).optional(),
+  /**
+   * Whether this is the effective (highest active authoritative) version for its
+   * base identity. Derived at recall time; the decision engine only ever
+   * receives the effective version.
+   */
+  effective: z.boolean().optional(),
+  createdAt: z.string(),
+  /** Walrus persistence reference: the blob id, once a write completed. */
+  walrus: z.object({
+    blobId: z.string().optional(),
+    namespace: z.string().optional(),
+    backend: z.string().min(1),
+    /** Only true when the write genuinely completed with a blob id. */
+    persisted: z.boolean(),
+    /** Whether a recall query returned the record. */
+    recallVerified: z.boolean(),
+  }),
+  provenance: ProvenanceSchema,
+});
+export type SafeguardMemory = z.infer<typeof SafeguardMemorySchema>;
+
+/**
+ * The structured lesson text persisted for a Safeguard Memory.
+ *
+ * Distinct from `CorrectiveLessonRecord`: it carries the full applicability
+ * conditions and required checks, so a recalled memory can be *evaluated for
+ * applicability* rather than merely displayed.
+ */
+export const SafeguardMemoryRecordSchema = z.object({
+  type: z.literal("safeguard_memory"),
+  memory_id: z.string().min(1),
+  version: z.number().int().positive(),
+  origin_incident_id: z.string().min(1),
+  domain: DomainSchema,
+  action_type: z.string().min(1),
+  failure_category: FailurePatternSchema,
+  verified_failure: z.string().min(1),
+  evidence: z.array(z.string().min(1)),
+  root_cause: z.string().optional(),
+  corrective_rule: z.string().min(1),
+  applies_when: z.array(z.string().min(1)),
+  required_checks: z.array(z.string().min(1)),
+  action: z.enum(["BLOCK", "REQUIRE_VERIFICATION"]),
+  severity: SeveritySchema,
+  confidence: z.number().min(0).max(1),
+  limitations: z.array(z.string().min(1)),
+  authoritative: z.boolean(),
+  support_basis: z.string().min(1),
+  status: z.enum(["active", "superseded", "retired"]),
+  /**
+   * The predecessor this version corrects, as `memory_id@vN`. The base id is
+   * reused across versions, so this must name the exact prior identity — never
+   * the bare base id, which would make the record appear to supersede itself.
+   */
+  supersedes: z.string().optional(),
+  /**
+   * Excluded from the serialized memory text so a retry is byte-identical (the
+   * idempotency key hashes that text), so a recalled record may not carry it.
+   */
+  created_at: z.string().optional(),
+  provenance: ProvenanceSchema,
+});
+export type SafeguardMemoryRecord = z.infer<typeof SafeguardMemoryRecordSchema>;
+
+/**
+ * Why a recalled memory was (or was not) applied to a specific investigation.
+ *
+ * This is the recall stage's audit trail: which memory was retrieved, why it was
+ * considered relevant, whether it was applicable, the rule it contributed, and
+ * whether it changed the investigation. A memory that was retrieved but not
+ * applicable is recorded here and does not influence the decision.
+ */
+export const SafeguardApplicationSchema = z.object({
+  memoryId: z.string().min(1),
+  /** The exact version of the memory evaluated, so provenance is unambiguous. */
+  version: z.number().int().positive().optional(),
+  blobId: z.string().min(1),
+  /** How the record was returned: by similarity, or as a confirmed recurrence. */
+  relation: MemoryRelationSchema,
+  /** Why the memory was retrieved and considered. */
+  relevance: z.string().min(1).max(2000),
+  /** Whether the memory's conditions actually match this investigation. */
+  applicable: z.boolean(),
+  /** The reason the applicability check passed or failed. */
+  applicabilityBasis: z.string().min(1).max(2000),
+  /** The rule the memory contributed, when it was applied. */
+  contributedRule: z.string().max(4000).optional(),
+  /** The verification requirement the memory added, when it was applied. */
+  addedVerification: z.string().max(1000).optional(),
+  /** Whether applying it changed the investigation's decision or requirements. */
+  changedBehaviour: z.boolean(),
+  /** Whether the memory is authoritative (only these may be enforced). */
+  authoritative: z.boolean(),
+  /**
+   * Version currency of the enforced record, present only when the record was
+   * applied. `uncertain` is true when a higher version may exist that recall did
+   * not return, so the applied version is the latest *known* rather than the
+   * latest *verified*.
+   */
+  versionCertainty: z
+    .object({
+      latestKnownVersion: z.number().int().positive(),
+      latestGloballyVerifiedVersion: z.number().int().positive().optional(),
+      uncertain: z.boolean(),
+    })
+    .optional(),
+  provenance: ProvenanceSchema,
+});
+export type SafeguardApplication = z.infer<typeof SafeguardApplicationSchema>;
+
+/**
+ * The before/after of a memory's effect on one investigation.
+ *
+ * `before` is the decision and requirements computed with no memory applied;
+ * `after` is the decision and requirements with the applicable safeguards
+ * enforced. Both are produced by the same deterministic decision engine, so the
+ * difference is a real counterfactual over the engine, not a fabricated screen.
+ */
+export const BehaviourChangeSchema = z.object({
+  /** True only when the decision or the required checks actually differ. */
+  changed: z.boolean(),
+  beforeDecision: DecisionSchema,
+  afterDecision: DecisionSchema,
+  beforeRequiredChecks: z.array(z.string()),
+  afterRequiredChecks: z.array(z.string()),
+  addedRequiredChecks: z.array(z.string()),
+  /** The precise rule that changed the outcome, when one did. */
+  changedByRule: z.string().max(4000).optional(),
+  /** The applied memory that caused the change, when one did. */
+  changedByMemoryId: z.string().max(200).optional(),
+  /** The exact version of the applied memory that caused the change. */
+  changedByMemoryVersion: z.number().int().positive().optional(),
+  /**
+   * What the two arms held constant. Both arms use identical evidence, identical
+   * legacy `recalledLessons`, and identical rules; only the safeguard-memory
+   * mechanism differs. Stated so the comparison cannot be mistaken for a claim
+   * that the legacy lesson path was absent.
+   */
+  comparisonBasis: z.string().max(2000).optional(),
+  /** True only when the change is attributable to the safeguard-memory mechanism. */
+  attributableToMemory: z.boolean().optional(),
+  /**
+   * An honest statement of what the comparison shows — and, where the system
+   * cannot reliably establish what would have happened, the limitation.
+   */
+  explanation: z.string().min(1).max(4000),
+});
+export type BehaviourChange = z.infer<typeof BehaviourChangeSchema>;
+
+/**
  * The signature artifact. Connects
  *   Incident -> Evidence -> Hypothesis -> Safeguard -> Verification -> Memory
  * with truthful state labels at every join.
@@ -638,6 +864,21 @@ export const SafeguardRecordSchema = z.object({
   decision: SafeguardDecisionSchema,
   verification: VerificationSchema,
   recalledMemories: z.array(RecalledMemorySchema),
+  /**
+   * The safeguard memories created by this investigation (the "learn" stage).
+   * Optional so records written before the learning loop existed still load.
+   */
+  learnedSafeguards: z.array(SafeguardMemorySchema).optional(),
+  /**
+   * The applicability evaluation of every recalled memory (the "recall" stage):
+   * which memory was retrieved, why, whether it applied, and what it contributed.
+   */
+  safeguardApplications: z.array(SafeguardApplicationSchema).optional(),
+  /**
+   * The before/after of the applicable memories' effect on this investigation
+   * (the "change behaviour" stage). Absent when nothing was applicable.
+   */
+  behaviourChange: BehaviourChangeSchema.optional(),
   memory: z.object({
     /** Persistence of the incident record. */
     incident: MemoryWriteReceiptSchema,

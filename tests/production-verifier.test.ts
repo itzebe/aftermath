@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { assessOverview, type OverviewShape } from "../scripts/verify-production";
+import {
+  assessLearning,
+  assessOverview,
+  type LearningLoopShape,
+  type OverviewShape,
+} from "../scripts/verify-production";
 
 /**
  * The production verifier is a claim-checking tool: it must fail loudly when the
@@ -100,6 +105,113 @@ describe("production verifier", () => {
 
   it("treats a missing overview payload as a failure, not a pass", () => {
     const checks = assessOverview(null);
+    expect(checks).toHaveLength(1);
+    expect(checks[0].ok).toBe(false);
+  });
+});
+
+describe("production verifier — learning loop", () => {
+  const liveLearning: LearningLoopShape = {
+    retrieval: [
+      {
+        memoryId: "safeguard-incident-unsupported_completion_claim",
+        originalIncidentId: "inc-1",
+        applicable: true,
+        changedBehaviour: true,
+        blobId: "blob-abc",
+      },
+      {
+        memoryId: "other-memory",
+        originalIncidentId: "inc-2",
+        applicable: false,
+        changedBehaviour: false,
+      },
+    ],
+    behaviourChanges: [
+      {
+        changed: true,
+        attributableToMemory: true,
+        beforeDecision: "REQUIRE_VERIFICATION",
+        afterDecision: "REQUIRE_VERIFICATION",
+        addedRequiredChecks: ["Capture the authoritative record."],
+        changedByMemoryId: "safeguard-incident-unsupported_completion_claim",
+      },
+    ],
+    impact: {
+      totalVerifiedSafeguards: 1,
+      safeguardsPersisted: 1,
+      memoriesRecalled: 2,
+      memoriesApplied: 1,
+      investigationsInfluenced: 1,
+      verificationRequirementsStrengthened: 1,
+      demonstratedRepeatPreventions: 0,
+    },
+    provenance: [
+      {
+        memoryId: "safeguard-incident-unsupported_completion_claim",
+        persisted: true,
+        recallVerified: true,
+      },
+    ],
+  };
+
+  it("passes for an internally consistent learning loop", () => {
+    expect(assessLearning(liveLearning).every((c) => c.ok)).toBe(true);
+  });
+
+  it("fails when an influenced investigation has no behaviour change behind it", () => {
+    const inconsistent: LearningLoopShape = {
+      ...liveLearning,
+      behaviourChanges: [],
+    };
+    const found = assessLearning(inconsistent).find((c) =>
+      c.name.includes("behaviour change"),
+    );
+    expect(found?.ok).toBe(false);
+  });
+
+  it("fails when the applied counter disagrees with the retrievals", () => {
+    const inflated: LearningLoopShape = {
+      ...liveLearning,
+      impact: { ...liveLearning.impact, memoriesApplied: 5 },
+    };
+    const found = assessLearning(inflated).find((c) => c.name.includes("applied counter"));
+    expect(found?.ok).toBe(false);
+  });
+
+  it("fails when a persisted memory is not recall-verified", () => {
+    const unverified: LearningLoopShape = {
+      ...liveLearning,
+      provenance: [
+        { memoryId: "safeguard-incident-unsupported_completion_claim", persisted: true, recallVerified: false },
+      ],
+    };
+    const found = assessLearning(unverified).find((c) =>
+      c.name.includes("recall-verified"),
+    );
+    expect(found?.ok).toBe(false);
+  });
+
+  it("fails when a changed behaviour is not attributable to the memory", () => {
+    const noop: LearningLoopShape = {
+      ...liveLearning,
+      behaviourChanges: [
+        {
+          changed: true,
+          attributableToMemory: false,
+          beforeDecision: "REQUIRE_VERIFICATION",
+          afterDecision: "REQUIRE_VERIFICATION",
+          addedRequiredChecks: [],
+          changedByMemoryId: "safeguard-incident-unsupported_completion_claim",
+        },
+      ],
+    };
+    const found = assessLearning(noop).find((c) => c.name.includes("memory-caused effect"));
+    expect(found?.ok).toBe(false);
+  });
+
+  it("treats a missing learning payload as a failure, not a pass", () => {
+    const checks = assessLearning(null);
     expect(checks).toHaveLength(1);
     expect(checks[0].ok).toBe(false);
   });

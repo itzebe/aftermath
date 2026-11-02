@@ -269,6 +269,40 @@ describe("groundResponse", () => {
   });
 });
 
+describe("runAiInvestigation — the model never receives a pasted credential", () => {
+  it("redacts the structured context fields before building the user message", async () => {
+    const client = fakeClient(groundedResponse());
+    await runAiInvestigation({
+      client,
+      text: MATERIAL,
+      service: "payment-api",
+      expectedBehavior: "the charge succeeds",
+      actualBehavior: "bearer abcDEF1234567890 leaked",
+    });
+    const userMessage = client.calls[0]?.messages.find((m) => m.role === "user");
+    expect(userMessage).toBeDefined();
+    const content = String(userMessage?.content ?? "");
+    // The credential-shaped actual behavior is redacted before it leaves.
+    expect(content).not.toContain("abcDEF1234567890");
+    // The non-secret context still reaches the model.
+    expect(content).toContain("payment-api");
+    expect(content).toContain("the charge succeeds");
+  });
+
+  it("redacts a credential placed in the service field", async () => {
+    const client = fakeClient(groundedResponse());
+    await runAiInvestigation({
+      client,
+      text: MATERIAL,
+      service: "svc-token-ABCDEFGHIJKLMNOPQRSTUVWX123456",
+    });
+    const content = String(
+      client.calls[0]?.messages.find((m) => m.role === "user")?.content ?? "",
+    );
+    expect(content).not.toContain("ABCDEFGHIJKLMNOPQRSTUVWX123456");
+  });
+});
+
 describe("AiAnalysisCache", () => {
   it("returns a stored value and evicts beyond its bound", () => {
     const cache = new AiAnalysisCache<number>(2, 60_000);
