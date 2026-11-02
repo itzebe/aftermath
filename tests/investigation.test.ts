@@ -64,6 +64,23 @@ describe("extractSignals", () => {
     expect(s.hasTimeout).toBe(true);
     expect(s.hasRetry).toBe(true);
   });
+
+  it("extracts a Sui base58 digest as a defined value, never `undefined`", () => {
+    // Regression: the digest patterns capture the whole match, so the value is
+    // `m[0]`. Reading `m[1]` produced `undefined`, which crashed the finance
+    // pipeline when it built the evidence reference from `signals.digests[0]`.
+    const digest = "5Kd3Nb9XoPqRsTuVwXyZ1a2b3c4d5e6f7g8h9iJkLmN";
+    const s = extractSignals(`settlement failed, digest ${digest}`);
+    expect(s.digests).toContain(digest);
+    expect(s.digests.every((d) => typeof d === "string" && d.length > 0)).toBe(true);
+  });
+
+  it("extracts a labelled 0x hex transaction hash as a defined value", () => {
+    const hash = "0x" + "b".repeat(64);
+    const s = extractSignals(`settlement failed, tx hash ${hash}`);
+    expect(s.digests).toContain(hash);
+    expect(s.digests.every((d) => typeof d === "string" && d.length > 0)).toBe(true);
+  });
 });
 
 describe("inferDomain", () => {

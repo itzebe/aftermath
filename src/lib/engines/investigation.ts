@@ -273,11 +273,14 @@ export interface SubmissionSignals {
 }
 
 export function extractSignals(text: string): SubmissionSignals {
+  // `SUI_DIGEST` and `HEX_TX` capture the whole match (no group), so the value
+  // is `m[0]`, not `m[1]` — reading `m[1]` yields `undefined` and crashes the
+  // finance pipeline downstream.
   const digests = uniq([
-    ...collect(text, SUI_DIGEST, "digest", (m) => ({ value: m[1], source: m[0] })).map(
+    ...collect(text, SUI_DIGEST, "digest", (m) => ({ value: m[0], source: m[0] })).map(
       (f) => f.value,
     ),
-    ...collect(text, HEX_TX, "digest", (m) => ({ value: m[1], source: m[0] })).map(
+    ...collect(text, HEX_TX, "digest", (m) => ({ value: m[0], source: m[0] })).map(
       (f) => f.value,
     ),
   ]);
