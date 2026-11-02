@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { AftermathConfig } from "@/lib/config";
-import { evaluatePublicSubmitAvailability } from "@/lib/api/public-submit-guard";
+import { evaluatePublicSubmitAvailability, guardIncidentSubmission } from "@/lib/api/public-submit-guard";
 import { resetSharedLimiters } from "@/lib/api/rate-limit";
 
 /**
@@ -139,5 +139,80 @@ describe("public submission availability fails closed", () => {
     const v = evaluatePublicSubmitAvailability(config());
     expect(v.available).toBe(true);
     expect(v.reason).toMatch(/safety controls are present/i);
+  });
+});
+
+/**
+ * Admission, not just availability.
+ *
+ * `evaluatePublicSubmitAvailability` decides whether the controls are present;
+ * `guardIncidentSubmission` decides who may proceed. A tokenless caller must be
+ * admitted *only* when the whole control set holds, and must be told it was the
+ * anonymous path. These use a real PostgreSQL index (so the shared-counter
+ * control is genuinely satisfied) and never call the memory relayer.
+ *
+ * Gated on AFTERMATH_TEST_DATABASE_URL; skipped without it.
+ */
+const testUrl = process.env.AFTERMATH_TEST_DATABASE_URL;
+const maybeLive = testUrl ? describe : describe.skip;
+
+maybeLive("public submission admission (real shared index)", () => {
+  const prevDatabaseUrl = process.env.DATABASE_URL;
+
+  beforeEach(async () => {
+    delete process.env.AFTERMATH_FORCE_MOCK_MEMORY;
+    // Credentials present + mock off selects the live adapter; the adapter is
+    // never called here, so no Mainnet traffic occurs.
+    process.env.MEMWAL_PRIVATE_KEY = "0x" + "1".repeat(64);
+    process.env.MEMWAL_ACCOUNT_ID = "0x" + "2".repeat(64);
+    process.env.DATABASE_URL = testUrl!;
+    await freshRuntime();
+  });
+
+  afterEach(() => {
+    if (prevDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = prevDatabaseUrl;
+  });
+
+  function post(token?: string): Request {
+    const headers: Record<string, string> = {
+      "content-type": "application/json",
+      "x-real-ip": "203.0.113.9",
+    };
+    if (token) headers.authorization = `Bearer ${token}`;
+    return new Request("http://test/api/incidents/submit", {
+      method: "POST",
+      headers,
+    });
+  }
+
+  it("admits a tokenless caller as anonymous when the controls hold", async () => {
+    resetSharedLimiters();
+    const guard = await guardIncidentSubmission(
+      post(),
+      config({ publicSubmission: { enabled: true } }),
+    );
+    expect(guard.ok).toBe(true);
+    if (guard.ok) expect(guard.anonymous).toBe(true);
+  });
+
+  it("keeps the route admin-gated when the operator has not opted in", async () => {
+    resetSharedLimiters();
+    const guard = await guardIncidentSubmission(
+      post(),
+      config({ publicSubmission: { enabled: false } }),
+    );
+    expect(guard.ok).toBe(false);
+    if (!guard.ok) expect(guard.response.status).toBe(401);
+  });
+
+  it("admits a valid admin token even when public submission is off", async () => {
+    resetSharedLimiters();
+    const guard = await guardIncidentSubmission(
+      post("tok"),
+      config({ publicSubmission: { enabled: false } }),
+    );
+    expect(guard.ok).toBe(true);
+    if (guard.ok) expect(guard.anonymous).toBe(false);
   });
 });

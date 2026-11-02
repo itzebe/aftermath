@@ -196,6 +196,13 @@ export interface SharedRateLimiterOptions {
   policy: RateLimitPolicy;
   store: RateLimitStore;
   /**
+   * The stable identifier for this limiter's bucket (e.g.
+   * `admin:incidents/submit`). Exposed so a caller can build a per-bucket
+   * counter key — `rateLimitKey(bucketId, clientId, salt)` — that hashes the
+   * client address rather than persisting it verbatim.
+   */
+  bucketId?: string;
+  /**
    * The in-process limiter used only while `store` is unavailable. Bounds abuse
    * during a database outage without failing the public site closed.
    */
@@ -273,6 +280,15 @@ export class SharedRateLimiter {
     this.globalMaxRequests = options.globalMaxRequests;
     this.globalScope = options.globalScope;
     this.retentionMs = options.retentionMs ?? DEFAULT_COUNTER_RETENTION_MS;
+  }
+
+  /**
+   * The stable bucket identifier, when one was supplied. Callers use it to
+   * derive a hashed counter key (`rateLimitKey`) instead of persisting a raw
+   * client address in the counter table.
+   */
+  get bucketId(): string | undefined {
+    return this.options.bucketId;
   }
 
   /**
@@ -399,6 +415,7 @@ export function limiterFor(
     limiter = new SharedRateLimiter({
       policy,
       store,
+      bucketId: key,
       fallback: new FixedWindowRateLimiter(policy),
       ...(options.globalMaxRequests !== undefined
         ? { globalMaxRequests: options.globalMaxRequests }
@@ -427,7 +444,7 @@ export function resetSharedLimiters(): void {
  * a public constant, so without that override the hash is only obfuscation.
  */
 export function rateLimitKey(
-  bucket: RateLimitBucket,
+  bucket: string,
   clientId: string,
   salt: string,
 ): string {
