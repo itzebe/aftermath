@@ -179,6 +179,27 @@ describe("production verifier — learning loop", () => {
     expect(found?.ok).toBe(false);
   });
 
+  it("does not count fixture retrievals against the production applied counter", () => {
+    // The counters are production evidence. A fixture retrieval is visible in
+    // the array but must not be compared against a production-only figure, or a
+    // fixture would make an honest counter look wrong.
+    const withFixture: LearningLoopShape = {
+      ...liveLearning,
+      retrieval: [
+        ...(liveLearning.retrieval ?? []),
+        {
+          memoryId: "safeguard-incident-unsupported_completion_claim",
+          originalIncidentId: "inc-fixture",
+          applicable: true,
+          changedBehaviour: true,
+          blobId: "blob-fixture",
+          fixture: true,
+        },
+      ],
+    };
+    expect(assessLearning(withFixture).every((c) => c.ok)).toBe(true);
+  });
+
   it("fails when a persisted memory is not recall-verified", () => {
     const unverified: LearningLoopShape = {
       ...liveLearning,
