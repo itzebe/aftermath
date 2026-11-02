@@ -238,6 +238,25 @@ export interface SharedRateLimiterOptions {
    * {@link DEFAULT_COUNTER_RETENTION_MS} when omitted.
    */
   retentionMs?: number;
+  /**
+   * How long to wait for the shared counter before degrading to the in-process
+   * cap.
+   *
+   * The store is the durable database. On a serverless host a cold start opens a
+   * fresh connection and, for the first request, takes a cross-instance advisory
+   * lock to run its migration. Under a traffic burst several instances do this at
+   * once and serialize on that lock, so a counter write can occasionally take
+   * seconds — or, if a dependency stalls, never return. Without a bound, the
+   * request that is waiting for the counter waits as long as the database does,
+   * and the platform turns that into a `504` for a request whose only sin was
+   * asking for a rate-limit decision.
+   *
+   * A healthy counter write is sub-100 ms, so a multi-second ceiling never fires
+   * in normal operation. When it does fire the request is not failed: it falls
+   * back to the in-process cap (still bounded, reported as `degraded`), so the
+   * public surface stays available while the shared store recovers.
+   */
+  storeTimeoutMs?: number;
   /** Injectable clock for deterministic tests. */
   now?: () => number;
 }
@@ -271,15 +290,20 @@ export class SharedRateLimiter {
   private readonly globalMaxRequests?: number;
   private readonly globalScope?: string;
   private readonly retentionMs: number;
+  private readonly storeTimeoutMs: number;
   /** Throttles the opportunistic sweep so it runs on a small fraction of hits. */
   private nextSweepAt = 0;
   private static readonly SWEEP_INTERVAL_MS = 60_000;
+  /** Default ceiling on a counter write before the request degrades. */
+  private static readonly DEFAULT_STORE_TIMEOUT_MS = 3_000;
 
   constructor(private readonly options: SharedRateLimiterOptions) {
     this.now = options.now ?? (() => Date.now());
     this.globalMaxRequests = options.globalMaxRequests;
     this.globalScope = options.globalScope;
     this.retentionMs = options.retentionMs ?? DEFAULT_COUNTER_RETENTION_MS;
+    this.storeTimeoutMs =
+      options.storeTimeoutMs ?? SharedRateLimiter.DEFAULT_STORE_TIMEOUT_MS;
   }
 
   /**
@@ -306,20 +330,49 @@ export class SharedRateLimiter {
       .catch(() => {});
   }
 
+  /**
+   * Charge one hit, but never wait longer than {@link storeTimeoutMs}.
+   *
+   * A rejected promise or a timeout both surface as a rejection here, so the
+   * caller's existing `catch` degrades to the in-process cap. The timeout does
+   * not cancel the underlying query — a settled database will finish it — but it
+   * frees the request so the platform never turns a stalled counter into a 504.
+   */
+  private async hitWithinTimeout(
+    key: string,
+    windowStart: number,
+  ): Promise<number> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error("rate-limit store timed out")),
+        this.storeTimeoutMs,
+      );
+    });
+    try {
+      return await Promise.race([
+        this.options.store.hit(key, windowStart),
+        timeout,
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
   async check(windowKey: string): Promise<RateLimitResult> {
     const now = this.now();
     const { maxRequests, windowMs } = this.options.policy;
     const windowStart = Math.floor(now / windowMs) * windowMs;
     this.maybeSweep(now);
     try {
-      const count = await this.options.store.hit(windowKey, windowStart);
+      const count = await this.hitWithinTimeout(windowKey, windowStart);
       // The global backstop is charged *after* the per-client counter, and only
       // rejects once it is over its (much higher) cap. It is keyed on the
       // bucket scope, never on the per-client key, so a caller who rotates the
       // forwarding header still shares this counter.
       let globalCount = 0;
       if (this.globalMaxRequests !== undefined && this.globalScope) {
-        globalCount = await this.options.store.hit(
+        globalCount = await this.hitWithinTimeout(
           globalLimitKey(this.globalScope),
           windowStart,
         );

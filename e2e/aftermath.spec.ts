@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 
 /**
@@ -7,7 +7,26 @@ import { readFileSync } from "node:fs";
  * These assert the product's honesty properties, not just that pages render:
  * simulated state must be labelled, and no figure may be presented as a live
  * Mainnet result when the backend is simulated.
+ *
+ * The suite runs against an isolated instance seeded by `global-setup.ts` with a
+ * real scenario run on the simulated memory backend, so the operator surfaces
+ * have the state they render. Operations that write (incident submission, the
+ * scenario run) are gated by the operator token, so the tests that drive them
+ * sign in on `/admin` exactly as an operator does. The token is the local test
+ * server's own (`AFTERMATH_ADMIN_TOKEN` in `playwright.config.ts`).
  */
+
+const OPERATOR_TOKEN = "e2e-operator-token";
+
+/** Sign in on the admin console, so the gated operator surfaces are revealed. */
+async function signInAsOperator(page: Page): Promise<void> {
+  await page.goto("/admin");
+  await page.getByLabel(/Administrator token/i).fill(OPERATOR_TOKEN);
+  await page.getByRole("button", { name: /^Sign in$/i }).click();
+  await expect(
+    page.getByText(/Signed in as administrator/i),
+  ).toBeVisible({ timeout: 15_000 });
+}
 
 test("overview renders and labels the memory backend honestly", async ({ page }) => {
   await page.goto("/lab");
@@ -25,13 +44,17 @@ test("overview renders and labels the memory backend honestly", async ({ page })
 });
 
 test("running the demonstrations populates the scenario table", async ({ page }) => {
-  await page.goto("/lab");
+  // The scenario run is an operator operation, so it is driven from the admin
+  // console the way a real operator drives it. The table it fills is the
+  // Evaluation Lab's; assert it there.
+  await signInAsOperator(page);
   const runButton = page.getByRole("button", { name: /Run from scratch/i });
   await runButton.click();
-  // The run advances in bounded batches against real Mainnet writes, so it can
-  // take several minutes; wait for the button to become idle again.
+  // The run advances in bounded batches, so it can take several minutes; wait
+  // for the button to become idle again.
   await expect(runButton).toBeEnabled({ timeout: 600_000 });
 
+  await page.goto("/lab");
   const table = page.locator("table.data").last();
   await expect(table).toBeVisible();
   await expect(table.getByText("coding-tests-fail")).toBeVisible();
@@ -39,9 +62,13 @@ test("running the demonstrations populates the scenario table", async ({ page })
 });
 
 test("submitting an incident produces a connected Safeguard Record", async ({ page }) => {
-  await page.goto("/");
+  // Submission is an operator operation in this deployment (the public form is
+  // exercised separately, against whatever availability the instance reports).
+  // The token is held in memory for the console's lifetime, so the console must
+  // not be reloaded between sign-in and use.
+  await signInAsOperator(page);
   await expect(
-    page.getByRole("heading", { name: /Every failure should leave a safeguard/i }),
+    page.getByRole("heading", { name: /Investigate an incident/i }),
   ).toBeVisible();
 
   await page
@@ -72,6 +99,20 @@ test("submitting an incident produces a connected Safeguard Record", async ({ pa
     page.getByText(/effect shown, recurrence not proven/i),
   ).toBeVisible();
   await expect(page.getByText("memory simulated").first()).toBeVisible();
+});
+
+test("the public home page offers the investigation workspace honestly", async ({ page }) => {
+  // An ordinary visitor must be able to reach the core act from the front door.
+  // The form is rendered only when the server reports public submission is
+  // available; either way the page states the truth and never crashes.
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: /Submit an incident, get a Safeguard Record/i }),
+  ).toBeVisible();
+
+  const form = page.getByLabel(/Incident material/i);
+  const unavailable = page.getByText(/Public submission is not enabled/i);
+  await expect(form.or(unavailable)).toBeVisible({ timeout: 15_000 });
 });
 
 test("incident explorer shows evidence, diagnosis, and decision", async ({ page }) => {

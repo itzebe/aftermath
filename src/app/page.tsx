@@ -3,6 +3,7 @@ import { getOverview } from "@/lib/service";
 import { Notice, Pill } from "@/components/ui";
 import { ChainDiagram } from "@/components/chain-diagram";
 import { HeroVisual } from "@/components/hero-visual";
+import { PublicInvestigation } from "@/components/public-investigation";
 
 export const dynamic = "force-dynamic";
 
@@ -80,16 +81,7 @@ export default async function HomePage() {
             executed, and never interpolated into a command or a query.
           </p>
         </div>
-        <div className="panel flex flex-col gap-4 p-6 md:flex-row md:items-center md:justify-between md:p-8">
-          <p className="max-w-prose text-[0.875rem] leading-relaxed text-paper-300">
-            Investigations write a Safeguard Record to Walrus Memory, so they are
-            performed by the operator from the admin console rather than by any
-            visitor.
-          </p>
-          <Link href="/admin" className="action primary shrink-0">
-            Operator sign-in
-          </Link>
-        </div>
+        <PublicInvestigation />
         <div className="mt-4">
           <Notice tone="info" title="What a Safeguard Record contains">
             Every record is a connected argument: the incident, the evidence with

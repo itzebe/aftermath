@@ -215,4 +215,46 @@ maybeLive("public submission admission (real shared index)", () => {
     expect(guard.ok).toBe(true);
     if (guard.ok) expect(guard.anonymous).toBe(false);
   });
+
+/**
+ * The public configuration summary must state public-submission availability
+ * exactly as the server decides it.
+ *
+ * The UI renders the submission form only when `/api/config` says submission is
+ * available, so the two must never disagree: a UI that offers a form the guard
+ * refuses is as wrong as one that hides a form the guard would accept. This pins
+ * them together by driving both from the same environment.
+ */
+describe("public submission availability is reported consistently", () => {
+  function post(): Request {
+    return new Request("http://localhost/api/incidents/submit", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ material: "2026-03-01 ERROR sample" }),
+    });
+  }
+
+  it("agrees with the guard when the controls hold", async () => {
+    resetSharedLimiters();
+    const { evaluatePublicSubmitAvailability } = await import(
+      "@/lib/api/public-submit-guard"
+    );
+    const cfg = config({ publicSubmission: { enabled: true } });
+    const availability = evaluatePublicSubmitAvailability(cfg);
+    const guard = await guardIncidentSubmission(post(), cfg);
+    expect(availability.available).toBe(guard.ok);
+  });
+
+  it("agrees with the guard when the operator has not opted in", async () => {
+    resetSharedLimiters();
+    const { evaluatePublicSubmitAvailability } = await import(
+      "@/lib/api/public-submit-guard"
+    );
+    const cfg = config({ publicSubmission: { enabled: false } });
+    const availability = evaluatePublicSubmitAvailability(cfg);
+    const guard = await guardIncidentSubmission(post(), cfg);
+    expect(availability.available).toBe(false);
+    expect(guard.ok).toBe(false);
+  });
+});
 });

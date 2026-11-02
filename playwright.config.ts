@@ -14,6 +14,10 @@ const BASE_URL = process.env.E2E_BASE_URL ?? `http://127.0.0.1:${PORT}`;
 
 export default defineConfig({
   testDir: "./e2e",
+  // Seed the isolated database with a real scenario run before the suite, so the
+  // operator surfaces have the state they render. Only applies when this config
+  // starts the server; an external instance (E2E_BASE_URL) is used as-is.
+  globalSetup: process.env.E2E_BASE_URL ? undefined : "./e2e/global-setup.ts",
   fullyParallel: false,
   retries: 0,
   workers: 1,
@@ -34,6 +38,12 @@ export default defineConfig({
         env: {
           AFTERMATH_FORCE_MOCK_MEMORY: "1",
           AFTERMATH_DB_PATH: "./data/e2e-aftermath.db",
+          // A fixed, non-secret token for the local test server only. The
+          // operator surfaces under test (incident submission, the scenario run)
+          // are gated by this token, so the suite must be able to present it —
+          // exactly as a real operator does, by signing in on /admin. It is not
+          // a production credential and never leaves this isolated instance.
+          AFTERMATH_ADMIN_TOKEN: "e2e-operator-token",
         },
       },
 });

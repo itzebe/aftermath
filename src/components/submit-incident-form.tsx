@@ -8,14 +8,18 @@ import { Notice } from "@/components/ui";
 import { adminHeaders } from "@/lib/admin-token";
 
 /**
- * The incident submission form — the admin console's primary operation.
+ * The incident submission form.
  *
  * It shows the pipeline's stages as they genuinely happen (validate, parse,
  * look up, diagnose, retrieve, propose, verify, preserve) and then renders the
  * resulting Safeguard Record. A transient dependency failure is surfaced as a
  * retryable condition with no verdict recorded, never as a completed
- * investigation. It is mounted only in the admin console, because a submission
- * writes a Safeguard Record and therefore requires the administrator token.
+ * investigation.
+ *
+ * It is mounted in two places: the public workspace (anonymous submissions,
+ * when the deployment enables them) and the admin console (where the operator
+ * token is attached). `anonymous` selects the correct failure copy — an
+ * anonymous visitor is never told to "sign in again".
  */
 
 const STAGES = [
@@ -38,7 +42,17 @@ interface ApiError {
   issues?: { path: string; message: string }[];
 }
 
-export function SubmitIncidentForm({ sample }: { sample?: string }) {
+export function SubmitIncidentForm({
+  sample,
+  anonymous = false,
+}: {
+  sample?: string;
+  /**
+   * When true the form is used by an anonymous visitor: no admin token is
+   * attached, and failure copy addresses a visitor rather than an operator.
+   */
+  anonymous?: boolean;
+}) {
   const [text, setText] = useState("");
   const [service, setService] = useState("");
   const [expected, setExpected] = useState("");
@@ -69,7 +83,9 @@ export function SubmitIncidentForm({ sample }: { sample?: string }) {
       try {
         const res = await fetch("/api/incidents/submit", {
           method: "POST",
-          headers: adminHeaders({ "content-type": "application/json" }),
+          headers: anonymous
+            ? { "content-type": "application/json" }
+            : adminHeaders({ "content-type": "application/json" }),
           body: JSON.stringify({
             text,
             ...(service ? { service } : {}),
@@ -98,7 +114,7 @@ export function SubmitIncidentForm({ sample }: { sample?: string }) {
         setBusy(false);
       }
     },
-    [busy, text, service, expected, actual],
+    [busy, text, service, expected, actual, anonymous],
   );
 
   return (
@@ -257,22 +273,47 @@ export function SubmitIncidentForm({ sample }: { sample?: string }) {
             >
               {error.detail ?? "Unknown error."}
               {error.error === "unauthorized" ? (
-                <>
-                  {" "}
-                  Your administrator session is missing or no longer valid. Sign
-                  in again from the{" "}
-                  <Link href="/admin" className="link-quiet">
-                    admin console
-                  </Link>{" "}
-                  and retry.
-                </>
+                anonymous ? (
+                  <>
+                    {" "}
+                    Public submission is not available on this deployment. You
+                    can still read every published Safeguard Record from the{" "}
+                    <Link href="/records" className="link-quiet">
+                      Safeguard Records
+                    </Link>{" "}
+                    view.
+                  </>
+                ) : (
+                  <>
+                    {" "}
+                    Your administrator session is missing or no longer valid.
+                    Sign in again from the{" "}
+                    <Link href="/admin" className="link-quiet">
+                      admin console
+                    </Link>{" "}
+                    and retry.
+                  </>
+                )
               ) : null}
               {error.error === "admin_disabled" ? (
-                <>
-                  {" "}
-                  The server has no <span className="mono">AFTERMATH_ADMIN_TOKEN</span>{" "}
-                  configured, so incident submission is switched off.
-                </>
+                anonymous ? (
+                  <>
+                    {" "}
+                    Submission is not enabled on this deployment. You can still
+                    read every published Safeguard Record from the{" "}
+                    <Link href="/records" className="link-quiet">
+                      Safeguard Records
+                    </Link>{" "}
+                    view.
+                  </>
+                ) : (
+                  <>
+                    {" "}
+                    The server has no{" "}
+                    <span className="mono">AFTERMATH_ADMIN_TOKEN</span>{" "}
+                    configured, so incident submission is switched off.
+                  </>
+                )
               ) : null}
               {error.retryable ? (
                 <>
