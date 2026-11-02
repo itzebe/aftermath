@@ -110,9 +110,9 @@ export async function runSubmissionPipeline(
 
   // Stage A/B: rule-based parse. The authoritative lookup is folded in first so
   // the investigation reflects what a connected source actually returned.
-  const signals = extractSignals(submission.text);
+  const signals = extractSignals(storedSubmission.text);
   const preliminary = investigateSubmission({
-    submission,
+    submission: storedSubmission,
     authoritativeLookup: {
       attempted: false,
       verified: false,
@@ -133,7 +133,11 @@ export async function runSubmissionPipeline(
   const incidentInput = submissionToIncidentInput({
     investigation: preliminary,
     executionId: recordId,
-    intendedOutcome: submission.expectedBehavior ?? "Resolve the reported incident",
+    // Derive the intended outcome from the *redacted* submission: a credential
+    // pasted into `expectedBehavior` must not reach the stored Incident (and
+    // from there the public incident response and the Walrus payload).
+    intendedOutcome:
+      storedSubmission.expectedBehavior ?? "Resolve the reported incident",
     signals,
   });
   const incident = IncidentSchema.parse({

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { maskSecret, redact, redactSubmission } from "@/lib/util/redact";
+import { maskSecret, redact, redactServed, redactSubmission } from "@/lib/util/redact";
 
 /**
  * Secret-exposure guards.
@@ -251,6 +251,78 @@ describe("redactSubmission", () => {
     // A benign key is preserved so a caller's own idempotency still round-trips.
     const benign = redactSubmission({ text: "x", idempotencyKey: "retry-42" });
     expect(benign.idempotencyKey).toBe("retry-42");
+  });
+});
+
+describe("redactServed — the read boundary for derived fields", () => {
+  const SECRET = "hunter2secret";
+  const BEARER = "Bearer abcdefghijklmnopqrstuvwxyz012345";
+
+  it("redacts credential-shaped free text in nested derived fields", () => {
+    const record = {
+      recordId: "r-1",
+      intendedOutcome: `password ${SECRET}`,
+      investigation: {
+        summary: `[checkout] the password is ${SECRET}`,
+        categories: {
+          confirmedFacts: [
+            { kind: "expected_behavior", value: `password ${SECRET}`, source: `expected behavior (supplied): password ${SECRET}` },
+            { kind: "actual_behavior", value: BEARER, source: `actual behavior (supplied): ${BEARER}` },
+          ],
+        },
+      },
+      memory: { incident: { text: `intended: password ${SECRET}` } },
+    };
+    const served = redactServed(record);
+    const blob = JSON.stringify(served);
+    expect(blob).not.toContain(SECRET);
+    expect(blob).not.toContain("abcdefghijklmnopqrstuvwxyz012345");
+    // The redaction is visible, not a silent deletion.
+    expect(blob).toMatch(/\[redacted-secret\]|\[redacted-bearer-token\]/);
+  });
+
+  it("preserves identity, reference, timestamp, and enum fields", () => {
+    const digest = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
+    const record = {
+      recordId: "4519d613-810b-a832-5aa0-716dacfb150f",
+      incidentId: "4519d613-810b-a832-5aa0-716dacfb150f",
+      createdAt: "2026-03-01T10:00:00Z",
+      domain: "finance",
+      actionType: "verify_reported_transaction_outcome",
+      investigation: {
+        authoritativeLookup: {
+          evidenceReference: `incident:submission:4519d613-810b-a832-5aa0-716dacfb150f`,
+        },
+      },
+      proposedRule: { supportingIncidentIds: ["4519d613-810b-a832-5aa0-716dacfb150f"] },
+      decision: { evidenceReferences: [digest] },
+      learnedSafeguards: [{ evidence: [digest] }],
+    };
+    const served = redactServed(record);
+    expect(served.recordId).toBe(record.recordId);
+    expect(served.incidentId).toBe(record.incidentId);
+    expect(served.createdAt).toBe(record.createdAt);
+    expect(served.domain).toBe("finance");
+    expect(served.investigation.authoritativeLookup.evidenceReference).toBe(
+      record.investigation.authoritativeLookup.evidenceReference,
+    );
+    expect(served.proposedRule.supportingIncidentIds[0]).toBe(record.recordId);
+    // A labelled transaction digest is evidence and survives.
+    expect(served.decision.evidenceReferences[0]).toBe(digest);
+    expect(served.learnedSafeguards[0].evidence[0]).toBe(digest);
+  });
+
+  it("is idempotent and safe on non-string scalars", () => {
+    const once = redactServed({ n: 1, ok: true, nil: null, s: `password ${SECRET}` });
+    expect(redactServed(once)).toEqual(once);
+    expect(once.n).toBe(1);
+    expect(once.ok).toBe(true);
+    expect(once.nil).toBeNull();
+  });
+
+  it("defaults an unknown key to redacted (fail safe)", () => {
+    const served = redactServed({ someFutureField: `token ${SECRET}` });
+    expect(served.someFutureField).not.toContain(SECRET);
   });
 });
 

@@ -31,7 +31,7 @@ import {
   type IncidentInputDraft,
   type Investigation,
 } from "@/lib/schemas";
-import { redact } from "@/lib/util/redact";
+import { redactSubmission } from "@/lib/util/redact";
 
 /** Cap how many of each fact kind we keep, so a huge paste stays readable. */
 const MAX_FACTS_PER_KIND = 6;
@@ -950,10 +950,15 @@ export function investigateSubmission(input: {
    */
   aiAnalysis?: AiAnalysis | null;
 }): Investigation {
-  const { submission } = input;
   // Redact anything credential-shaped before it is stored, displayed, or sent
-  // to memory. A pasted log frequently contains a token by accident.
-  const text = redact(submission.text);
+  // to memory. A pasted log frequently contains a token by accident, and the
+  // structured context fields are untrusted too, so *every* free-text field is
+  // redacted here — at the single boundary where the engine reads the
+  // submission — before any value is copied into the derived investigation.
+  // `redactSubmission` is idempotent, so a caller that already redacted (the
+  // submission pipeline) sees no change.
+  const submission = redactSubmission(input.submission);
+  const text = submission.text;
   const signals = extractSignals(text);
 
   const inference = inferDomain(signals, submission.service);

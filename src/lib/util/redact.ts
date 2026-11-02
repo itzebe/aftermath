@@ -273,6 +273,68 @@ export function redactSubmission<T extends RedactableSubmission>(submission: T):
   };
 }
 
+/**
+ * Keys whose string values are identity, reference, timestamp, or enum fields —
+ * structural provenance that must survive a read-boundary redaction intact.
+ *
+ * Every other string is treated as untrusted free text and redacted. The default
+ * is deliberately to redact: a field added later is protected unless it is
+ * explicitly listed here, so a new free-text field cannot silently leak.
+ */
+const PRESERVED_KEYS = new Set<string>([
+  // Identity.
+  "recordId", "incidentId", "executionId", "memoryId", "baseMemoryId",
+  "originIncidentId", "blobId", "writeId", "jobId", "owner", "ruleId",
+  "changedByMemoryId", "supersedes", "id", "uuid", "guid",
+  "retrievedMemoryIds", "applicableMemoryIds", "applicableRuleIds",
+  "supportingIncidentIds", "missingPreconditions",
+  // References (a digest/hash reference is evidence, not a secret).
+  "evidenceReference", "evidenceReferences", "ref", "evidence", "kind",
+  "evidenceType", "evidenceStatus",
+  // Enum / structural fields.
+  "domain", "actionType", "status", "state", "decision", "severity", "action",
+  "type", "pattern", "failureCategory", "failurePattern", "extractionMethod",
+  "validationStatus", "availability", "provider", "model", "backend",
+  "provenance", "role", "step", "outcome", "assertedStatus", "policyVersion",
+  "relation", "scope", "version", "beforeDecision", "afterDecision",
+  // Timestamps.
+  "createdAt", "updatedAt", "observedAt", "requestedAt", "completedAt",
+  "decidedAt", "generatedAt", "ranAt", "reviewAfter",
+]);
+
+/** Redact a served value, preserving identity/reference/enum keys. */
+function redactServedValue(value: unknown, key: string | null): unknown {
+  if (typeof value === "string") {
+    return key !== null && PRESERVED_KEYS.has(key) ? value : redact(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => redactServedValue(item, key));
+  }
+  if (value !== null && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = redactServedValue(v, k);
+    }
+    return out;
+  }
+  return value;
+}
+
+/**
+ * Redact every free-text string in a value about to be served to a client,
+ * keeping identity, reference, timestamp, and enum fields intact.
+ *
+ * This is the read boundary for records that may have been written *before* the
+ * write-path redaction existed — or that carry a derived copy of an untrusted
+ * field. It is key-aware rather than a blanket {@link redactValue} precisely so
+ * a record's own ids, evidence references, and transaction digests survive: a
+ * whole-value redaction would rewrite those and destroy the provenance the
+ * product exists to show. Unknown keys default to redacted (fail safe).
+ */
+export function redactServed<T>(input: T): T {
+  return redactServedValue(input, null) as T;
+}
+
 function replacer() {
   const seen = new WeakSet();
   return function (_key: string, value: unknown) {

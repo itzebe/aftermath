@@ -1,6 +1,6 @@
 import { runtime } from "@/lib/runtime";
 import { loadConfig, relayerNetwork } from "@/lib/config";
-import { maskSecret, redactSubmission } from "@/lib/util/redact";
+import { maskSecret, redactServed, redactSubmission } from "@/lib/util/redact";
 import { runAllScenarios, type DemoRunResult } from "@/lib/demos/runner";
 import { runDemoBatch, type BatchResult } from "@/lib/demos/resumable-runner";
 import { evaluate, type EvaluationMetrics, type ScenarioOutcome } from "@/lib/engines/evaluation";
@@ -309,15 +309,24 @@ export async function getDemoProgress(): Promise<{
 }
 
 export async function getIncidents(limit = 200) {
-  return runtime().store.listIncidents(limit);
+  // Public read: the stored Incident carries `intendedOutcome`, which is derived
+  // from the untrusted `expectedBehavior`. Redact in depth at the boundary so a
+  // credential pasted into the submission cannot be served from here.
+  const incidents = await runtime().store.listIncidents(limit);
+  return redactServed(incidents);
 }
 
 export async function getRules() {
-  return runtime().store.listRules();
+  // Public read. Rules carry only derived, structured text, but redacting the
+  // boundary uniformly means a rule statement echoing submission prose cannot
+  // leak a credential either.
+  return redactServed(await runtime().store.listRules());
 }
 
 export async function getMemoryWrites(limit = 200) {
-  return runtime().store.listMemoryWrites(limit);
+  // Public read. A receipt's `text` is the exact payload sent to the memory
+  // backend; redact it here so the ledger cannot echo a credential.
+  return redactServed(await runtime().store.listMemoryWrites(limit));
 }
 
 /**
@@ -453,29 +462,37 @@ export async function submitIncident(
 
 export async function getSafeguardRecords(limit = 100): Promise<SafeguardRecord[]> {
   const records = await runtime().store.listSafeguardRecords(limit);
-  return records.map(withRedactedSubmission);
+  return records.map(withRedactedRecord);
 }
 
 export async function getSafeguardRecord(
   recordId: string,
 ): Promise<SafeguardRecord | null> {
   const record = await runtime().store.getSafeguardRecord(recordId);
-  return record ? withRedactedSubmission(record) : null;
+  return record ? withRedactedRecord(record) : null;
 }
 
 /**
- * Return a record with its submission's credential-shaped strings redacted.
+ * Redact a record at the read boundary, in depth.
  *
- * This is the read boundary. New records are already redacted before they are
- * written, so for them this is a no-op; applying it here as well is what
- * protects a record written *before* the redaction rule existed — its stored
- * payload may still contain a raw credential, and it must never be served.
+ * The submission field is redacted on its own terms (it holds the raw pasted
+ * material). The rest of the record is deep-redacted with {@link redactServed},
+ * which strips credential-shaped strings from every free-text value while
+ * leaving identity, reference, timestamp, and enum fields intact. That protects
+ * the *derived* copies of the untrusted fields — `intendedOutcome`,
+ * `investigation.categories.confirmedFacts` (value and source), `summarise`,
+ * and the memory-write payload text — which a record written before this
+ * boundary existed may still hold raw.
  *
- * The rest of the record (ids, evidence spans, decisions) is untouched, because
- * a whole-record deep redaction would also rewrite the record's own UUIDs.
+ * A record's own ids, evidence references, and transaction digests survive,
+ * because redaction is key-aware and those keys are on the preserve list.
  */
-function withRedactedSubmission(record: SafeguardRecord): SafeguardRecord {
-  return { ...record, submission: redactSubmission(record.submission) };
+function withRedactedRecord(record: SafeguardRecord): SafeguardRecord {
+  const { submission, ...rest } = record;
+  return {
+    ...(redactServed(rest) as Omit<SafeguardRecord, "submission">),
+    submission: redactSubmission(submission),
+  };
 }
 
 export async function countSafeguardRecords(): Promise<number> {
@@ -516,7 +533,16 @@ export async function getLearningLoop(): Promise<LearningLoop> {
   const { value } = await readCache.getOrLoad(
     "learning-loop",
     LEARNING_LOOP_TTL_MS,
-    async () => buildLearningLoop(await rt.store.listSafeguardRecords(LEARNING_LOOP_RECORD_LIMIT)),
+    async () =>
+      buildLearningLoop(
+        // The view model surfaces `investigation.summary` and safeguard text on
+        // a public route, so the records it reads pass through the same read
+        // boundary. Metrics are computed from structured fields, which the
+        // boundary preserves, so the counts are unchanged.
+        (await rt.store.listSafeguardRecords(LEARNING_LOOP_RECORD_LIMIT)).map(
+          withRedactedRecord,
+        ),
+      ),
   );
   return value;
 }
