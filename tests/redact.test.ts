@@ -415,5 +415,26 @@ describe("redactServed — a credential inside a preserved-key value", () => {
     });
     expect(redactServed(once)).toEqual(once);
   });
+
+  it("strips a credential from a preserved key nested inside objects and arrays", () => {
+    // The definitive pass must recurse the same way the general pass does: a
+    // preserved key can hold an array of objects (`evidenceReferences`), each
+    // with its own preserved keys, so a credential one level down must not slip
+    // through.
+    const apiKey = `sk-${"F".repeat(32)}`;
+    const jwt = `eyJ${"G".repeat(20)}.${"H".repeat(20)}.${"I".repeat(20)}`;
+    const served = redactServed({
+      evidenceReferences: [{ kind: apiKey, ref: jwt }],
+      evidence: [[{ ref: `password=${apiKey}` }]],
+    });
+    const blob = JSON.stringify(served);
+    expect(blob).not.toContain(apiKey);
+    expect(blob).not.toContain(jwt);
+    // A digest one level down still survives.
+    const digest = "5Kd3Nb9XoPqRsTuVwXyZ1a2b3c4d5e6f7g8h9iJkLmN";
+    expect(
+      JSON.stringify(redactServed({ evidence: [{ ref: digest }] })),
+    ).toContain(digest);
+  });
 });
 
