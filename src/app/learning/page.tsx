@@ -9,6 +9,7 @@ import type {
   LearningProvenanceEntry,
   MemoryRetrievalEntry,
 } from "@/lib/engines/learning-loop";
+import { fetchJson } from "@/lib/util/api-get";
 import {
   EmptyState,
   Loading,
@@ -36,9 +37,8 @@ export default function LearningPage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/learning")
-      .then((r) => r.json())
-      .then((d: LearningLoop) => {
+    fetchJson<LearningLoop>("/api/learning")
+      .then((d) => {
         if (!cancelled) setData(d);
       })
       .catch((e: Error) => {
@@ -54,7 +54,7 @@ export default function LearningPage() {
       <div>
         <PageHeader eyebrow="Learning loop" title="Learning Loop" />
         <Panel>
-          <p className="text-[0.875rem] text-signal-bad">{error}</p>
+          <p role="alert" className="text-[0.875rem] text-signal-bad">{error}</p>
         </Panel>
       </div>
     );

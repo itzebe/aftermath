@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { fetchJson } from "@/lib/util/api-get";
 
 /**
  * The application frame: one authoritative primary navigation.
@@ -65,10 +66,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/config")
-      .then((r) => r.json())
+    fetchJson<ConfigSummary>("/api/config")
       .then((data) => {
-        if (!cancelled) setConfig(data as ConfigSummary);
+        if (!cancelled) setConfig(data);
       })
       .catch(() => {});
     return () => {
@@ -113,7 +113,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <Link
             href="/"
             className="flex shrink-0 items-center gap-2.5"
-            aria-label="AFTERMATH home"
           >
             <Mark />
             <span className="flex flex-col leading-none">
@@ -124,6 +123,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 Failure Prevention
               </span>
             </span>
+            {/* The visible brand is the accessible name (WCAG 2.5.3, Label in
+                Name); "home" is added for screen readers without overriding it. */}
+            <span className="sr-only">home</span>
           </Link>
 
           {/* Primary destinations — desktop */}

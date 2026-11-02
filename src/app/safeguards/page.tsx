@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { SafeguardRule } from "@/lib/schemas";
+import { fetchJson } from "@/lib/util/api-get";
 import {
   EmptyState,
   Field,
@@ -36,9 +37,8 @@ export default function SafeguardsPage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/rules")
-      .then((r) => r.json())
-      .then((d: RulesResponse) => {
+    fetchJson<RulesResponse>("/api/rules")
+      .then((d) => {
         if (!cancelled) setRules(d.rules);
       })
       .catch((e: Error) => {
@@ -54,7 +54,7 @@ export default function SafeguardsPage() {
       <div>
         <PageHeader eyebrow="System" title="Safeguards" />
         <Panel>
-          <p className="text-[0.875rem] text-signal-bad">{error}</p>
+          <p role="alert" className="text-[0.875rem] text-signal-bad">{error}</p>
         </Panel>
       </div>
     );

@@ -11,6 +11,7 @@ import {
   Panel,
   Pill,
 } from "@/components/ui";
+import { fetchJson } from "@/lib/util/api-get";
 
 type WriteState = "requested" | "processing" | "completed" | "failed";
 
@@ -97,8 +98,7 @@ export default function MemoryPage() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const r = await fetch("/api/memory");
-    setData((await r.json()) as MemoryResponse);
+    setData(await fetchJson<MemoryResponse>("/api/memory"));
   }, []);
 
   useEffect(() => {
@@ -109,7 +109,7 @@ export default function MemoryPage() {
       <div>
         <PageHeader eyebrow="System" title="Memory Ledger" />
         <Panel>
-          <p className="text-[0.875rem] text-signal-bad">{error}</p>
+          <p role="alert" className="text-[0.875rem] text-signal-bad">{error}</p>
         </Panel>
       </div>
     );

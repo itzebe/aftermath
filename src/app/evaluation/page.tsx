@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { EvaluationMetrics, ScenarioOutcome } from "@/lib/engines/evaluation";
+import { fetchJson } from "@/lib/util/api-get";
 import {
   DecisionPill,
   EmptyState,
@@ -26,9 +27,8 @@ export default function EvaluationPage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/evaluation")
-      .then((r) => r.json())
-      .then((d: EvaluationResponse) => {
+    fetchJson<EvaluationResponse>("/api/evaluation")
+      .then((d) => {
         if (!cancelled) setData(d);
       })
       .catch((e: Error) => {
@@ -44,7 +44,7 @@ export default function EvaluationPage() {
       <div>
         <PageHeader eyebrow="System" title="Learning Evaluation" />
         <Panel>
-          <p className="text-[0.875rem] text-signal-bad">{error}</p>
+          <p role="alert" className="text-[0.875rem] text-signal-bad">{error}</p>
         </Panel>
       </div>
     );
