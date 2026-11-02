@@ -150,14 +150,14 @@ export function SubmitIncidentForm({
             <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
               <button
                 type="button"
-                className="link-quiet mono text-[0.75rem]"
+                className="link-quiet mono inline-flex min-h-6 items-center text-[0.75rem]"
                 onClick={() => sample && setText(sample)}
               >
                 Use a sample incident
               </button>
               <button
                 type="button"
-                className="link-quiet mono text-[0.75rem]"
+                className="link-quiet mono inline-flex min-h-6 items-center text-[0.75rem]"
                 aria-expanded={advanced}
                 aria-controls="incident-context"
                 onClick={() => setAdvanced((v) => !v)}

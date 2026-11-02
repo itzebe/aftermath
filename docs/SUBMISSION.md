@@ -34,7 +34,7 @@ fail the same way twice.
 | --- | --- | --- | --- |
 | 01 | Walrus Memory integrated and writing on Mainnet | ✅ | Real SDK writes to `https://relayer.memory.walrus.xyz`, namespace `aftermath`. Each write is awaited to a blob id and confirmed by a recall query. See [`src/lib/adapters/memwal-memory.ts`](../src/lib/adapters/memwal-memory.ts) and the live counts on `/memory`. |
 | 02 | Tatum RPC used for onchain data where relevant | ✅ | Read-only Sui verifier on Tatum's documented gRPC primary (`LedgerService/GetTransaction`) with a GraphQL fallback, server-side API key. It is the authoritative evidence source for the **finance** case: a Sui transaction digest in the submitted material is looked up and classified `VERIFIED_SUCCESS` / `VERIFIED_FAILURE` / `UNKNOWN`. Digests are discovered from the live ledger at runtime, never hardcoded. No transaction is ever broadcast. See [`src/lib/adapters/tatum-sui-grpc.ts`](../src/lib/adapters/tatum-sui-grpc.ts). |
-| 03 | At least 10 memories stored on Mainnet | ✅ | The live ledger reports **164 completed** and **163 recall-verified** Mainnet writes — see `GET /api/overview` (`completedLiveWrites`, `recallVerifiedWrites`). `mainnetRequirement` returns `{required: 10, completedLive: 164, recallVerified: 163, remaining: 0, satisfied: true}`. `simulatedWrites` is **0**; every write carries `backend: memwal-mainnet`, `provenance: live`. The relayer reports **319** memories in the `aftermath` namespace. Simulated writes are tracked separately and excluded. |
+| 03 | At least 10 memories stored on Mainnet | ✅ | The live ledger reports **167 completed** and **166 recall-verified** Mainnet writes — see `GET /api/overview` (`completedLiveWrites`, `recallVerifiedWrites`). `mainnetRequirement` returns `{required: 10, completedLive: 167, recallVerified: 166, remaining: 0, satisfied: true}`. `simulatedWrites` is **0**; every write carries `backend: memwal-mainnet`, `provenance: live`. The relayer reports **322** memories in the `aftermath` namespace. Simulated writes are tracked separately and excluded. |
 | 04 | Published blog post (what it does, how it uses Tatum + Walrus, how it learned) | ✅ | [`BLOG.md`](BLOG.md), published on Medium and mirrored on GitHub Pages. Covers the pipeline, both integrations, the transient-failure/deferral fix, and measured results. |
 | 05 | Working demo and public repo | ✅ | Demo: <https://aftermath-7tij.vercel.app/>. Repo: <https://github.com/itzebe/aftermath> (public). |
 | 06 | Optional: build with Tatum AI Builder (ai.tatum.io) — $500 bonus | ⛔ Not pursued | AFTERMATH was built as an indie project. The dedicated AI-Builder award is out of scope; the app still uses Tatum RPC/Data APIs directly. |
@@ -76,6 +76,16 @@ Record** that connects incident → evidence → hypothesis → safeguard →
 verification → memory, with an honest state label at every link. Facts are
 grounded by verbatim span; uncertainty stays explicit; a safeguard is proposed,
 then tested, and only ever called *validated* with proof.
+
+The investigation workspace is **public**: a visitor can submit an incident from
+the home page without a credential, because that is the product's core act. The
+operator console stays separate and gated. Anonymous submission is enabled only
+when every safety control holds at request time — a live Walrus Memory Mainnet
+backend, a shared durable (PostgreSQL) audit index, and a configured per-client
+cap — and fails closed otherwise. The deployment reports which decision it made
+through `GET /api/config` (`publicSubmission`), and the home page renders the
+form only when submission is genuinely available, stating the honest reason when
+it is not.
 
 **Architecture.** A seven-stage pipeline. Incident intake (regex, never
 execution; credential-shaped strings redacted before storage and again on read)
@@ -154,11 +164,11 @@ a dependency being briefly unavailable is never mistaken for a verified failure.
 (`GET /api/overview`, `GET /api/memory`):
 
 - Walrus Memory is **live** (`backend: memwal-mainnet`, `isLive: true`,
-  `MAINNET_AUTH_CONFIRMED`); the live ledger reports **164 completed** Mainnet
-  writes, of which **163** were confirmed by a recall query, with
-  `simulatedWrites: 0`. The relayer reports **319** memories in the `aftermath`
+  `MAINNET_AUTH_CONFIRMED`); the live ledger reports **167 completed** Mainnet
+  writes, of which **166** were confirmed by a recall query, with
+  `simulatedWrites: 0`. The relayer reports **322** memories in the `aftermath`
   namespace. Completed and recall-verified counts are reported separately and
-  never merged — the 164 writes are **not** all recall-verified.
+  never merged — the 167 writes are **not** all recall-verified.
 - Tatum Sui gRPC gateway configured and healthy (authenticated, chain
   identifier matching Sui Mainnet). The finance case has verified **one** live
   Mainnet transaction as `VERIFIED_SUCCESS`; the `UNKNOWN` path is also present
@@ -168,14 +178,17 @@ a dependency being briefly unavailable is never mistaken for a verified failure.
   stand, **100%** repeat-prevention, **0%** false-block, **100%**
   memory-retrieval relevance. These describe the controlled scenarios, not
   production reliability.
-- Checks: `typecheck` clean, `lint` clean, unit suite **345 passed / 21
-  skipped**, `verify:prod` **28/28 passed**, live `verify:ai` **`ran=true`**.
+- Checks: `typecheck` clean, `lint` clean, unit suite **587 passed / 40
+  skipped**, `verify:prod` **27/28 read-only** (the recall-query check needs the operator token; it passes when run by the operator), live `verify:ai` **`ran=true`**.
 
 **Demo URL:** <https://aftermath-7tij.vercel.app/>
 **Repository:** <https://github.com/itzebe/aftermath>
 **Blog:** <https://itzebe.github.io/aftermath/>
-**Demo video:** <https://github.com/itzebe/aftermath/releases/tag/demo-v1>
-(2:12, 1920×1080, captioned). Storyboard and script in [`DEMO.md`](DEMO.md).
+**Demo video:** <https://github.com/itzebe/aftermath/releases/tag/demo-v2>
+(2:36, 1920×1080, narrated, captioned). A second, silent captioned recording of
+the current public build is in
+[`artifacts/mission9/aftermath-demo-m9.mp4`](../artifacts/mission9/aftermath-demo-m9.mp4)
+(1:31). Storyboard and script in [`DEMO.md`](DEMO.md).
 
 **Honest limitations.** The finance case needs a `TATUM_API_KEY`; without it,
 `UNKNOWN`. The AI reading needs `GROQ_API_KEY`; without it, the deterministic
@@ -234,17 +247,17 @@ Figures verified **30 October 2026 (UTC)**.
 
 | Check | Command / source | Result |
 | --- | --- | --- |
-| Genuine Mainnet writes completed | `GET /api/overview` → `counts.completedLiveWrites` | **164** |
-| Writes confirmed retrievable by recall | `GET /api/overview` → `counts.recallVerifiedWrites` | **163** |
+| Genuine Mainnet writes completed | `GET /api/overview` → `counts.completedLiveWrites` | **167** |
+| Writes confirmed retrievable by recall | `GET /api/overview` → `counts.recallVerifiedWrites` | **166** |
 | Simulated writes (excluded) | `GET /api/overview` → `counts.simulatedWrites` | **0** |
-| Requirement eval | `GET /api/overview` → `mainnetRequirement` | `{required: 10, completedLive: 164, recallVerified: 163, remaining: 0, satisfied: true}` |
-| Namespace memories (relayer-reported, authoritative) | `GET /api/overview` → `memoryStatus.namespaceMemoryCount` | **319** |
+| Requirement eval | `GET /api/overview` → `mainnetRequirement` | `{required: 10, completedLive: 167, recallVerified: 166, remaining: 0, satisfied: true}` |
+| Namespace memories (relayer-reported, authoritative) | `GET /api/overview` → `memoryStatus.namespaceMemoryCount` | **322** |
 | Backend is genuinely Mainnet | `GET /api/config` / `/api/overview` | `backend: memwal-mainnet`, `isLive: true`, `network: mainnet` |
-| Every ledger row | `GET /api/memory` → `writes[]` | 197 rows, **all** `backend: memwal-mainnet`, `provenance: live` |
+| Every ledger row | `GET /api/memory` → `writes[]` | 200 rows, **all** `backend: memwal-mainnet`, `provenance: live` |
 | Relayer auth | `GET /api/overview` → `memoryStatus` | `state: MAINNET_AUTH_CONFIRMED`, `authenticated: true` |
 
-**Interpretation.** 164 completed writes and 163 recall-verified writes means the
-instance has written at least **163 memories that a recall query returned**, more
+**Interpretation.** 167 completed writes and 166 recall-verified writes means the
+instance has written at least **166 memories that a recall query returned**, more
 than sixteen times the required ten. Because `simulatedWrites` is `0` and every
 ledger row carries `backend: memwal-mainnet` with `provenance: live`, the count
 is not inflated by fixtures: a fixture is a record whose submission carries an
@@ -255,10 +268,10 @@ happened to run without credentials, counted and labelled rather than hidden.
 Completed and
 recall-verified are reported **separately** and never merged, so a write that
 completed but whose follow-up recall was rate-limited is not silently promoted —
-**the 164 completed writes are not all recall-verified.**
+**the 167 completed writes are not all recall-verified.**
 
 The standalone check `npm run verify:prod` includes the memory checks and passes
-**28/28**; `verify:ai` is read-only.
+**27/28 read-only**; the recall-query check requires `AFTERMATH_ADMIN_TOKEN` and is reported as a failure with an explicit reason rather than silently skipped. `verify:ai` is read-only.
 
 ## Learning integrity — a failure in our own metrics, corrected
 
@@ -334,10 +347,24 @@ The full cycle is readable at
 
 ## Demo video
 
-- Video: <https://github.com/itzebe/aftermath/releases/tag/demo-v1> — 2:12,
-  1920×1080, H.264 + AAC, burned-in captions. Direct file:
-  <https://github.com/itzebe/aftermath/releases/download/demo-v1/aftermath-hackathon-demo.mp4>.
-- Captions (SRT): [`DEMO.srt`](DEMO.srt) (also attached to the release).
+**Two recordings exist.** Both were captured from the live production
+deployment with Playwright and cut with ffmpeg; neither invents an incident, a
+hash, or a Mainnet write.
+
+- **Narrated, published:** <https://github.com/itzebe/aftermath/releases/tag/demo-v2>
+  — 2:36, 1920×1080, H.264 + AAC, burned-in captions (the primary submission
+  video). Direct file:
+  <https://github.com/itzebe/aftermath/releases/download/demo-v2/aftermath-demo-v2.mp4>.
+- **Fresh, silent, captioned (Mission 9):**
+  [`artifacts/mission9/aftermath-demo-m9.mp4`](../artifacts/mission9/aftermath-demo-m9.mp4)
+  — 1:31, 1920×1080, H.264, burned-in captions, no narration. It shows the
+  **now-public** investigation workspace and the current live figures. Recording
+  a fresh *narrated* track was not possible in this environment: no TTS engine
+  (espeak, piper, festival) or microphone is available, so the voice track could
+  not be produced. The captioned video is the honest alternative, and every
+  on-screen figure in it is read from the live ledger.
+- Captions (SRT): [`artifacts/mission9/aftermath-demo-m9.srt`](../artifacts/mission9/aftermath-demo-m9.srt),
+  plus the narrated [`DEMO.srt`](DEMO.srt).
 - Storyboard and script: [`DEMO.md`](DEMO.md).
 
 ## Demo plan (2–3 minutes)
@@ -375,6 +402,8 @@ npm run typecheck     # clean
 npm run lint          # clean
 npm test              # hermetic unit + integration suite
 npm run verify:prod   # 28 checks against the deployed application
+                      # (27 pass read-only; the recall-query check needs
+                      #  AFTERMATH_ADMIN_TOKEN and is reported honestly)
 AFTERMATH_AI_VERIFY_TOKEN=<token> npm run verify:ai   # read-only live AI check
 ```
 

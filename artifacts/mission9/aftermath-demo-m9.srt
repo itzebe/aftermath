@@ -1,0 +1,66 @@
+1
+00:00:00,000 --> 00:00:08,870
+AFTERMATH — Every Failure Should Leave a Safeguard. Recorded from the live
+production deployment at aftermath-7tij.vercel.app
+
+2
+00:00:08,870 --> 00:00:16,880
+A claim is not evidence. When an AI agent says the work succeeded, AFTERMATH
+asks for the proof — and when a failure is verified, it leaves a safeguard so
+the same failure cannot recur unnoticed.
+
+3
+00:00:16,880 --> 00:00:25,980
+The investigation workspace is now public. A visitor can open the product's
+core act without a credential; the operator console remains separate and
+gated.
+
+4
+00:00:25,980 --> 00:00:34,530
+Paste the incident: a charge request returned 503, was retried, and an agent
+then claimed success. AFTERMATH parses the material as data — it is never
+executed.
+
+5
+00:00:34,530 --> 00:00:42,040
+Safeguard Records: every investigation, newest first. Each record is a
+connected chain — incident, evidence, hypothesis, safeguard, verification, and
+memory.
+
+6
+00:00:42,040 --> 00:00:50,510
+Each record states honestly how far its safeguard is verified: simulated,
+live, or recall-verified. Nothing is presented as more than it is.
+
+7
+00:00:50,510 --> 00:00:57,970
+The Memory Ledger reads live Walrus Memory Mainnet state from the relayer:
+authentication, the namespace, and the persisted memories.
+
+8
+00:00:57,970 --> 00:01:05,760
+Completed writes and recall-verified writes are counted from durable records.
+Simulated writes are excluded, and each write is confirmed by a recall query.
+
+9
+00:01:05,760 --> 00:01:14,400
+The learning loop end to end: investigate, learn, persist to Walrus Memory,
+recall during a later investigation, change a decision, and verify the change.
+
+10
+00:01:14,400 --> 00:01:23,410
+Learning impact — every figure counted from durable records: memories
+recalled, memories applied, investigations influenced, and requirements
+strengthened.
+
+11
+00:01:23,410 --> 00:01:31,410
+Behaviour change is a real counterfactual: the same decision engine run twice,
+once with the recalled safeguard held out and once enforced. The difference is
+the memory's own contribution — here it added required verification checks.
+
+12
+00:01:31,410 --> 00:01:35,410
+Provenance closes the loop: the safeguard links back to the incident that
+produced it, its Walrus blob reference, and every later investigation it
+reached. Every failure should leave a safeguard.

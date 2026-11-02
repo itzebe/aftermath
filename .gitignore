@@ -23,3 +23,6 @@ tsconfig.tsbuildinfo
 
 # Agent scratch space (screenshots, temp scripts) — not part of the submission.
 .agent_tmp/
+
+# Mission 9 demo recording (large binary; kept locally, publishable as a release asset)
+artifacts/mission9/*.mp4

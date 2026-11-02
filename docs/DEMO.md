@@ -1,12 +1,19 @@
 # AFTERMATH — demo storyboard (2–3 minutes)
 
-Recording status: **recorded.** The playable video is published as a release
-asset: <https://github.com/itzebe/aftermath/releases/tag/demo-v1> (2:12,
+Recording status: **recorded.** The primary narrated video is published as a
+release asset: <https://github.com/itzebe/aftermath/releases/tag/demo-v2> (2:36,
 1920×1080, H.264 + AAC, burned-in captions). It was captured from the **live
 production deployment** with Playwright, narrated with a local TTS voice, and cut
 with ffmpeg. This storyboard remains the source of truth for what each scene shows
 and the claim it supports; the verbatim narration is in
 [`DEMO-narration.md`](DEMO-narration.md) and [`DEMO.srt`](DEMO.srt).
+
+A second, **silent captioned** recording was produced for Mission 9 from the
+current production build: [`artifacts/mission9/aftermath-demo-m9.mp4`](../artifacts/mission9/aftermath-demo-m9.mp4)
+(1:31, burned-in captions). It is silent because this environment has no TTS
+engine or microphone, so a fresh narrated track could not be produced; the
+captions carry the same narration. It shows the now-public investigation
+workspace and the current live figures.
 
 The whole run is reproducible against the **live production deployment**:
 <https://aftermath-7tij.vercel.app/>. Every figure it shows is read from the live
