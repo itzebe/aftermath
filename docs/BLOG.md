@@ -2,6 +2,15 @@
 
 *A submission for Total Recall (Tatum × Walrus).*
 
+> **Update (2026-11-02).** The counts in this article were read live on
+> 2026-10-29. The instance keeps writing, so the current figures are higher:
+> **167 completed** and **166 recall-verified** Mainnet writes, **322** memories
+> in the `aftermath` namespace, `simulatedWrites: 0`. The investigation
+> workspace is now public (a visitor can submit from the home page), and the
+> hermetic suite is now **587 passed / 40 skipped** with **16/16** E2E. Nothing
+> below is retracted; the numbers simply moved. Live values are always read from
+> `GET /api/overview` rather than quoted from here.
+
 ---
 
 ## The problem, in one sentence
