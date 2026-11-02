@@ -110,4 +110,25 @@ describe("model-supplied text is redacted at the investigation boundary", () => 
       "the upstream status",
     ]);
   });
+
+  it("keeps a credential out of an identity/enum field the model controls", () => {
+    // `observedFacts[].kind` and `.source` are preserved keys (identity/evidence
+    // provenance), so they are served verbatim. A model that echoes a credential
+    // into one of them must not smuggle it into the persisted record: the
+    // unambiguous format rules still run against preserved-key values.
+    const secret = `sk-${"E".repeat(32)}`;
+    const analysis: AiAnalysis = {
+      ...maliciousAnalysis(),
+      interpretation: "clean",
+      observedFacts: [
+        { kind: secret, value: "x", source: `material: ${secret}` },
+      ],
+    };
+    const investigation = investigateSubmission({
+      submission: { text: "2026-03-03T00:00:00Z ERROR svc returned 503" },
+      authoritativeLookup: lookup(),
+      aiAnalysis: analysis,
+    });
+    expect(JSON.stringify(investigation)).not.toContain(secret);
+  });
 });

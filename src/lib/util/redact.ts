@@ -63,6 +63,28 @@ const UUID_SHAPE =
 const SUI_DIGEST_SHAPE = /^[1-9A-HJ-NP-Za-km-z]{43,44}$/;
 
 /**
+ * The three rules whose match is *ambiguous*: they fire on a shape that a piece
+ * of legitimate evidence also has, so they are safe only on untrusted free text
+ * and must not run against an identity/reference/enum value.
+ *
+ *   - a bare 64-hex value is a 32-byte key *or* a hash/digest;
+ *   - a bare UUID is an identifier *or* some providers' key shape;
+ *   - an unlabelled high-entropy token is a secret *or* an opaque identifier.
+ *
+ * Named here so {@link applyDefinitiveSecretPatterns} can skip them by identity
+ * while {@link applySecretPatterns} still applies the full ordered set.
+ */
+const HEX_KEY_PATTERN = /\b(0x)?[0-9a-fA-F]{64}\b/g;
+const BARE_UUID_PATTERN =
+  /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
+const UNLABELLED_TOKEN_PATTERN = /[A-Za-z0-9+/=_-]{6,}/g;
+const AMBIGUOUS_SECRET_PATTERNS = new Set<RegExp>([
+  HEX_KEY_PATTERN,
+  BARE_UUID_PATTERN,
+  UNLABELLED_TOKEN_PATTERN,
+]);
+
+/**
  * The credential shapes stripped from any value that may be logged, persisted,
  * or returned. Order matters: the more specific a pattern runs first, so a value
  * is never partially consumed by a broader rule.
@@ -77,7 +99,7 @@ const SECRET_PATTERNS: Array<[RegExp, SecretReplacement]> = [
   // a bare value is conservatively removed — but one the surrounding text labels
   // as a hash or digest is evidence and is kept.
   [
-    /\b(0x)?[0-9a-fA-F]{64}\b/g,
+    HEX_KEY_PATTERN,
     (match: string, _prefix: string | undefined, offset: number, whole: string) =>
       HASH_CONTEXT.test(precedingContext(whole, offset)) ? match : "[redacted-hex-key]",
   ],
@@ -97,7 +119,7 @@ const SECRET_PATTERNS: Array<[RegExp, SecretReplacement]> = [
   // but a UUID the surrounding text labels as an id/trace/request is an
   // identifier and is kept.
   [
-    /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi,
+    BARE_UUID_PATTERN,
     (match: string, offset: number, whole: string) =>
       ID_CONTEXT.test(precedingContext(whole, offset)) ? match : "[redacted-uuid]",
   ],
@@ -138,7 +160,7 @@ const SECRET_PATTERNS: Array<[RegExp, SecretReplacement]> = [
   // Identifiers (UUIDs, hex hashes, hyphenated slugs, version strings) are
   // excluded so evidence survives.
   [
-    /[A-Za-z0-9+/=_-]{6,}/g,
+    UNLABELLED_TOKEN_PATTERN,
     (match: string) => (looksLikeSecretToken(match) ? "[possible-secret]" : match),
   ],
 ];
@@ -199,6 +221,29 @@ function looksLikeSecretToken(token: string): boolean {
 function applySecretPatterns(text: string): string {
   let out = text;
   for (const [pattern, replacement] of SECRET_PATTERNS) {
+    out = out.replace(pattern, replacement as string);
+  }
+  return out;
+}
+
+/**
+ * Apply only the *unambiguous* credential patterns — every rule whose match is a
+ * credential by its own format (a provider key, a JWT, a `Basic`/Bearer value, a
+ * PEM block, a connection string, a labelled assignment), skipping the three
+ * ambiguous ones (see {@link AMBIGUOUS_SECRET_PATTERNS}).
+ *
+ * This runs on identity/reference/enum values, which are preserved verbatim for
+ * provenance. Those values are *not* trusted to be free of credentials: a
+ * submission's own digest is matched back out of the material and written into
+ * `evidenceReferences[].ref`, so a `password=` pasted next to it would otherwise
+ * be persisted and served. A value that merely *has* a digest or hash shape is
+ * left intact, because the ambiguous rules are skipped; a value that contains a
+ * credential by format is stripped.
+ */
+function applyDefinitiveSecretPatterns(text: string): string {
+  let out = text;
+  for (const [pattern, replacement] of SECRET_PATTERNS) {
+    if (AMBIGUOUS_SECRET_PATTERNS.has(pattern)) continue;
     out = out.replace(pattern, replacement as string);
   }
   return out;
@@ -305,7 +350,14 @@ const PRESERVED_KEYS = new Set<string>([
 /** Redact a served value, preserving identity/reference/enum keys. */
 function redactServedValue(value: unknown, key: string | null): unknown {
   if (typeof value === "string") {
-    return key !== null && PRESERVED_KEYS.has(key) ? value : redact(value);
+    // A preserved key keeps its identity/reference/enum value — but a credential
+    // embedded in it is still stripped. The value is not trusted merely because
+    // its key is on the preserve list: a digest is copied back out of the raw
+    // material, so a secret pasted beside it would otherwise ride along.
+    if (key !== null && PRESERVED_KEYS.has(key)) {
+      return applyDefinitiveSecretPatterns(value);
+    }
+    return redact(value);
   }
   if (Array.isArray(value)) {
     return value.map((item) => redactServedValue(item, key));

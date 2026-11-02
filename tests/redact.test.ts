@@ -194,6 +194,30 @@ describe("redact — evidence preserved (F1)", () => {
     expect(redact(`digest ${digest}`)).toContain(digest);
   });
 
+  it("does not attempt to validate a digest structurally — the shape is the rule", () => {
+    // Investigated: a Sui digest is a base58 encoding of a *random* 32-byte
+    // value, so no structural check (decoded byte length, leading byte) can tell
+    // a real digest from an arbitrary base58 string of the same length. Random
+    // 43-44 char base58 decodes to 31-33 bytes and the leading byte spans the
+    // whole range, overlapping a genuine digest exactly. A length+charset rule
+    // is therefore the only viable test, and it is what the exemption uses.
+    const arbitrary = "aB3xY7kLmN9pQrStUvWx2yZ4cD6eF8gH1jK3mN5pQrS";
+    // An arbitrary base58 string of digest length is left intact, exactly like a
+    // digest: they are indistinguishable, and destroying one would destroy the
+    // other.
+    expect(redact(`value ${arbitrary}`)).toContain(arbitrary);
+  });
+
+  it("still redacts a base58-shaped value the text labels as a secret", () => {
+    // The one case where the exemption could leak is a base58 *secret* pasted
+    // under a secret label — and the labelled-value rule removes it regardless
+    // of shape, so the exemption does not weaken the boundary.
+    const b58 = "5Kd3Nb9XoPqRsTuVwXyZ1a2b3c4d5e6f7g8h9iJkLmN";
+    expect(redact(`password ${b58}`)).toBe("password [redacted-secret]");
+    expect(redact(`token: ${b58}`)).toBe("token: [redacted-secret]");
+    expect(redact(`secret=${b58}`)).toBe("secret=[redacted-secret]");
+  });
+
   it("keeps ordinary identifiers and slugs", () => {
     for (const value of [
       "aftermath-7tij",
@@ -323,6 +347,73 @@ describe("redactServed — the read boundary for derived fields", () => {
   it("defaults an unknown key to redacted (fail safe)", () => {
     const served = redactServed({ someFutureField: `token ${SECRET}` });
     expect(served.someFutureField).not.toContain(SECRET);
+  });
+});
+
+describe("redactServed — a credential inside a preserved-key value", () => {
+  // Identity/reference/enum keys keep their value verbatim so provenance and
+  // evidence survive. That is not a licence to keep a credential: a value under
+  // one of those keys may still *contain* a credential (a submission's own
+  // digest is copied back out of the raw material), so the unambiguous format
+  // rules must still run against it.
+  const KEYS = [
+    "evidence",
+    "evidenceReference",
+    "evidenceReferences",
+    "ref",
+    "kind",
+    "type",
+    "status",
+    "role",
+    "pattern",
+    "failureCategory",
+  ];
+
+  it("strips a provider key embedded in a preserved-key value", () => {
+    const apiKey = `sk-${"A".repeat(32)}`;
+    for (const key of KEYS) {
+      const served = redactServed({ [key]: `leaked ${apiKey}` });
+      expect(JSON.stringify(served)).not.toContain(apiKey);
+    }
+  });
+
+  it("strips a JWT, a connection string, and a PEM block from a preserved key", () => {
+    const jwt = `eyJ${"B".repeat(20)}.${"C".repeat(20)}.${"D".repeat(20)}`;
+    const dsn = "postgres://admin:s3cr3tpw@db.internal:5432/aftermath";
+    const pem = "-----BEGIN PRIVATE KEY-----\nMIIabc\n-----END PRIVATE KEY-----";
+    const served = redactServed({
+      evidence: [jwt, dsn, pem],
+      ref: `password=hunter2secret`,
+    });
+    const blob = JSON.stringify(served);
+    expect(blob).not.toContain(jwt);
+    expect(blob).not.toContain("s3cr3tpw");
+    expect(blob).not.toContain("MIIabc");
+    expect(blob).not.toContain("hunter2secret");
+  });
+
+  it("still preserves a bare digest, hash, and identifier under a preserved key", () => {
+    // The ambiguous rules (bare hex, bare UUID, unlabelled token) are skipped
+    // for preserved keys, so evidence keeps its shape.
+    const digest = "5Kd3Nb9XoPqRsTuVwXyZ1a2b3c4d5e6f7g8h9iJkLmN";
+    const hexHash = `0x${"1".repeat(64)}`;
+    const uuid = "4519d613-810b-a832-5aa0-716dacfb150f";
+    const served = redactServed({
+      evidenceReferences: [digest, hexHash],
+      evidenceReference: `incident:submission:${uuid}`,
+      kind: "sui_tx_digest",
+    });
+    expect(served.evidenceReferences).toEqual([digest, hexHash]);
+    expect(served.evidenceReference).toBe(`incident:submission:${uuid}`);
+    expect(served.kind).toBe("sui_tx_digest");
+  });
+
+  it("is idempotent when a preserved key was already cleaned", () => {
+    const once = redactServed({
+      evidence: [`5Kd3Nb9XoPqRsTuVwXyZ1a2b3c4d5e6f7g8h9iJkLmN password hunter2secret`],
+      kind: `sk-${"A".repeat(32)}`,
+    });
+    expect(redactServed(once)).toEqual(once);
   });
 });
 
