@@ -37,6 +37,7 @@ function baseConfig(overrides: Partial<AftermathConfig["ai"]> = {}): AftermathCo
     },
     aiVerify: { token: null, maxRequests: 5, windowMs: 60000 },
     adminToken: null,
+    publicSubmission: { enabled: false },
     adminRateLimit: {
       "incidents/submit": { maxRequests: 5, windowMs: 60_000 },
       "scenarios/run": { maxRequests: 1, windowMs: 60_000 },

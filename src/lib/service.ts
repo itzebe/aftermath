@@ -487,6 +487,10 @@ export async function getSafeguardRecord(
  * A record's own ids, evidence references, and transaction digests survive,
  * because redaction is key-aware and those keys are on the preserve list.
  */
+export function redactRecordForServing(record: SafeguardRecord): SafeguardRecord {
+  return withRedactedRecord(record);
+}
+
 function withRedactedRecord(record: SafeguardRecord): SafeguardRecord {
   const { submission, ...rest } = record;
   return {

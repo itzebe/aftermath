@@ -94,6 +94,19 @@ export interface AftermathConfig {
    */
   adminToken: string | null;
   /**
+   * Anonymous public incident submission.
+   *
+   * Off by default. When the operator opts in with
+   * `AFTERMATH_PUBLIC_SUBMISSION_ENABLED=1`, the submission route still refuses
+   * an anonymous caller unless *every* safety control is verified at request
+   * time — a live (Mainnet) memory backend, a shared durable index, and a
+   * configured per-client cap. If any control is missing the route stays
+   * admin-gated and reports why (see `api/public-submit-guard`). A public
+   * submission is never written as an authoritative Mainnet safeguard merely
+   * because it was submitted; authority is decided by the evidence, as always.
+   */
+  publicSubmission: { enabled: boolean };
+  /**
    * Per-endpoint fixed-window request caps for the administrator write
    * endpoints, keyed by the endpoint id the route passes to
    * `adminWriteLimiter`. These bound a holder of the admin token and blunt
@@ -358,6 +371,9 @@ export function loadConfig(): AftermathConfig {
       windowMs: aiVerifyWindowMs,
     },
     adminToken: optional("AFTERMATH_ADMIN_TOKEN"),
+    publicSubmission: {
+      enabled: optional("AFTERMATH_PUBLIC_SUBMISSION_ENABLED") === "1",
+    },
     adminRateLimit,
     publicReadLimit,
     // The shared, non-rotatable ceiling per bucket. Deliberately an order of

@@ -24,6 +24,7 @@ function config(adminToken: string | null): AftermathConfig {
     ai: { provider: "none", model: "openai/gpt-oss-120b", apiKey: null, timeoutMs: 20000, maxOutputTokens: 8192 },
     aiVerify: { token: null, maxRequests: 3, windowMs: 60_000 },
     adminToken,
+    publicSubmission: { enabled: false },
     adminRateLimit: { reset: POLICY },
     publicReadLimit: { read: POLICY, heavy: POLICY, status: POLICY },
     publicReadGlobalLimit: { read: 1200, heavy: 600, status: 600 },

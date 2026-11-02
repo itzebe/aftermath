@@ -243,18 +243,27 @@ The learning loop is **read-only public**. `/learning`, `GET /api/learning`, and
 every Safeguard Record are anonymous — a visitor can see the whole cycle without
 a token.
 
-Triggering a *new* investigation is not yet open to anonymous visitors. Incident
-submission (`POST /api/incidents/submit`) is administrator-gated because every
-request spends free-tier model quota, and the scenario runner writes to Walrus
-Mainnet. This is stated plainly rather than presented as finished public
-self-service.
+Triggering a *new* investigation is **administrator-gated by default**. Incident
+submission (`POST /api/incidents/submit`) spends free-tier model quota and can
+write to Walrus Mainnet, so it is not opened without controls.
 
-The integration points for opening it up are already in place and need no change
-to the loop itself: `submitIncident` / `runSubmissionPipeline` are pure of the
-transport, recall and safeguard evaluation run inside them, and the submission
-schema is validated before any work. A public path would add a stricter
-anonymous rate limit and a quota guard at `POST /api/incidents/submit` while
-keeping the same pipeline, the same recall, and the same eligibility rules.
+A public self-service path exists and is **fail-closed**. It activates only when
+the whole control set is verified at the request boundary
+(`guardIncidentSubmission` in `src/lib/api/public-submit-guard.ts`):
+
+- `AFTERMATH_PUBLIC_SUBMISSION_ENABLED=1` (the opt-in switch), **and**
+- a live Walrus Memory Mainnet backend (not the simulated one), **and**
+- a shared, durable audit index (Postgres, so one instance sees another's work), **and**
+- a configured rate limiter.
+
+If any control is absent, the route falls back to the exact prior admin gate —
+an anonymous caller gets `401`, and a rate-limited caller gets `429`. The public
+path changes no part of the loop itself: `submitIncident` /
+`runSubmissionPipeline` are pure of the transport, recall and safeguard
+evaluation run inside them, and the submission schema is validated before any
+work. The submit response is redacted by the same serving boundary as every read
+route, and no Walrus signing credential, Tatum key, database credential or admin
+token is reachable from the public path.
 
 ---
 

@@ -154,6 +154,18 @@ export function buildLearningLoop(records: SafeguardRecord[]): LearningLoop {
   const retrievedIn = new Map<string, string[]>();
   const influencedIn = new Map<string, string[]>();
 
+  // memoryId -> the incident each memory was first learned from, across every
+  // record. A memory recalled in a later record traces back through this even
+  // when the application predates the carried origin field.
+  const originOf = new Map<string, string>();
+  const knownIncidentIds = new Set<string>();
+  for (const record of records) {
+    knownIncidentIds.add(record.incidentId);
+    for (const m of record.learnedSafeguards ?? []) {
+      if (!originOf.has(m.memoryId)) originOf.set(m.memoryId, m.originIncidentId);
+    }
+  }
+
   for (const record of ordered) {
     const safeguard = record.learnedSafeguards?.[0] ?? null;
     const applications = record.safeguardApplications ?? [];
@@ -164,6 +176,18 @@ export function buildLearningLoop(records: SafeguardRecord[]): LearningLoop {
       if (app.applicable && app.changedBehaviour) {
         push(influencedIn, appKey, record.recordId);
       }
+      // The application carries the origin incident it was recalled from, so a
+      // memory learned in an earlier record stays traceable. Fall back to a
+      // safeguard learned in this same record, then to a known incident id the
+      // memory's identity names directly (legacy corrective lessons).
+      const originalIncidentId =
+        app.originalIncidentId ??
+        originOf.get(app.memoryId) ??
+        record.learnedSafeguards?.find(
+          (m) => m.memoryId === app.memoryId && m.version === app.version,
+        )?.originIncidentId ??
+        (knownIncidentIds.has(app.memoryId) ? app.memoryId : "");
+
       retrieval.push({
         recordId: record.recordId,
         incidentId: record.incidentId,
@@ -171,15 +195,7 @@ export function buildLearningLoop(records: SafeguardRecord[]): LearningLoop {
         memoryId: app.memoryId,
         ...(app.version !== undefined ? { version: app.version } : {}),
         blobId: app.blobId,
-        // Prefer the exact version's origin; fall back to the base identity so a
-        // version learned in an earlier record still traces to an incident.
-        originalIncidentId:
-          record.learnedSafeguards?.find(
-            (m) => m.memoryId === app.memoryId && m.version === app.version,
-          )?.originIncidentId ??
-          record.learnedSafeguards?.find((m) => m.memoryId === app.memoryId)
-            ?.originIncidentId ??
-          "",
+        originalIncidentId,
         relation: app.relation,
         relevance: app.relevance,
         applicable: app.applicable,

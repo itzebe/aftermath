@@ -29,6 +29,7 @@ function config(overrides: Partial<AftermathConfig["memory"]> = {}): AftermathCo
     ai: { provider: "none", model: "openai/gpt-oss-120b", apiKey: null, timeoutMs: 20000, maxOutputTokens: 8192 },
     aiVerify: { token: null, maxRequests: 5, windowMs: 60000 },
     adminToken: null,
+    publicSubmission: { enabled: false },
     adminRateLimit: {
       "incidents/submit": { maxRequests: 5, windowMs: 60_000 },
       "scenarios/run": { maxRequests: 1, windowMs: 60_000 },
