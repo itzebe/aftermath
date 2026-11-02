@@ -42,6 +42,8 @@ export interface LearningHistoryEntry {
   /** Subsequent investigations this safeguard's memory influenced. */
   influencedInvestigationIds: string[];
   provenance: "live" | "simulated";
+  /** True when this record is a labelled test fixture, not a production incident. */
+  fixture: boolean;
 }
 
 export interface MemoryRetrievalEntry {
@@ -61,6 +63,8 @@ export interface MemoryRetrievalEntry {
   changedBehaviour: boolean;
   authoritative: boolean;
   provenance: "live" | "simulated";
+  /** True when this record is a labelled test fixture, not a production incident. */
+  fixture: boolean;
 }
 
 export interface BehaviourChangeEntry {
@@ -78,6 +82,8 @@ export interface BehaviourChangeEntry {
   changedByMemoryId?: string;
   changedByMemoryVersion?: number;
   explanation: string;
+  /** True when this record is a labelled test fixture, not a production incident. */
+  fixture: boolean;
 }
 
 export interface LearningImpact {
@@ -132,12 +138,14 @@ export interface LearningLoop {
 }
 
 /**
- * A record is treated as a test fixture when it is explicitly simulated, or
- * when its submission carries the fixture marker the demonstration scripts set.
- * Fixtures are counted separately and never presented as production evidence.
+ * A record is a test fixture when its submission carries the fixture marker the
+ * demonstration scripts set. The marker is the explicit, human-visible signal;
+ * a record's *provenance* (`live` vs `simulated`) is a separate honesty axis —
+ * whether a memory was really persisted — and is surfaced per entry, so a
+ * credential-less run is still counted and labelled rather than hidden. Fixtures
+ * are counted separately and excluded from every headline production figure.
  */
 function isFixture(record: SafeguardRecord): boolean {
-  if (record.provenance === "simulated") return true;
   return /TEST FIXTURE/i.test(record.submission.text);
 }
 
@@ -169,6 +177,7 @@ export function buildLearningLoop(records: SafeguardRecord[]): LearningLoop {
   for (const record of ordered) {
     const safeguard = record.learnedSafeguards?.[0] ?? null;
     const applications = record.safeguardApplications ?? [];
+    const fixture = isFixture(record);
 
     for (const app of applications) {
       const appKey = app.version !== undefined ? `${app.memoryId}@v${app.version}` : app.memoryId;
@@ -204,6 +213,7 @@ export function buildLearningLoop(records: SafeguardRecord[]): LearningLoop {
         changedBehaviour: app.changedBehaviour,
         authoritative: app.authoritative,
         provenance: app.provenance,
+        fixture,
       });
     }
 
@@ -229,6 +239,7 @@ export function buildLearningLoop(records: SafeguardRecord[]): LearningLoop {
           ? { changedByMemoryVersion: record.behaviourChange.changedByMemoryVersion }
           : {}),
         explanation: record.behaviourChange.explanation,
+        fixture,
       });
     }
 
@@ -255,6 +266,7 @@ export function buildLearningLoop(records: SafeguardRecord[]): LearningLoop {
         ? influencedIn.get(`${safeguard.memoryId}@v${safeguard.version}`) ?? []
         : [],
       provenance: record.provenance,
+      fixture,
     });
   }
 
@@ -286,9 +298,6 @@ export function buildLearningLoop(records: SafeguardRecord[]): LearningLoop {
     }
   }
   const allSafeguards = [...byMemoryId.values()];
-  const verifiedSafeguards = allSafeguards.filter((s) => s.memory.authoritative);
-  const persisted = allSafeguards.filter((s) => s.persisted);
-  const recallVerified = allSafeguards.filter((s) => s.recallVerified);
 
   const influencedRecords = new Set<string>();
   for (const apps of influencedIn.values()) for (const r of apps) influencedRecords.add(r);
@@ -325,25 +334,55 @@ export function buildLearningLoop(records: SafeguardRecord[]): LearningLoop {
   });
 
   const fixtureRecords = ordered.filter(isFixture);
+  const fixtureRecordIds = new Set(fixtureRecords.map((r) => r.recordId));
   const fixtureSafeguards = allSafeguards.filter((s) =>
-    ordered.some((r) => isFixture(r) && s.recordIds.includes(r.recordId)),
+    s.recordIds.some((id) => fixtureRecordIds.has(id)),
+  );
+
+  // The headline figures are production evidence, so a fixture record is
+  // excluded from every one of them. Fixtures stay visible in the history,
+  // retrieval and behaviour-change views (each entry carries its own
+  // provenance), and are counted in `fixtures` below, but they never inflate a
+  // production metric. Without this, a labelled fixture would silently raise the
+  // counters the page presents as production evidence.
+  const isProductionRecord = (recordId: string) => !fixtureRecordIds.has(recordId);
+  const productionSafeguards = allSafeguards.filter((s) =>
+    s.recordIds.some(isProductionRecord),
+  );
+  const productionRetrieval = retrieval.filter((r) => isProductionRecord(r.recordId));
+  const productionInfluenced = [...influencedRecords].filter(isProductionRecord);
+  const productionStrengthened = strengthened.filter((b) =>
+    isProductionRecord(b.recordId),
+  );
+  const productionPreventions = demonstratedPreventions.filter((b) =>
+    isProductionRecord(b.recordId),
   );
 
   const impact: LearningImpact = {
-    totalVerifiedSafeguards: verifiedSafeguards.length,
-    safeguardsPersisted: persisted.length,
-    safeguardsRecallVerified: recallVerified.length,
-    memoriesRecalled: retrieval.length,
-    memoriesApplied: retrieval.filter((r) => r.applicable).length,
-    investigationsInfluenced: influencedRecords.size,
-    verificationRequirementsStrengthened: strengthened.length,
-    demonstratedRepeatPreventions: demonstratedPreventions.length,
+    totalVerifiedSafeguards: productionSafeguards.filter(
+      (s) => s.memory.authoritative,
+    ).length,
+    safeguardsPersisted: productionSafeguards.filter((s) => s.persisted).length,
+    safeguardsRecallVerified: productionSafeguards.filter((s) => s.recallVerified).length,
+    memoriesRecalled: productionRetrieval.length,
+    memoriesApplied: productionRetrieval.filter((r) => r.applicable).length,
+    investigationsInfluenced: productionInfluenced.length,
+    verificationRequirementsStrengthened: productionStrengthened.length,
+    demonstratedRepeatPreventions: productionPreventions.length,
     provenance: {
-      verifiedSafeguards: verifiedSafeguards.flatMap((s) => s.recordIds),
-      persisted: persisted.flatMap((s) => s.recordIds),
-      recalled: [...new Set(retrieval.map((r) => r.recordId))],
-      applied: [...new Set(retrieval.filter((r) => r.applicable).map((r) => r.recordId))],
-      influenced: [...influencedRecords],
+      verifiedSafeguards: productionSafeguards
+        .filter((s) => s.memory.authoritative)
+        .flatMap((s) => s.recordIds.filter(isProductionRecord)),
+      persisted: productionSafeguards
+        .filter((s) => s.persisted)
+        .flatMap((s) => s.recordIds.filter(isProductionRecord)),
+      recalled: [...new Set(productionRetrieval.map((r) => r.recordId))],
+      applied: [
+        ...new Set(
+          productionRetrieval.filter((r) => r.applicable).map((r) => r.recordId),
+        ),
+      ],
+      influenced: productionInfluenced,
     },
     fixtures: { records: fixtureRecords.length, safeguards: fixtureSafeguards.length },
   };

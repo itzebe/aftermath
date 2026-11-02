@@ -299,6 +299,12 @@ function WalrusPill({ entry }: { entry: LearningHistoryEntry["safeguard"] }) {
   return <Pill tone="unknown">not persisted</Pill>;
 }
 
+/** Marks a record as a labelled test fixture so it is never read as production. */
+function FixturePill({ fixture }: { fixture: boolean }) {
+  if (!fixture) return null;
+  return <Pill tone="warn">TEST FIXTURE</Pill>;
+}
+
 function HistoryCard({ entry }: { entry: LearningHistoryEntry }) {
   const s = entry.safeguard;
   return (
@@ -312,6 +318,7 @@ function HistoryCard({ entry }: { entry: LearningHistoryEntry }) {
           <div className="heading mt-1.5 text-[1rem]">{entry.summary}</div>
         </div>
         <div className="flex flex-wrap gap-2">
+          <FixturePill fixture={entry.fixture} />
           <Pill tone={entry.provenance === "live" ? "ok" : "warn"}>
             {entry.provenance}
           </Pill>
@@ -389,6 +396,7 @@ function RetrievalCard({ entry }: { entry: MemoryRetrievalEntry }) {
           · {entry.createdAt.slice(0, 19).replace("T", " ")}
         </div>
         <div className="flex flex-wrap gap-2">
+          <FixturePill fixture={entry.fixture} />
           <Pill tone={RELATION_TONE[entry.relation] ?? "neutral"}>
             {entry.relation.replace(/_/g, " ")}
           </Pill>
@@ -457,13 +465,16 @@ function BehaviourChangeCard({ entry }: { entry: BehaviourChangeEntry }) {
           </div>
           <div className="heading mt-1.5 text-[0.9375rem]">{entry.summary}</div>
         </div>
-        <Pill tone={entry.changed ? "ok" : "neutral"}>
-          {entry.beforeDecision !== entry.afterDecision
-            ? "verdict changed"
-            : entry.changed
-              ? "requirements strengthened"
-              : "no change"}
-        </Pill>
+        <div className="flex flex-wrap gap-2">
+          <FixturePill fixture={entry.fixture} />
+          <Pill tone={entry.changed ? "ok" : "neutral"}>
+            {entry.beforeDecision !== entry.afterDecision
+              ? "verdict changed"
+              : entry.changed
+                ? "requirements strengthened"
+                : "no change"}
+          </Pill>
+        </div>
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-stretch">

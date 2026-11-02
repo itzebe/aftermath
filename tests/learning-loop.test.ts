@@ -509,6 +509,53 @@ describe("learning loop view model", () => {
     const loop = buildLearningLoop(await d.store.listSafeguardRecords());
     expect(loop.impact.fixtures.records).toBe(1);
   });
+
+  it("excludes fixtures from every headline production figure", async () => {
+    // The page tells the reader fixtures are "excluded from the production
+    // figures above". A labelled fixture must therefore not raise a single
+    // headline counter, even though it is a real record that learned a real
+    // safeguard and changed a real decision. Only `fixtures` may move. The
+    // comparison is within one store: add fixtures *after* the production pair
+    // and assert the figures do not move.
+    const d = deps();
+    await runSubmissionPipeline({ text: FIRST }, d);
+    await runSubmissionPipeline({ text: SECOND }, d);
+    const before = buildLearningLoop(await d.store.listSafeguardRecords());
+
+    const fix1 = await runSubmissionPipeline({ text: `[TEST FIXTURE] ${FIRST}` }, d);
+    await runSubmissionPipeline({ text: `[TEST FIXTURE] ${SECOND}` }, d);
+    const after = buildLearningLoop(await d.store.listSafeguardRecords());
+
+    // The fixture records are real, influential records…
+    expect(after.impact.fixtures.records).toBeGreaterThanOrEqual(1);
+    expect(fix1.learnedSafeguards?.length ?? 0).toBeGreaterThanOrEqual(1);
+    expect(after.history.length).toBeGreaterThan(before.history.length);
+    // …yet no headline production figure is inflated by them.
+    expect(after.impact.totalVerifiedSafeguards).toBe(
+      before.impact.totalVerifiedSafeguards,
+    );
+    expect(after.impact.safeguardsPersisted).toBe(before.impact.safeguardsPersisted);
+    expect(after.impact.memoriesApplied).toBe(before.impact.memoriesApplied);
+    expect(after.impact.investigationsInfluenced).toBe(
+      before.impact.investigationsInfluenced,
+    );
+    expect(after.impact.verificationRequirementsStrengthened).toBe(
+      before.impact.verificationRequirementsStrengthened,
+    );
+    // …and the provenance that backs those figures names no fixture record.
+    const fixtureIds = new Set(
+      (await d.store.listSafeguardRecords())
+        .filter((r) => /TEST FIXTURE/i.test(r.submission.text))
+        .map((r) => r.recordId),
+    );
+    expect(fixtureIds.size).toBeGreaterThanOrEqual(2);
+    for (const id of after.impact.provenance.influenced) {
+      expect(fixtureIds.has(id)).toBe(false);
+    }
+    for (const id of after.impact.provenance.recalled) {
+      expect(fixtureIds.has(id)).toBe(false);
+    }
+  });
 });
 
 describe("behaviour change: a memory can change the verdict itself", () => {
