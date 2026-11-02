@@ -494,3 +494,57 @@ describe("F1 — legitimate evidence survives the read boundary", () => {
     expect(detailBlob).toContain(record.recordId);
   });
 });
+
+describe("F1 — a historical record's preserved-key values are redacted on read", () => {
+  it("strips a credential held in a preserved identity/reference/enum field", async () => {
+    const { runtime } = await import("@/lib/runtime");
+    const store = runtime().store;
+
+    // Simulate a record written before the preserved-key boundary existed: a
+    // credential sits in a field whose *key* is on the preserve list — the shape
+    // a model-supplied `observedFacts[].kind` or a derived `evidence` reference
+    // takes — so a naive key-based skip would serve it verbatim.
+    const apiKey = `sk-${"J".repeat(32)}`;
+    const seeded = await submitPOST(
+      jsonReq(
+        "http://test/api/incidents/submit",
+        { text: "2026-03-05T00:00:00Z ERROR svc returned 503" },
+        "198.51.100.41",
+      ),
+    );
+    const { record } = (await seeded.json()) as {
+      record: Record<string, unknown> & {
+        recordId: string;
+        investigation: { categories: { observedEvidence: unknown[] } };
+      };
+    };
+    const raw = {
+      ...record,
+      investigation: {
+        ...record.investigation,
+        categories: {
+          ...record.investigation.categories,
+          observedEvidence: [
+            { kind: apiKey, value: "x", source: `material ${apiKey}` },
+          ],
+        },
+      },
+    };
+    await store.saveSafeguardRecord(raw as never);
+
+    // The list and detail endpoints must not serve the credential.
+    const listRes = await recordsGET(get("http://test/api/records", "198.51.100.42"));
+    expect(listRes.status).toBe(200);
+    expect(JSON.stringify(await listRes.json())).not.toContain(apiKey);
+
+    const detailRes = await recordByIdGET(
+      get(`http://test/api/records/${record.recordId}`, "198.51.100.43"),
+      { params: Promise.resolve({ recordId: record.recordId }) },
+    );
+    expect(detailRes.status).toBe(200);
+    const detailBlob = JSON.stringify(await detailRes.json());
+    expect(detailBlob).not.toContain(apiKey);
+    // The record's own identity survives the boundary.
+    expect(detailBlob).toContain(record.recordId);
+  });
+});

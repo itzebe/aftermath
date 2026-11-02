@@ -108,10 +108,16 @@ chars), a hash or UUID the surrounding text labels as such, and ordinary slugs
 are left intact, because destroying them would break the verification the
 product depends on. A bare UUID or bare 64-hex value is ambiguous (it is also a
 key shape), so it is conservatively redacted — a deliberate, documented
-trade-off. This is **not** perfect detection and is not described as such: a
-short, low-entropy secret pasted with no label and no distinguishing format is
-indistinguishable from ordinary prose. The behaviour is pinned by
-`tests/redact.test.ts`.
+trade-off. Preserved values are not exempt from the *format* rules, however: an
+identity, reference, or enum value (an `evidence` reference, a `kind`, a `ref`)
+that *contains* a provider key, a JWT, a connection string, or a PEM block has
+that credential stripped, because a submission's own digest is copied back out
+of the raw material and a secret pasted beside it would otherwise ride along.
+Only the ambiguous rules (bare hex, bare UUID, unlabelled high-entropy token)
+are skipped for those keys, so a digest or hash keeps its shape. This is **not**
+perfect detection and is not described as such: a short, low-entropy secret
+pasted with no label and no distinguishing format is indistinguishable from
+ordinary prose. The behaviour is pinned by `tests/redact.test.ts`.
 
 **Walrus integration (specific).** The live adapter talks to the Mainnet relayer
 `https://relayer.memory.walrus.xyz`, namespace `aftermath`. Each write is
