@@ -34,7 +34,7 @@ fail the same way twice.
 | --- | --- | --- | --- |
 | 01 | Walrus Memory integrated and writing on Mainnet | ✅ | Real SDK writes to `https://relayer.memory.walrus.xyz`, namespace `aftermath`. Each write is awaited to a blob id and confirmed by a recall query. See [`src/lib/adapters/memwal-memory.ts`](../src/lib/adapters/memwal-memory.ts) and the live counts on `/memory`. |
 | 02 | Tatum RPC used for onchain data where relevant | ✅ | Read-only Sui verifier on Tatum's documented gRPC primary (`LedgerService/GetTransaction`) with a GraphQL fallback, server-side API key. It is the authoritative evidence source for the **finance** case: a Sui transaction digest in the submitted material is looked up and classified `VERIFIED_SUCCESS` / `VERIFIED_FAILURE` / `UNKNOWN`. Digests are discovered from the live ledger at runtime, never hardcoded. No transaction is ever broadcast. See [`src/lib/adapters/tatum-sui-grpc.ts`](../src/lib/adapters/tatum-sui-grpc.ts). |
-| 03 | At least 10 memories stored on Mainnet | ✅ | The live ledger reports **155 completed** and **154 recall-verified** Mainnet writes — see `GET /api/overview` (`completedLiveWrites`, `recallVerifiedWrites`). `mainnetRequirement` returns `{required: 10, completedLive: 155, recallVerified: 154, remaining: 0, satisfied: true}`. `simulatedWrites` is **0**; every write carries `backend: memwal-mainnet`, `provenance: live`. The relayer reports **310** memories in the `aftermath` namespace. Simulated writes are tracked separately and excluded. |
+| 03 | At least 10 memories stored on Mainnet | ✅ | The live ledger reports **164 completed** and **163 recall-verified** Mainnet writes — see `GET /api/overview` (`completedLiveWrites`, `recallVerifiedWrites`). `mainnetRequirement` returns `{required: 10, completedLive: 164, recallVerified: 163, remaining: 0, satisfied: true}`. `simulatedWrites` is **0**; every write carries `backend: memwal-mainnet`, `provenance: live`. The relayer reports **319** memories in the `aftermath` namespace. Simulated writes are tracked separately and excluded. |
 | 04 | Published blog post (what it does, how it uses Tatum + Walrus, how it learned) | ✅ | [`BLOG.md`](BLOG.md), published on Medium and mirrored on GitHub Pages. Covers the pipeline, both integrations, the transient-failure/deferral fix, and measured results. |
 | 05 | Working demo and public repo | ✅ | Demo: <https://aftermath-7tij.vercel.app/>. Repo: <https://github.com/itzebe/aftermath> (public). |
 | 06 | Optional: build with Tatum AI Builder (ai.tatum.io) — $500 bonus | ⛔ Not pursued | AFTERMATH was built as an indie project. The dedicated AI-Builder award is out of scope; the app still uses Tatum RPC/Data APIs directly. |
@@ -154,11 +154,11 @@ a dependency being briefly unavailable is never mistaken for a verified failure.
 (`GET /api/overview`, `GET /api/memory`):
 
 - Walrus Memory is **live** (`backend: memwal-mainnet`, `isLive: true`,
-  `MAINNET_AUTH_CONFIRMED`); the live ledger reports **155 completed** Mainnet
-  writes, of which **154** were confirmed by a recall query, with
-  `simulatedWrites: 0`. The relayer reports **310** memories in the `aftermath`
+  `MAINNET_AUTH_CONFIRMED`); the live ledger reports **164 completed** Mainnet
+  writes, of which **163** were confirmed by a recall query, with
+  `simulatedWrites: 0`. The relayer reports **319** memories in the `aftermath`
   namespace. Completed and recall-verified counts are reported separately and
-  never merged — the 155 writes are **not** all recall-verified.
+  never merged — the 164 writes are **not** all recall-verified.
 - Tatum Sui gRPC gateway configured and healthy (authenticated, chain
   identifier matching Sui Mainnet). The finance case has verified **one** live
   Mainnet transaction as `VERIFIED_SUCCESS`; the `UNKNOWN` path is also present
@@ -169,7 +169,7 @@ a dependency being briefly unavailable is never mistaken for a verified failure.
   memory-retrieval relevance. These describe the controlled scenarios, not
   production reliability.
 - Checks: `typecheck` clean, `lint` clean, unit suite **345 passed / 21
-  skipped**, `verify:prod` **20/20 passed**, live `verify:ai` **`ran=true`**.
+  skipped**, `verify:prod` **28/28 passed**, live `verify:ai` **`ran=true`**.
 
 **Demo URL:** <https://aftermath-7tij.vercel.app/>
 **Repository:** <https://github.com/itzebe/aftermath>
@@ -234,27 +234,103 @@ Figures verified **30 October 2026 (UTC)**.
 
 | Check | Command / source | Result |
 | --- | --- | --- |
-| Genuine Mainnet writes completed | `GET /api/overview` → `counts.completedLiveWrites` | **155** |
-| Writes confirmed retrievable by recall | `GET /api/overview` → `counts.recallVerifiedWrites` | **154** |
+| Genuine Mainnet writes completed | `GET /api/overview` → `counts.completedLiveWrites` | **164** |
+| Writes confirmed retrievable by recall | `GET /api/overview` → `counts.recallVerifiedWrites` | **163** |
 | Simulated writes (excluded) | `GET /api/overview` → `counts.simulatedWrites` | **0** |
-| Requirement eval | `GET /api/overview` → `mainnetRequirement` | `{required: 10, completedLive: 155, recallVerified: 154, remaining: 0, satisfied: true}` |
-| Namespace memories (relayer-reported, authoritative) | `GET /api/overview` → `memoryStatus.namespaceMemoryCount` | **310** |
+| Requirement eval | `GET /api/overview` → `mainnetRequirement` | `{required: 10, completedLive: 164, recallVerified: 163, remaining: 0, satisfied: true}` |
+| Namespace memories (relayer-reported, authoritative) | `GET /api/overview` → `memoryStatus.namespaceMemoryCount` | **319** |
 | Backend is genuinely Mainnet | `GET /api/config` / `/api/overview` | `backend: memwal-mainnet`, `isLive: true`, `network: mainnet` |
-| Every ledger row | `GET /api/memory` → `writes[]` | 188 rows, **all** `backend: memwal-mainnet`, `provenance: live` |
+| Every ledger row | `GET /api/memory` → `writes[]` | 197 rows, **all** `backend: memwal-mainnet`, `provenance: live` |
 | Relayer auth | `GET /api/overview` → `memoryStatus` | `state: MAINNET_AUTH_CONFIRMED`, `authenticated: true` |
 
-**Interpretation.** 155 completed writes and 154 recall-verified writes means the
-instance has written at least **154 memories that a recall query returned**, more
-than fifteen times the required ten. Because `simulatedWrites` is `0` and every
+**Interpretation.** 164 completed writes and 163 recall-verified writes means the
+instance has written at least **163 memories that a recall query returned**, more
+than sixteen times the required ten. Because `simulatedWrites` is `0` and every
 ledger row carries `backend: memwal-mainnet` with `provenance: live`, the count
-is not inflated by fixtures: the simulated input worlds the scenarios use are
-labelled `simulated`, and none of them is counted here. Completed and
+is not inflated by fixtures: a fixture is a record whose submission carries an
+explicit `TEST FIXTURE` marker, and those are counted separately and excluded
+from every production figure. `provenance` is a different axis — whether a write
+was really persisted — and a `simulated` provenance is a real investigation that
+happened to run without credentials, counted and labelled rather than hidden.
+Completed and
 recall-verified are reported **separately** and never merged, so a write that
 completed but whose follow-up recall was rate-limited is not silently promoted —
-**the 155 completed writes are not all recall-verified.**
+**the 164 completed writes are not all recall-verified.**
 
 The standalone check `npm run verify:prod` includes the memory checks and passes
-**20/20**; `verify:ai` is read-only.
+**28/28**; `verify:ai` is read-only.
+
+## Learning integrity — a failure in our own metrics, corrected
+
+The learning loop makes a claim on `/learning`:
+
+> Every figure is counted from durable records, never estimated. Test fixtures
+> are excluded from production evidence and counted separately.
+
+That claim was not true. The headline figures were computed over every record,
+including labelled fixtures, so a single labelled probe submitted through the
+public endpoint inflated the counters the page presents as production evidence:
+`memoriesApplied` moved 2 → 5 and `investigationsInfluenced` moved 1 → 2. An
+inflated learning claim is exactly the misleading memory the system exists to
+prevent, so it was fixed rather than explained away.
+
+Two corrections were required for the claim to hold:
+
+1. The headline figures and their provenance now count production records only.
+   Fixtures stay visible in the history, retrieval and behaviour views — each
+   entry carries a `fixture` flag, rendered as a `TEST FIXTURE` pill — and are
+   counted under `fixtures`, but they never move a production metric.
+2. A fixture is now defined by the explicit `TEST FIXTURE` marker, not by
+   `provenance: simulated`. Provenance is a separate honesty axis — whether a
+   write was really persisted. Conflating the two would have zeroed the metrics
+   for any credential-less deployment, hiding real investigations instead of
+   labelling them.
+
+Measured on the **same** production store, with the fixture still present:
+
+| Figure | Before the fix | After the fix |
+| --- | --- | --- |
+| `memoriesApplied` | 5 (inflated) | **2** |
+| `investigationsInfluenced` | 2 (inflated) | **1** |
+| `fixtures.records` | 1 | 1 (still counted) |
+| Fixture labelled in the UI | no | **yes** |
+
+The production verifier (`npm run verify:prod`) had the same defect in reverse:
+it compared the production-only counter against *all* applicable retrievals and
+so reported a false FAIL (`memoriesApplied=2 vs 5 applicable retrieval(s)`). It
+now filters fixtures before deriving its expectations, while the traceability and
+provenance checks still run over every entry — so nothing becomes invisible. Both
+corrections are pinned by tests, and the regression test was confirmed to fail
+without the fix.
+
+## Live end-to-end evidence: a memory changes a decision
+
+Run against production with no operator token (the public self-service path):
+
+1. **Learn.** An earlier investigation of an unsupported completion claim
+   established that a success claim with no authoritative record cannot stand,
+   and persisted a safeguard to Walrus Memory Mainnet
+   (`blobId dVhv7FPhVWAkym3xA93WsbJOCKGbZiTkr7pVCRNxgMM`, namespace `aftermath`,
+   recall-verified).
+2. **Recall.** A fresh anonymous submission of the same failure pattern returned
+   `recordId 98365402-f3cf-2ce7-5070-13fd3dc4f569`, recalled **5** memories,
+   found the safeguard **applicable** (`relation: candidate_pattern_match`;
+   *domain and failure pattern match the recalled lesson*), and attached it as
+   `applicableMemoryIds: ["safeguard-incident-unsupported_completion_claim@v1"]`.
+3. **Change behaviour.** The safeguard added **2 required verification checks**
+   the engine would not otherwise require — replay through the decision engine,
+   and capture the operation's own authoritative record — while the verdict
+   remained `REQUIRE_VERIFICATION` rather than being upgraded to verified
+   success. The change is recorded as `attributableToMemory: true` with the
+   memory id and the honest limitation stated on the record.
+4. **Verify.** `GET /api/learning` now reports
+   `investigationsInfluenced: 2`, `verificationRequirementsStrengthened: 2`,
+   `memoriesApplied: 6`, and `provenance.influenced` names the new record. The
+   fixture is excluded from all of it.
+
+The full cycle is readable at
+<https://aftermath-7tij.vercel.app/learning> and
+<https://aftermath-7tij.vercel.app/records/98365402-f3cf-2ce7-5070-13fd3dc4f569>.
 
 ## Demo video
 
@@ -298,7 +374,7 @@ instructions, and the "what is genuinely demonstrable live" table are in
 npm run typecheck     # clean
 npm run lint          # clean
 npm test              # hermetic unit + integration suite
-npm run verify:prod   # 20 checks against the deployed application
+npm run verify:prod   # 28 checks against the deployed application
 AFTERMATH_AI_VERIFY_TOKEN=<token> npm run verify:ai   # read-only live AI check
 ```
 
