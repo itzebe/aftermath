@@ -82,6 +82,7 @@ export interface LearningLoopShape {
     changedBehaviour?: boolean;
     originalIncidentId?: string;
     blobId?: string;
+    fixture?: boolean;
   }>;
   behaviourChanges?: Array<{
     changed?: boolean;
@@ -90,6 +91,7 @@ export interface LearningLoopShape {
     afterDecision?: string;
     addedRequiredChecks?: string[];
     changedByMemoryId?: string;
+    fixture?: boolean;
   }>;
   impact?: {
     totalVerifiedSafeguards?: number;
@@ -110,7 +112,10 @@ export interface LearningLoopShape {
  *   - an investigation is counted as influenced only if a retrieved memory both
  *     applied and changed behaviour, and every such memory has a behaviour
  *     change behind it;
- *   - `memoriesApplied` counts exactly the applicable retrievals;
+ *   - `memoriesApplied` counts exactly the applicable retrievals — and, because
+ *     the headline figures are production evidence, only those from production
+ *     records. A labelled fixture is excluded here exactly as the view model
+ *     excludes it, so the counter and this check agree on the same population;
  *   - a memory counted as persisted must be recall-verified, so no write is
  *     claimed that cannot be read back;
  *   - every retrieval and provenance entry carries a memory id and the origin
@@ -125,10 +130,18 @@ export function assessLearning(lp: LearningLoopShape | null): Check[] {
   const provenance = lp.provenance ?? [];
   const impact = lp.impact ?? {};
 
-  const applied = retrieval.filter((r) => r.applicable);
-  const influenced = retrieval.filter((r) => r.applicable && r.changedBehaviour);
+  // The impact counters are production evidence, so compare like with like:
+  // a fixture entry is not part of the population the counters describe.
+  const productionRetrieval = retrieval.filter((r) => !r.fixture);
+  const productionChanges = changes.filter((c) => !c.fixture);
+
+  const applied = productionRetrieval.filter((r) => r.applicable);
+  const influenced = productionRetrieval.filter((r) => r.applicable && r.changedBehaviour);
   const changedIds = new Set(
-    changes.filter((c) => c.changed).map((c) => c.changedByMemoryId).filter(Boolean),
+    productionChanges
+      .filter((c) => c.changed)
+      .map((c) => c.changedByMemoryId)
+      .filter(Boolean),
   );
 
   const checks: Check[] = [];
@@ -150,31 +163,31 @@ export function assessLearning(lp: LearningLoopShape | null): Check[] {
   checks.push({
     name: "memories applied counter agrees",
     ok: (impact.memoriesApplied ?? -1) === applied.length,
-    detail: `impact.memoriesApplied=${impact.memoriesApplied} vs ${applied.length} applicable retrieval(s)`,
+    detail: `impact.memoriesApplied=${impact.memoriesApplied} vs ${applied.length} applicable production retrieval(s)`,
   });
   checks.push({
     name: "influenced investigations have a behaviour change",
     ok: influenced.every((r) => changedIds.has(r.memoryId as string)),
-    detail: `${influenced.length} influenced retrieval(s), each backed by a changed behaviour`,
+    detail: `${influenced.length} influenced production retrieval(s), each backed by a changed behaviour`,
   });
   checks.push({
     name: "no uninfluential memory counted",
     ok: (impact.investigationsInfluenced ?? -1) <= influenced.length,
-    detail: `impact.investigationsInfluenced=${impact.investigationsInfluenced} vs ${influenced.length} evidenced change(s)`,
+    detail: `impact.investigationsInfluenced=${impact.investigationsInfluenced} vs ${influenced.length} evidenced production change(s)`,
   });
   checks.push({
     name: "no behaviour change without a memory-caused effect",
     // A change is claimed only when the memory moved the decision or added a
     // required check the before arm did not require. A change that does neither
     // is the attribution error the learning loop must never make.
-    ok: changes.every(
+    ok: productionChanges.every(
       (c) =>
         !c.changed ||
         (c.attributableToMemory === true &&
           ((c.beforeDecision ?? "") !== (c.afterDecision ?? "") ||
             (c.addedRequiredChecks?.length ?? 0) > 0)),
     ),
-    detail: `${changes.filter((c) => c.changed).length} changed behaviour(s), each attributed to the memory`,
+    detail: `${productionChanges.filter((c) => c.changed).length} changed production behaviour(s), each attributed to the memory`,
   });
   checks.push({
     name: "persisted memories are recall-verified",
