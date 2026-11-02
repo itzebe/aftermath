@@ -8,6 +8,7 @@ import type {
   SafeguardDecision,
   SafeguardRule,
 } from "@/lib/schemas";
+import { fetchJson } from "@/lib/util/api-get";
 import {
   DecisionPill,
   EmptyState,
@@ -46,9 +47,8 @@ export default function IncidentsPage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/incidents")
-      .then((r) => r.json())
-      .then((d: IncidentsResponse) => {
+    fetchJson<IncidentsResponse>("/api/incidents")
+      .then((d) => {
         if (cancelled) return;
         setData(d);
         setSelectedId(d.incidents[0]?.incident.incidentId ?? null);

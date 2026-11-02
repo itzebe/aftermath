@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { EvaluationMetrics, ScenarioOutcome } from "@/lib/engines/evaluation";
+import { fetchJson } from "@/lib/util/api-get";
 import {
   DecisionPill,
   EmptyState,
@@ -26,9 +27,8 @@ export default function EvaluationPage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/evaluation")
-      .then((r) => r.json())
-      .then((d: EvaluationResponse) => {
+    fetchJson<EvaluationResponse>("/api/evaluation")
+      .then((d) => {
         if (!cancelled) setData(d);
       })
       .catch((e: Error) => {

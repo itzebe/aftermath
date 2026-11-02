@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { readFileSync } from "node:fs";
 
 /**
  * Browser tests against a running AFTERMATH instance.
@@ -192,4 +193,52 @@ test("a mobile menu is reachable and holds the same destinations", async ({ page
   await expect(menu.getByRole("link", { name: "Investigate" })).toBeVisible();
   await expect(menu.getByRole("link", { name: "Safeguard Records" })).toBeVisible();
   await expect(menu.getByRole("link", { name: "Evaluation Lab" })).toBeVisible();
+});
+
+test("a rate-limited read endpoint degrades gracefully, not into a crash", async ({ page }) => {
+  // A public read route can answer 429 with an error body. The page must show
+  // that error, not parse it as the payload and throw during render. Route-level
+  // interception keeps this deterministic; it does not need the real limiter.
+  await page.route("**/api/incidents", (route) =>
+    route.fulfill({
+      status: 429,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "rate_limited", retryAfterSeconds: 30 }),
+    }),
+  );
+  const pageErrors: string[] = [];
+  page.on("pageerror", (e) => pageErrors.push(e.message));
+  await page.goto("/incidents");
+  await expect(page.getByText(/rate_limited/i)).toBeVisible();
+  await expect(page.getByText(/client-side exception/i)).toHaveCount(0);
+  expect(pageErrors).toEqual([]);
+});
+
+test("no serious or critical accessibility violation on any public route", async ({ page }) => {
+  // A whole-route WCAG 2.x A/AA sweep. The learning loop's quiet links were
+  // once distinguishable only by colour (SC 1.4.1), so this guards the fix and
+  // the rest of the surface together. Serious and critical are the levels that
+  // block a user outright; moderate and minor are reported by axe but not
+  // asserted here.
+  const axeSource = readFileSync(
+    require.resolve("axe-core/axe.min.js"),
+    "utf8",
+  );
+  for (const path of ["/", "/records", "/learning", "/lab", "/incidents", "/safeguards", "/memory", "/evaluation", "/admin"]) {
+    await page.goto(path);
+    await page.addScriptTag({ content: axeSource });
+    const results = await page.evaluate(async () => {
+      const axe = (window as unknown as { axe: { run: (c: Document, o: unknown) => Promise<{ violations: Array<{ id: string; impact: string | null; nodes: unknown[] }> }> } }).axe;
+      return axe.run(document, {
+        runOnly: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"],
+      });
+    });
+    const blocking = results.violations.filter(
+      (v) => v.impact === "serious" || v.impact === "critical",
+    );
+    expect(
+      blocking.map((v) => `${v.id}(${v.nodes.length})`),
+      `accessibility violations on ${path}`,
+    ).toEqual([]);
+  }
 });

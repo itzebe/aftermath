@@ -240,14 +240,19 @@ button.action.primary:hover:not(:disabled) {
   border-color: #4b90e2;
 }
 
-/* A link that reads as a quiet text action. */
+/* A link that reads as a quiet text action.
+   The underline is present at rest, not only on hover, so the link is
+   distinguishable from the surrounding text without relying on colour alone
+   (WCAG 2.2 SC 1.4.1). Hover strengthens the rule rather than introducing it. */
 .link-quiet {
   color: var(--info);
   text-underline-offset: 3px;
-  text-decoration-color: rgba(91, 157, 255, 0.4);
+  text-decoration: underline;
+  text-decoration-color: rgba(91, 157, 255, 0.5);
+  text-decoration-thickness: 1px;
 }
 .link-quiet:hover {
-  text-decoration: underline;
+  text-decoration-color: var(--info);
 }
 
 /* ---- navigation ----------------------------------------------------- */
