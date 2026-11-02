@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import type { AftermathConfig } from "@/lib/config";
 import { guardIncidentSubmission } from "@/lib/api/public-submit-guard";
@@ -89,6 +89,19 @@ maybe("rate-limit counters carry no raw client address", () => {
     );
     return res.rows.map((r) => r.bucket_key);
   }
+
+  // The counter table is shared and durable, and the fixture's buckets use a
+  // fixed salt and client, so hits from an earlier run in the same window would
+  // carry over — a raw row left by a revert-only-fix run would fail the
+  // assertion, and a hashed row would push the counter past its cap and turn
+  // `res.ok` into a 429. Clear this fixture's own rows first so the result
+  // reflects this run alone.
+  beforeEach(async () => {
+    await pool.query(
+      "DELETE FROM rate_limit_counters WHERE bucket_key LIKE $1 OR bucket_key LIKE $2 OR bucket_key LIKE $3",
+      [`%${CLIENT_IP}%`, "admin:incidents/submit:%", "public:incidents/submit:%"],
+    );
+  });
 
   it("the admin-write guard stores a hash, never the raw address", async () => {
     resetSharedLimiters();
