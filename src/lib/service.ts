@@ -5,6 +5,7 @@ import { runAllScenarios, type DemoRunResult } from "@/lib/demos/runner";
 import { runDemoBatch, type BatchResult } from "@/lib/demos/resumable-runner";
 import { evaluate, type EvaluationMetrics, type ScenarioOutcome } from "@/lib/engines/evaluation";
 import { runSubmissionPipeline, submissionId } from "@/lib/engines/submission-pipeline";
+import { evaluatePublicSubmitAvailability } from "@/lib/api/public-submit-guard";
 import { buildLearningLoop, type LearningLoop } from "@/lib/engines/learning-loop";
 import { runAiInvestigation } from "@/lib/engines/ai-investigation";
 import { resolveModelClient, AiAnalysisCache } from "@/lib/adapters/model-factory";
@@ -54,6 +55,18 @@ export interface ConfigurationStatus {
     durable: boolean;
     detail: string;
   };
+  /**
+   * Whether an anonymous visitor may submit an incident, and why.
+   *
+   * This mirrors the server-side decision in `api/public-submit-guard` exactly,
+   * so the UI can present the public submission form when it is genuinely
+   * available and the honest reason when it is not. It exposes no secret — only
+   * the boolean and the human-readable reason.
+   */
+  publicSubmission: {
+    available: boolean;
+    reason: string;
+  };
 }
 
 export function configurationStatus(): ConfigurationStatus {
@@ -91,6 +104,10 @@ export function configurationStatus(): ConfigurationStatus {
       durable: rt.store.durable,
       detail: rt.store.detail,
     },
+    publicSubmission: (() => {
+      const availability = evaluatePublicSubmitAvailability(config);
+      return { available: availability.available, reason: availability.reason };
+    })(),
   };
 }
 
@@ -132,6 +149,48 @@ export interface OverviewPayload {
  */
 const OVERVIEW_TTL_MS = 10_000;
 
+/**
+ * The ceiling for each live status probe in the overview.
+ *
+ * The homepage awaits the overview, so an unbounded probe turns a slow upstream
+ * into a slow page. Six seconds is well above a healthy relayer or Tatum round
+ * trip (both answer in well under a second) and well below a page-load budget,
+ * so it only fires when an upstream is genuinely stalled — and when it does, the
+ * overview still renders with that probe reported as unavailable.
+ *
+ * Configurable so a test can bound it tightly instead of waiting the full budget.
+ */
+const DEFAULT_PROBE_BUDGET_MS = 6_000;
+
+function probeBudgetMs(): number {
+  const raw = Number(process.env.AFTERMATH_PROBE_BUDGET_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_PROBE_BUDGET_MS;
+}
+
+/**
+ * Resolve `probe` within `budgetMs`, or resolve to `fallback`.
+ *
+ * Used for the optional live status probes: a probe that overruns its budget (or
+ * rejects) must not hold up the page or fail the whole payload, because none of
+ * these probes is required to render it. The fallback states the honest reason,
+ * so a degraded status is never presented as a healthy one.
+ */
+async function probeWithin<T>(
+  probe: Promise<T>,
+  budgetMs: number,
+  fallback: () => T,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<T>((resolve) => {
+    timer = setTimeout(() => resolve(fallback()), budgetMs);
+  });
+  try {
+    return await Promise.race([probe.catch(() => fallback()), timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 let overviewCache: { at: number; payload: OverviewPayload } | null = null;
 
 /** Drop the cached overview. Exported for tests and after a reset. */
@@ -142,10 +201,30 @@ export function resetOverviewCache(): void {
 async function buildOverview(): Promise<OverviewPayload> {
   const rt = runtime();
   const counts = await rt.store.counts();
+  // The three live probes reach the Walrus relayer and Tatum. Each is already
+  // configured with its own transport timeout, but a stalled upstream can still
+  // leave the whole request waiting far longer than a page load may. They are
+  // bounded here as well, and — because none of them is required to render the
+  // page — a probe that does not answer within its budget resolves to an honest
+  // "unavailable" state rather than failing the whole overview. The page then
+  // shows real counts with a degraded status, instead of hanging or erroring.
   const [tatumHealth, memoryHealth, memoryStatus] = await Promise.all([
-    rt.suiVerifier.health(),
-    rt.memory.adapter.validateMemoryAvailability(),
-    rt.memory.adapter.status(),
+    probeWithin(rt.suiVerifier.health(), probeBudgetMs(), () => ({
+      ok: false,
+      detail: "The Tatum Sui interface did not answer within the probe budget.",
+    })),
+    probeWithin(rt.memory.adapter.validateMemoryAvailability(), probeBudgetMs(), () => ({
+      ok: false,
+      detail: "The Walrus Memory relayer did not answer within the probe budget.",
+    })),
+    probeWithin(rt.memory.adapter.status(), probeBudgetMs(), () => ({
+      state: "MAINNET_UNAVAILABLE" as const,
+      reachable: false,
+      authenticated: false,
+      authFailed: false,
+      authUpstreamUnavailable: true,
+      detail: "The Walrus Memory relayer did not answer within the probe budget.",
+    })),
   ]);
 
   const lastRun = (await rt.store.listScenarioRuns(1))[0];

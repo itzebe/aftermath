@@ -133,6 +133,26 @@ describe("SharedRateLimiter over the durable SQLite store", () => {
     expect(results.every((r) => r.degraded)).toBe(true);
   });
 
+  it("does not hang the request when the store never settles", async () => {
+    // A store that never resolves models a stalled database dependency. Without
+    // a bound the caller would wait as long as the dependency, and the platform
+    // would turn the request into a 504. The limiter must instead give up after
+    // its timeout and degrade to the in-process cap.
+    const neverSettles: RateLimitStore = {
+      hit: () => new Promise<number>(() => {}),
+    };
+    const limiter = new SharedRateLimiter({
+      policy: POLICY,
+      store: neverSettles,
+      fallback: new FixedWindowRateLimiter(POLICY),
+      storeTimeoutMs: 50,
+      now: at(1_000_000),
+    });
+    const verdict = await limiter.check("stalled");
+    expect(verdict.allowed).toBe(true);
+    expect(verdict.degraded).toBe(true);
+  });
+
   it("shares one limiter per registry key", () => {
     resetSharedLimiters();
     const opts = { resolveStore: () => new InMemoryRateLimitStore() };

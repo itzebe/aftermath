@@ -114,16 +114,51 @@ describe("getOverview caching", () => {
   it("does not cache a failure: the error propagates and the next call retries", async () => {
     const rt = runtime();
     let calls = 0;
-    vi.spyOn(rt.suiVerifier, "health").mockImplementation(async () => {
+    // An *essential* dependency (the audit store) failing must fail the overview
+    // and must not be memoised. The live status probes are optional and degrade
+    // instead (see the next test), so this uses the store to test the caching
+    // property.
+    vi.spyOn(rt.store, "counts").mockImplementation(async () => {
       calls += 1;
-      if (calls === 1) throw new Error("tatum down");
-      return { ok: true, detail: "recovered" };
+      if (calls === 1) throw new Error("store down");
+      return {
+        incidents: 0,
+        verifiedFailures: 0,
+        activeRules: 0,
+        unresolved: 0,
+        completedLiveWrites: 0,
+        recallVerifiedWrites: 0,
+        simulatedWrites: 0,
+        totalWrites: 0,
+        records: 0,
+      };
     });
 
-    await expect(getOverview()).rejects.toThrow("tatum down");
+    await expect(getOverview()).rejects.toThrow("store down");
     // The failure was not memoised; the next call rebuilds successfully.
     const recovered = await getOverview();
     expect(recovered).toHaveProperty("counts");
     expect(calls).toBe(2);
+  });
+
+  it("degrades a stalled status probe instead of failing the whole overview", async () => {
+    const rt = runtime();
+    // A probe that never answers models a stalled upstream (the Walrus relayer or
+    // Tatum). The overview must still resolve, with that probe reported as
+    // unavailable, rather than hanging the homepage until the platform 504s.
+    process.env.AFTERMATH_PROBE_BUDGET_MS = "50";
+    vi.spyOn(rt.memory.adapter, "status").mockImplementation(
+      () => new Promise(() => {}) as never,
+    );
+
+    try {
+      const overview = await getOverview();
+      expect(overview.counts).toBeDefined();
+      expect(overview.memoryStatus.authenticated).toBe(false);
+      expect(overview.memoryStatus.state).toBe("MAINNET_UNAVAILABLE");
+      expect(overview.memoryStatus.detail).toMatch(/probe budget/i);
+    } finally {
+      delete process.env.AFTERMATH_PROBE_BUDGET_MS;
+    }
   });
 });

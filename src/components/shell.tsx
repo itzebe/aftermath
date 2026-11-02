@@ -53,6 +53,7 @@ interface ConfigSummary {
     namespace: string;
   };
   tatum: { rpcUrl: string; configured: boolean };
+  publicSubmission?: { available: boolean; reason: string };
 }
 
 const isActive = (pathname: string, href: string) =>
