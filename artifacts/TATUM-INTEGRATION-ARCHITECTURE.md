@@ -1,7 +1,7 @@
 # AFTERMATH — Tatum Sui integration
 
 *Independently audited and verified on 2026-11-03 against production
-(`https://aftermath-7tij.vercel.app`, commit `5c34926`).*
+(`https://aftermath-7tij.vercel.app`, commit `b8ce867`).*
 
 This document explains what Tatum actually does inside AFTERMATH, why it is
 load-bearing rather than decorative, and how each claim can be reproduced by a
