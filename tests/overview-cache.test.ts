@@ -84,6 +84,37 @@ describe("getOverview caching", () => {
     now.mockRestore();
   });
 
+  it("coalesces concurrent cache misses into one set of upstream calls", async () => {
+    // A burst of simultaneous first requests (a page load firing the overview,
+    // the memory page, and a retry together) must not fan out into N sets of
+    // live upstream calls. Without single-flight the burst multiplies the
+    // Walrus/Tatum load and the database work, which is what a cold serverless
+    // instance sees on the homepage.
+    const rt = runtime();
+    let statusCalls = 0;
+    let resolveStatus: (v: unknown) => void = () => {};
+    vi.spyOn(rt.memory.adapter, "status").mockImplementation(() => {
+      statusCalls += 1;
+      return new Promise((resolve) => {
+        resolveStatus = resolve as (v: unknown) => void;
+      }) as never;
+    });
+
+    const first = getOverview();
+    const second = getOverview();
+    const third = getOverview();
+    // Let the in-flight loader reach the probes before resolving.
+    await Promise.resolve();
+    resolveStatus({ state: "ready", authenticated: true, detail: "stub" });
+
+    const [a, b, c] = await Promise.all([first, second, third]);
+    expect(a).toEqual(b);
+    expect(b).toEqual(c);
+    expect(statusCalls).toBe(1);
+    expect(tatumHealthCalls).toBe(1);
+    expect(memoryAvailCalls).toBe(1);
+  });
+
   it("returns a payload with the unchanged contract", async () => {
     const overview = await getOverview();
     expect(overview).toHaveProperty("counts");
