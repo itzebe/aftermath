@@ -112,8 +112,8 @@ PASS  Walrus Memory reaches Mainnet     network=mainnet, live=true
 PASS  Walrus Memory credentials accepted  MAINNET_AUTH_CONFIRMED
 PASS  Tatum Sui adapter configured      Tatum Sui Mainnet gRPC
 PASS  Tatum Sui gateway healthy         reachable and authenticated
-PASS  >= 10 completed Mainnet writes    189 completed
-PASS  >= 10 recall-verified writes      186 recall-verified
+PASS  >= 10 completed Mainnet writes    191 completed
+PASS  >= 10 recall-verified writes      188 recall-verified
 PASS  recall query returns memories     5 result(s) from memwal-mainnet (live=true)
 PASS  learning retrieval entries traceable
 PASS  memories applied counter agrees
@@ -346,16 +346,16 @@ Read live from `GET /api/overview` and `GET /api/learning` on the deployed commi
 | Evidence | Value |
 | --- | --- |
 | Walrus authentication | `MAINNET_AUTH_CONFIRMED`, `authenticated: true` |
-| Namespace | `aftermath` — **344** memories (relayer-reported) |
-| Completed Mainnet writes | **189** |
-| Recall-verified writes | **186** |
+| Namespace | `aftermath` — **346** memories (relayer-reported) |
+| Completed Mainnet writes | **191** |
+| Recall-verified writes | **188** |
 | Simulated writes | **0** |
-| Total ledger rows | 222; the `/api/memory` feed returns the newest 200, all `backend: memwal-mainnet`, `provenance: live` |
+| Total ledger rows | 224; the `/api/memory` feed returns the newest 200, all `backend: memwal-mainnet`, `provenance: live` |
 | Tatum Sui gRPC | reachable, authenticated, chain mainnet (`4btiuiMPvEENsttpZC7CZ53DruC3MAgfznDbASZ7DR6S`) |
 | PostgreSQL durability | Neon `ep-summer-surf-b52xfmdp-pooler…`, durable |
 | Persisted safeguards (recall-verified) | **5** |
-| Memories recalled | 75 |
-| Memories applied | **33** |
+| Memories recalled | 80 |
+| Memories applied | **36** |
 | Investigations influenced | **4** |
 | Requirements strengthened | **4** |
 | Repeat preventions | **0** (reported honestly) |

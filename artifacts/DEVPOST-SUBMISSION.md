@@ -294,8 +294,8 @@ same way twice.
 The safeguard is written to Walrus Memory Mainnet and counted as verified only
 when a recall query returns it. Recall is what makes the behaviour change
 possible: without a working recall path there is no second arm in the
-comparison. As of 2026-11-03 the instance reports **189 completed** and **186
-recall-verified** Mainnet writes, `simulatedWrites: 0`, with **344** memories in
+comparison. As of 2026-11-03 the instance reports **191 completed** and **188
+recall-verified** Mainnet writes, `simulatedWrites: 0`, with **346** memories in
 the namespace.
 
 **Deepest learning loop.** The brief asks for the deepest loop, and that is the
@@ -308,7 +308,7 @@ same engine, twice, with only the memory varying), and the provenance shows the
 memory's contribution — including the cases where it changed nothing.
 
 *Honest scoping.* The instance currently shows **5** persisted, recall-verified
-safeguards, **33** memories applied, **4** investigations influenced, and **4**
+safeguards, **36** memories applied, **4** investigations influenced, and **4**
 requirements strengthened. It shows **0** demonstrated repeat preventions. We
 report those numbers as they are.
 
@@ -331,8 +331,8 @@ Everything a judge can check independently, without trusting this document:
   live and public, serving application commit `3fca1b98`.
 - **`GET /api/config`** — reports `publicSubmission.available: true` with the exact
   reason, and fails closed otherwise.
-- **`GET /api/overview`** — reports the live Walrus namespace count (**344**),
-  completed (**189**) and recall-verified (**186**) writes, simulated writes
+- **`GET /api/overview`** — reports the live Walrus namespace count (**346**),
+  completed (**191**) and recall-verified (**188**) writes, simulated writes
   (**0**), Tatum Sui Mainnet health, and the persistence backend — all read from
   the real services, not asserted.
 - **`GET /api/learning`** — returns the impact counters, the behaviour-change

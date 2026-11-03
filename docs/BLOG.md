@@ -4,7 +4,7 @@
 
 > **Update (2026-11-03).** The counts in this article were read live on
 > 2026-10-29. The instance keeps writing, so the current figures are higher:
-> **189 completed** and **186 recall-verified** Mainnet writes, **344** memories
+> **191 completed** and **188 recall-verified** Mainnet writes, **346** memories
 > in the `aftermath` namespace, `simulatedWrites: 0`. The investigation
 > workspace is now public (a visitor can submit from the home page), and the
 > hermetic suite is now **620 passed / 12 skipped** with **18/18** E2E. Nothing
@@ -651,7 +651,7 @@ append-only, and it keeps counting everything that happened before the fix. I am
 not rewriting it, and I am not hiding it. Three distinctions matter:
 
 - **Completed writes and recall-verified writes are different numbers.** The
-  live instance reports **189 completed** Mainnet writes and **186
+  live instance reports **191 completed** Mainnet writes and **188
   recall-verified**. The gap is three writes that reached a blob id and were
   recorded as completed, but whose *follow-up recall query* was itself
   rate-limited — so they are completed-but-not-recall-verified. Each is counted
@@ -676,7 +676,7 @@ not rewriting it, and I am not hiding it. Three distinctions matter:
   observed it.
 
 None of this changes the headline the brief cares about: the requirement is ten
-genuine, completed Mainnet memories, and the instance has 189 completed and 186
+genuine, completed Mainnet memories, and the instance has 191 completed and 188
 recall-verified, all written through the real SDK against Mainnet.
 
 ## What I measured
@@ -779,8 +779,8 @@ conflating them would be dishonest in one direction or the other:
 A single counter cannot be honest about both "what did this process do" and
 "what is actually on chain". So there are two.
 
-As of this submission, the operator's own instance reports **189 completed
-Mainnet writes and 186 recall-verified writes**, with zero simulated writes in
+As of this submission, the operator's own instance reports **191 completed
+Mainnet writes and 188 recall-verified writes**, with zero simulated writes in
 that total — read straight from `GET /api/overview` on the running application,
 not asserted from memory. The two numbers are deliberately different and are
 never presented as equivalent: three writes reached a blob id and were recorded
