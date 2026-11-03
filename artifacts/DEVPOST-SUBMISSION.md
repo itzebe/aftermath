@@ -146,6 +146,19 @@ and the safeguard engine proposes a scoped rule. The rule is not trusted on
 sight: it carries an authority level and a version, and it is only *authoritative*
 when the failure was actually verified against a source.
 
+**Why Tatum is load-bearing, not decorative.** An agent's own claim ("the
+transaction succeeded") is never evidence — it is the thing under test. When a
+submission names a Sui transaction digest, AFTERMATH performs a **read-only**
+lookup through Tatum's Sui Mainnet gateway (`sui.rpc.v2.LedgerService/GetTransaction`,
+GraphQL fallback) and folds the ledger's execution status into the record. The
+verdict is then a function of Tatum's answer, not of the claim. The same class of
+submission resolves to **ALLOW** when the chain confirms success, **BLOCK** when
+the chain reports failure, and **REQUIRE_VERIFICATION** when the chain cannot
+answer — three different decisions from one claim, decided by on-chain truth. No
+transaction is broadcast and no wallet key is requested. A transport failure, an
+auth failure, or a missing transaction always resolves to `UNKNOWN`, never to a
+fabricated outcome. See `artifacts/TATUM-INTEGRATION-ARCHITECTURE.md`.
+
 **How it is persisted.** The rule and its lesson are written to Walrus Memory
 Mainnet under a content-hash idempotency key. The write is awaited to a blob id.
 A write is counted as *recall-verified* only after a recall query returns it — so
@@ -281,8 +294,8 @@ same way twice.
 The safeguard is written to Walrus Memory Mainnet and counted as verified only
 when a recall query returns it. Recall is what makes the behaviour change
 possible: without a working recall path there is no second arm in the
-comparison. As of 2026-11-03 the instance reports **180 completed** and **177
-recall-verified** Mainnet writes, `simulatedWrites: 0`, with **335** memories in
+comparison. As of 2026-11-03 the instance reports **189 completed** and **186
+recall-verified** Mainnet writes, `simulatedWrites: 0`, with **344** memories in
 the namespace.
 
 **Deepest learning loop.** The brief asks for the deepest loop, and that is the
@@ -294,10 +307,19 @@ The change is demonstrated by a real counterfactual over the decision engine (th
 same engine, twice, with only the memory varying), and the provenance shows the
 memory's contribution — including the cases where it changed nothing.
 
-*Honest scoping.* The instance currently shows **3** persisted, recall-verified
-safeguards, **31** memories applied, **3** investigations influenced, and **3**
+*Honest scoping.* The instance currently shows **5** persisted, recall-verified
+safeguards, **33** memories applied, **4** investigations influenced, and **4**
 requirements strengthened. It shows **0** demonstrated repeat preventions. We
 report those numbers as they are.
+
+**Tatum is load-bearing, and provable.** Four submissions of the same class — an
+agent claiming a Sui transaction succeeded — were run through the anonymous
+public endpoint with only the digest varying. Tatum's answer decided the outcome:
+a confirmed success → **ALLOW**, a confirmed failure → **BLOCK**, an unknown
+digest → **REQUIRE_VERIFICATION**, a malformed digest → **REQUIRE_VERIFICATION**.
+The digests and record ids are in
+`artifacts/evidence/2026-11-03-tatum-integration.json`; the failure digest was
+cross-checked independently against Tatum's public GraphQL endpoint.
 
 ---
 
@@ -309,8 +331,8 @@ Everything a judge can check independently, without trusting this document:
   live and public, serving application commit `3fca1b98`.
 - **`GET /api/config`** — reports `publicSubmission.available: true` with the exact
   reason, and fails closed otherwise.
-- **`GET /api/overview`** — reports the live Walrus namespace count (**335**),
-  completed (**180**) and recall-verified (**177**) writes, simulated writes
+- **`GET /api/overview`** — reports the live Walrus namespace count (**344**),
+  completed (**189**) and recall-verified (**186**) writes, simulated writes
   (**0**), Tatum Sui Mainnet health, and the persistence backend — all read from
   the real services, not asserted.
 - **`GET /api/learning`** — returns the impact counters, the behaviour-change
@@ -332,7 +354,12 @@ Everything a judge can check independently, without trusting this document:
 **What to inspect, and where:**
 
 1. **The front door (`/`).** The investigation form is public — no credential.
-   Click **Use a sample incident** and submit; you get a genuine Safeguard Record.
+   Click **Use a Sui transaction sample** and submit; AFTERMATH verifies the
+   named digest read-only against Sui Mainnet through Tatum and folds the
+   authoritative result into the record. (The sample is a real failed
+   transaction, so an agent's success claim is blocked.) **Use a sample
+   incident** exercises the no-source path instead. Either way you get a genuine
+   Safeguard Record.
 2. **Safeguard Records (`/records`).** Every investigation, newest first. Each
    record states honestly how far its safeguard is verified (simulated, live, or
    recall-verified).

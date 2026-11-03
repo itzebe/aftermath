@@ -310,6 +310,12 @@ evaluation metrics. Because each scenario performs real Walrus Mainnet writes, t
 advances in bounded batches across several requests; the page reports progress
 until the job completes.
 
+To try the on-chain evidence path by hand, open the home page (`/`) and press
+**Use a Sui transaction sample**, then **Investigate incident**. The sample names
+a real Sui Mainnet transaction that failed while the agent claims it succeeded;
+AFTERMATH verifies the digest read-only through Tatum and blocks the claim. See
+`artifacts/TATUM-INTEGRATION-ARCHITECTURE.md`.
+
 ### Durable audit index (required on Vercel)
 
 On a serverless host the deployment bundle is read-only and each request may run

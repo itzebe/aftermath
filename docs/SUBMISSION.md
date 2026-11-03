@@ -33,8 +33,8 @@ fail the same way twice.
 | # | Requirement | Status | Evidence |
 | --- | --- | --- | --- |
 | 01 | Walrus Memory integrated and writing on Mainnet | ✅ | Real SDK writes to `https://relayer.memory.walrus.xyz`, namespace `aftermath`. Each write is awaited to a blob id and confirmed by a recall query. See [`src/lib/adapters/memwal-memory.ts`](../src/lib/adapters/memwal-memory.ts) and the live counts on `/memory`. |
-| 02 | Tatum RPC used for onchain data where relevant | ✅ | Read-only Sui verifier on Tatum's documented gRPC primary (`LedgerService/GetTransaction`) with a GraphQL fallback, server-side API key. It is the authoritative evidence source for the **finance** case: a Sui transaction digest in the submitted material is looked up and classified `VERIFIED_SUCCESS` / `VERIFIED_FAILURE` / `UNKNOWN`. Digests are discovered from the live ledger at runtime, never hardcoded. No transaction is ever broadcast. See [`src/lib/adapters/tatum-sui-grpc.ts`](../src/lib/adapters/tatum-sui-grpc.ts). |
-| 03 | At least 10 memories stored on Mainnet | ✅ | The live ledger reports **180 completed** and **177 recall-verified** Mainnet writes — see `GET /api/overview` (`completedLiveWrites`, `recallVerifiedWrites`). `mainnetRequirement` returns `{required: 10, completedLive: 180, recallVerified: 177, remaining: 0, satisfied: true}`. `simulatedWrites` is **0**; every write carries `backend: memwal-mainnet`, `provenance: live`. The relayer reports **335** memories in the `aftermath` namespace. Simulated writes are tracked separately and excluded. |
+| 02 | Tatum RPC used for onchain data where relevant | ✅ | Read-only Sui verifier on Tatum's documented gRPC primary (`sui.rpc.v2.LedgerService/GetTransaction`) with a GraphQL fallback, server-side API key. It is the **load-bearing** evidence source for the **finance** case: a Sui transaction digest in the submitted material is looked up and classified `VERIFIED_SUCCESS` / `VERIFIED_FAILURE` / `UNKNOWN`. Proven by counterfactual — the same class of submission resolves to **ALLOW** on a confirmed success, **BLOCK** on a confirmed failure, and **REQUIRE_VERIFICATION** when Tatum cannot answer (`artifacts/evidence/2026-11-03-tatum-integration.json`). Digests are discovered from the live ledger at runtime, never hardcoded; no transaction is ever broadcast. Discoverable from the public front door via **Use a Sui transaction sample**. See [`src/lib/adapters/tatum-sui-grpc.ts`](../src/lib/adapters/tatum-sui-grpc.ts) and [`artifacts/TATUM-INTEGRATION-ARCHITECTURE.md`](TATUM-INTEGRATION-ARCHITECTURE.md). |
+| 03 | At least 10 memories stored on Mainnet | ✅ | The live ledger reports **189 completed** and **186 recall-verified** Mainnet writes — see `GET /api/overview` (`completedLiveWrites`, `recallVerifiedWrites`). `mainnetRequirement` returns `{required: 10, completedLive: 189, recallVerified: 186, remaining: 0, satisfied: true}`. `simulatedWrites` is **0**; every write carries `backend: memwal-mainnet`, `provenance: live`. The relayer reports **344** memories in the `aftermath` namespace. Simulated writes are tracked separately and excluded. |
 | 04 | Published blog post (what it does, how it uses Tatum + Walrus, how it learned) | ✅ | [`BLOG.md`](BLOG.md), published on Medium and mirrored on GitHub Pages. Covers the pipeline, both integrations, the transient-failure/deferral fix, and measured results. |
 | 05 | Working demo and public repo | ✅ | Demo: <https://aftermath-7tij.vercel.app/>. Repo: <https://github.com/itzebe/aftermath> (public). |
 | 06 | Optional: build with Tatum AI Builder (ai.tatum.io) — $500 bonus | ⛔ Not pursued | AFTERMATH was built as an indie project. The dedicated AI-Builder award is out of scope; the app still uses Tatum RPC/Data APIs directly. |
@@ -164,11 +164,11 @@ a dependency being briefly unavailable is never mistaken for a verified failure.
 (`GET /api/overview`, `GET /api/memory`):
 
 - Walrus Memory is **live** (`backend: memwal-mainnet`, `isLive: true`,
-  `MAINNET_AUTH_CONFIRMED`); the live ledger reports **180 completed** Mainnet
-  writes, of which **177** were confirmed by a recall query, with
-  `simulatedWrites: 0`. The relayer reports **335** memories in the `aftermath`
+  `MAINNET_AUTH_CONFIRMED`); the live ledger reports **189 completed** Mainnet
+  writes, of which **186** were confirmed by a recall query, with
+  `simulatedWrites: 0`. The relayer reports **344** memories in the `aftermath`
   namespace. Completed and recall-verified counts are reported separately and
-  never merged — the 180 completed writes are **not** all recall-verified.
+  never merged — the 189 completed writes are **not** all recall-verified.
 - Tatum Sui gRPC gateway configured and healthy (authenticated, chain
   identifier matching Sui Mainnet). The finance case has verified **one** live
   Mainnet transaction as `VERIFIED_SUCCESS`; the `UNKNOWN` path is also present
@@ -246,17 +246,17 @@ Figures verified **3 November 2026 (UTC)**.
 
 | Check | Command / source | Result |
 | --- | --- | --- |
-| Genuine Mainnet writes completed | `GET /api/overview` → `counts.completedLiveWrites` | **180** |
-| Writes confirmed retrievable by recall | `GET /api/overview` → `counts.recallVerifiedWrites` | **177** |
+| Genuine Mainnet writes completed | `GET /api/overview` → `counts.completedLiveWrites` | **189** |
+| Writes confirmed retrievable by recall | `GET /api/overview` → `counts.recallVerifiedWrites` | **186** |
 | Simulated writes (excluded) | `GET /api/overview` → `counts.simulatedWrites` | **0** |
-| Requirement eval | `GET /api/overview` → `mainnetRequirement` | `{required: 10, completedLive: 180, recallVerified: 177, remaining: 0, satisfied: true}` |
-| Namespace memories (relayer-reported, authoritative) | `GET /api/overview` → `memoryStatus.namespaceMemoryCount` | **335** |
+| Requirement eval | `GET /api/overview` → `mainnetRequirement` | `{required: 10, completedLive: 189, recallVerified: 186, remaining: 0, satisfied: true}` |
+| Namespace memories (relayer-reported, authoritative) | `GET /api/overview` → `memoryStatus.namespaceMemoryCount` | **344** |
 | Backend is genuinely Mainnet | `GET /api/config` / `/api/overview` | `backend: memwal-mainnet`, `isLive: true`, `network: mainnet` |
-| Every ledger row | `GET /api/memory` → `writes[]` | newest 200 rows, **all** `backend: memwal-mainnet`, `provenance: live` (213 total) |
+| Every ledger row | `GET /api/memory` → `writes[]` | newest 200 rows, **all** `backend: memwal-mainnet`, `provenance: live` (222 total) |
 | Relayer auth | `GET /api/overview` → `memoryStatus` | `state: MAINNET_AUTH_CONFIRMED`, `authenticated: true` |
 
-**Interpretation.** 180 completed writes and 177 recall-verified writes means the
-instance has written at least **177 memories that a recall query returned**, more
+**Interpretation.** 189 completed writes and 186 recall-verified writes means the
+instance has written at least **186 memories that a recall query returned**, more
 than sixteen times the required ten. Because `simulatedWrites` is `0` and every
 ledger row carries `backend: memwal-mainnet` with `provenance: live`, the count
 is not inflated by fixtures: a fixture is a record whose submission carries an
@@ -267,7 +267,7 @@ happened to run without credentials, counted and labelled rather than hidden.
 Completed and
 recall-verified are reported **separately** and never merged, so a write that
 completed but whose follow-up recall was rate-limited is not silently promoted —
-**the 180 completed writes are not all recall-verified.**
+**the 189 completed writes are not all recall-verified.**
 
 The standalone check `npm run verify:prod` includes the memory checks and passes
 **28/28** with `AFTERMATH_ADMIN_TOKEN` set. Without the token, the recall-query check requires it and is reported as a failure with an explicit reason rather than silently skipped (27/28). `verify:ai` is read-only.

@@ -1,0 +1,103 @@
+{
+  "mission": "AFTERMATH — Tatum Integration Mission",
+  "verificationDate": "2026-11-03",
+  "production": {
+    "url": "https://aftermath-7tij.vercel.app",
+    "branch": "master",
+    "verifiedHeadCommit": "5c34926",
+    "verifiedHeadSubject": "docs: pin final report to the live production deployment (#23)"
+  },
+  "tatumSuiMainnet": {
+    "role": "Authoritative, read-only verifier of Sui transaction execution status. It is the only evidence source that can establish whether a reported transaction actually executed.",
+    "interface": "Tatum Sui Mainnet gRPC (primary; fallback: Tatum Sui Mainnet GraphQL)",
+    "grpcUrl": "https://sui-mainnet-grpc.gateway.tatum.io",
+    "graphqlUrl": "https://sui-mainnet.gateway.tatum.io/graphql",
+    "apiKeyConfigured": true,
+    "apiKeyMasked": "(51 chars, hidden)",
+    "health": {
+      "ok": true,
+      "detail": "Tatum Sui Mainnet gRPC reachable and authenticated (chain mainnet).",
+      "chainIdentifier": "4btiuiMPvEENsttpZC7CZ53DruC3MAgfznDbASZ7DR6S",
+      "source": "GET /api/overview (tatumHealth)"
+    },
+    "readOnly": true,
+    "broadcastsTransactions": false
+  },
+  "liveOnChainLookups": {
+    "method": "POST /api/incidents/submit (anonymous, public submission enabled) with a Sui transaction digest in the material. AFTERMATH inferred domain=finance and performed a read-only lookup through Tatum.",
+    "cases": [
+      {
+        "case": "verified success",
+        "digest": "GHAuBeydSov1zyT6sUKS2cFxWtNWkeamtKANsHwZJHve",
+        "recordId": "8f12d8ec-28b9-1816-ef5d-e3cf57d019c3",
+        "lookupStatus": "VERIFIED_SUCCESS",
+        "lookupVerified": true,
+        "decision": "ALLOW",
+        "decisionReason": "Authoritative evidence establishes success, so the completion claim may stand.",
+        "counterfactual": "Without the Tatum lookup this success claim would be an unsupported claim and could not be allowed."
+      },
+      {
+        "case": "verified failure",
+        "digest": "A9iiTMAxi5BY2uwxu4HnuonfF6A4hhGbaCK8HfTFK26x",
+        "recordId": "d820a66b-828c-3798-07ba-b53a0d7ea896",
+        "lookupStatus": "VERIFIED_FAILURE",
+        "lookupVerified": true,
+        "decision": "BLOCK",
+        "diagnosisPattern": "missing_prerequisite",
+        "decisionReason": "Authoritative evidence establishes the transaction failed; the reported success is refused.",
+        "counterfactual": "A success claim contradicted by the ledger is blocked because Tatum reported the true outcome."
+      },
+      {
+        "case": "not found on chain",
+        "digest": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
+        "recordId": "13912043-1b24-6640-99a6-f8a7556a8986",
+        "lookupStatus": "UNKNOWN",
+        "lookupVerified": false,
+        "lookupDetail": "The node holds no transaction for this digest. It may not exist, or may have been pruned. Success is not established.",
+        "decision": "REQUIRE_VERIFICATION",
+        "counterfactual": "An unresolvable digest never becomes a fabricated verdict; the claim is deferred."
+      },
+      {
+        "case": "malformed digest",
+        "digest": "1111111111111111111111111111111111111111111",
+        "recordId": "5c75d532-7e93-c03f-0453-e15f76b3dc40",
+        "lookupStatus": "UNKNOWN",
+        "lookupVerified": false,
+        "lookupDetail": "The gateway rejected the digest as malformed. No transaction outcome can be established from this request.",
+        "decision": "REQUIRE_VERIFICATION",
+        "counterfactual": "A rejected lookup is reported as unknown, never as a transaction failure."
+      }
+    ]
+  },
+  "independentCrossCheck": {
+    "method": "The same digests were queried directly against Tatum's public Sui Mainnet GraphQL endpoint (read-only) from outside the application.",
+    "results": [
+      {
+        "digest": "GHAuBeydSov1zyT6sUKS2cFxWtNWkeamtKANsHwZJHve",
+        "status": "SUCCESS",
+        "checkpoint": 237661232
+      },
+      {
+        "digest": "A9iiTMAxi5BY2uwxu4HnuonfF6A4hhGbaCK8HfTFK26x",
+        "status": "FAILURE"
+      }
+    ],
+    "agreement": "The application's verdicts (ALLOW for the SUCCESS digest, BLOCK for the FAILURE digest) match the ledger state observed independently."
+  },
+  "behaviourChange": {
+    "claim": "Tatum is load-bearing: removing it changes the verdict.",
+    "evidence": "The same class of submission (a success claim naming a Sui digest) resolves to ALLOW when the chain confirms success, BLOCK when the chain reports failure, and REQUIRE_VERIFICATION when the chain cannot answer. The decision is a function of Tatum's answer, not of the agent's claim."
+  },
+  "knownLimitations": [
+    "The JSON-RPC interface at the legacy rpcUrl is no longer served by Tatum; gRPC is the primary interface and GraphQL the fallback. The legacy JSON-RPC adapter remains in the tree but is not wired.",
+    "Tatum AI Builder (the optional $500 bonus track) is not used. The AI-assisted reading runs on Groq, not on Tatum's AI.",
+    "The Tatum API key is a sensitive Vercel environment variable and cannot be decrypted through the Vercel API; its presence is confirmed through the application's own reported health rather than by reading the value.",
+    "Tatum's gateway rate-limits rapid lookups; the retry adapter backs off, so a burst can surface as a retryable condition rather than an immediate verdict."
+  ],
+  "sources": [
+    "GET https://aftermath-7tij.vercel.app/api/overview",
+    "POST https://aftermath-7tij.vercel.app/api/incidents/submit",
+    "GET https://aftermath-7tij.vercel.app/api/records",
+    "POST https://sui-mainnet.gateway.tatum.io/graphql (independent cross-check)"
+  ]
+}

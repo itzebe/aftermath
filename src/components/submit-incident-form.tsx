@@ -44,15 +44,25 @@ interface ApiError {
 
 export function SubmitIncidentForm({
   sample,
+  samples,
   anonymous = false,
 }: {
   sample?: string;
+  /**
+   * Optional labelled examples. A Sui-transaction example exercises the
+   * Tatum-backed finance path (a real, read-only Mainnet digest lookup); an
+   * incident example exercises the no-source path. When omitted, `sample` is
+   * offered under the legacy single-button label.
+   */
+  samples?: { label: string; text: string }[];
   /**
    * When true the form is used by an anonymous visitor: no admin token is
    * attached, and failure copy addresses a visitor rather than an operator.
    */
   anonymous?: boolean;
 }) {
+  const exampleSamples =
+    samples ?? (sample ? [{ label: "Use a sample incident", text: sample }] : []);
   const [text, setText] = useState("");
   const [service, setService] = useState("");
   const [expected, setExpected] = useState("");
@@ -148,13 +158,18 @@ export function SubmitIncidentForm({
               }
             />
             <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
-              <button
-                type="button"
-                className="link-quiet mono inline-flex min-h-6 items-center text-[0.75rem]"
-                onClick={() => sample && setText(sample)}
-              >
-                Use a sample incident
-              </button>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                {exampleSamples.map((s) => (
+                  <button
+                    key={s.label}
+                    type="button"
+                    className="link-quiet mono inline-flex min-h-6 items-center text-[0.75rem]"
+                    onClick={() => setText(s.text)}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
               <button
                 type="button"
                 className="link-quiet mono inline-flex min-h-6 items-center text-[0.75rem]"
