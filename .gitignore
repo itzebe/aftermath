@@ -26,3 +26,7 @@ tsconfig.tsbuildinfo
 
 # Mission 9 demo recording (large binary; kept locally, publishable as a release asset)
 artifacts/mission9/*.mp4
+# Final presentation demo (large binary; kept locally, publishable as a release asset)
+artifacts/*.mp4
+# Demo audio stems (intermediate; the muxed video and the .srt are the artifacts)
+artifacts/demo-audio/*.wav

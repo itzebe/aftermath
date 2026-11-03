@@ -1,0 +1,92 @@
+1
+00:00:00,450 --> 00:00:03,422
+An investigation can find out why something failed.
+
+2
+00:00:03,422 --> 00:00:06,511
+But what happens when the same mistake happens again?
+
+3
+00:00:06,511 --> 00:00:13,155
+Most incident reports are read once, then filed away, and the lesson stays trapped inside the report it came from.
+
+4
+00:00:13,155 --> 00:00:15,195
+AFTERMATH exists to close that gap.
+
+5
+00:00:15,225 --> 00:00:22,377
+This is the real, deployed product, and it is public: a visitor submits failure material with no account and no approval.
+
+6
+00:00:22,377 --> 00:00:24,209
+I will use the built-in sample.
+
+7
+00:00:24,209 --> 00:00:32,306
+A checkout service returned a 503, the charge status came back unknown, and an agent still reported the charge as completed successfully.
+
+8
+00:00:32,306 --> 00:00:39,931
+AFTERMATH parses the material strictly as data, never executes it, and grounds every fact in a verbatim span from the submission.
+
+9
+00:00:39,969 --> 00:00:47,355
+The result is a Safeguard Record: evidence with its verbatim spans, a hypothesis with a confidence, and one proposed safeguard.
+
+10
+00:00:47,355 --> 00:00:49,566
+Notice the evidence status is Unknown.
+
+11
+00:00:49,566 --> 00:00:55,614
+The material names no authoritative source, so AFTERMATH refuses to decide whether the charge succeeded.
+
+12
+00:00:55,614 --> 00:00:58,348
+That refusal is the product working, not a gap.
+
+13
+00:00:58,355 --> 00:01:05,401
+Verified safeguards are written to Walrus Memory on Mainnet, and a write counts as verified only when a recall query returns it.
+
+14
+00:01:05,401 --> 00:01:16,025
+This ledger reads live from the relayer: one hundred eighty completed writes, one hundred seventy-seven recall-verified, zero simulated, and three hundred thirty-five memories in the namespace.
+
+15
+00:01:16,037 --> 00:01:17,822
+Here is the moment that matters.
+
+16
+00:01:17,822 --> 00:01:23,008
+A later investigation reports a build passing in continuous integration with no log attached.
+
+17
+00:01:23,008 --> 00:01:31,317
+AFTERMATH recalls an applicable safeguard, then runs the decision engine twice over identical evidence: once with the memory held out, once enforced.
+
+18
+00:01:31,317 --> 00:01:33,213
+The only difference is the memory.
+
+19
+00:01:33,213 --> 00:01:39,794
+The verdict is unchanged, but the memory adds two required verification checks the engine would not otherwise require.
+
+20
+00:01:39,794 --> 00:01:45,259
+Provenance shows the chain from that incident, to this Walrus blob, to these later investigations.
+
+21
+00:01:45,284 --> 00:01:48,361
+AFTERMATH does not merely remember that something happened.
+
+22
+00:01:48,361 --> 00:01:52,271
+It makes the next investigation check what the last one taught us to check.
+
+23
+00:01:52,271 --> 00:01:54,305
+Every failure should leave a safeguard.
+

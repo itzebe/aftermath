@@ -1,0 +1,38 @@
+[
+ {
+  "id": "problem",
+  "start": 0,
+  "end": 14.774,
+  "duration": 14.774
+ },
+ {
+  "id": "investigate",
+  "start": 14.775,
+  "end": 39.518,
+  "duration": 24.743
+ },
+ {
+  "id": "record",
+  "start": 39.519,
+  "end": 57.905,
+  "duration": 18.386
+ },
+ {
+  "id": "walrus",
+  "start": 57.905,
+  "end": 75.587,
+  "duration": 17.682
+ },
+ {
+  "id": "recall",
+  "start": 75.587,
+  "end": 104.834,
+  "duration": 29.247
+ },
+ {
+  "id": "close",
+  "start": 104.834,
+  "end": 113.857,
+  "duration": 9.023
+ }
+]

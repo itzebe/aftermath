@@ -294,6 +294,35 @@ async function getJson(url: string): Promise<{ status: number; body: unknown }> 
   return { status: res.status, body };
 }
 
+/**
+ * Fetch a public route, retrying a bounded number of times on a transient
+ * failure.
+ *
+ * A serverless function's first request after a cold start can return a 5xx
+ * (a gateway timeout while the instance boots) and then succeed. That blip is
+ * not a product failure, so retrying it removes a false negative — but a route
+ * that is *persistently* 5xx still fails after the retries are exhausted. Only
+ * 5xx and network errors are retried; a 4xx is returned immediately, because it
+ * is a real, deterministic answer.
+ */
+async function fetchPageWithRetry(
+  url: string,
+  attempts = 3,
+): Promise<{ status: number; detail: string }> {
+  let last = "no response";
+  for (let i = 0; i < attempts; i++) {
+    if (i > 0) await delay(1500 * i);
+    try {
+      const res = await fetch(url, { redirect: "manual" });
+      if (res.status < 500) return { status: res.status, detail: `HTTP ${res.status}` };
+      last = `HTTP ${res.status}`;
+    } catch (err) {
+      last = err instanceof Error ? err.message : String(err);
+    }
+  }
+  return { status: 599, detail: `${last} (after ${attempts} attempts)` };
+}
+
 async function postJson(
   url: string,
   payload: unknown,
@@ -340,11 +369,11 @@ async function main(): Promise<number> {
     "/api/memory",
     "/api/evaluation",
   ]) {
-    const res = await fetch(base + path, { redirect: "manual" });
+    const res = await fetchPageWithRetry(base + path);
     checks.push({
       name: `GET ${path}`,
       ok: res.status >= 200 && res.status < 300,
-      detail: `HTTP ${res.status}`,
+      detail: res.detail,
     });
   }
 

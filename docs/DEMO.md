@@ -1,19 +1,23 @@
 # AFTERMATH — demo storyboard (2–3 minutes)
 
-Recording status: **recorded.** The primary narrated video is published as a
-release asset: <https://github.com/itzebe/aftermath/releases/tag/demo-v2> (2:36,
-1920×1080, H.264 + AAC, burned-in captions). It was captured from the **live
-production deployment** with Playwright, narrated with a local TTS voice, and cut
-with ffmpeg. This storyboard remains the source of truth for what each scene shows
-and the claim it supports; the verbatim narration is in
-[`DEMO-narration.md`](DEMO-narration.md) and [`DEMO.srt`](DEMO.srt).
+Recording status: **recorded.** Two narrated videos exist:
 
-A second, **silent captioned** recording was produced for Mission 9 from the
-current production build: [`artifacts/mission9/aftermath-demo-m9.mp4`](../artifacts/mission9/aftermath-demo-m9.mp4)
-(2:24, 1280×800, burned-in captions). It is silent because this environment has no TTS
-engine or microphone, so a fresh narrated track could not be produced; the
-captions carry the same narration. It shows the now-public investigation
-workspace and the current live figures.
+1. The **final presentation demo** (this mission): `artifacts/aftermath-final-demo.mp4`
+   — 2:01 (121.4 s), 1280×800, H.264 + AAC, burned-in captions, narrated with the
+   local Piper voice (`en_US-lessac-medium`). Captured live from
+   <https://aftermath-7tij.vercel.app/> as an anonymous visitor. Kept locally
+   (git-ignored); not published. Script and accuracy notes:
+   [`artifacts/DEMO-SCRIPT.md`](../artifacts/DEMO-SCRIPT.md).
+2. The **published narrated video**: <https://github.com/itzebe/aftermath/releases/tag/demo-v2>
+   (2:36, 1920×1080, H.264 + AAC, burned-in captions).
+
+This storyboard remains the source of truth for what each scene shows and the
+claim it supports; the verbatim narration is in [`DEMO-narration.md`](DEMO-narration.md)
+and [`DEMO.srt`](DEMO.srt).
+
+A **silent captioned** recording was also produced for Mission 9 from the
+production build: [`artifacts/mission9/aftermath-demo-m9.mp4`](../artifacts/mission9/aftermath-demo-m9.mp4)
+(2:24, 1280×800, burned-in captions). It is superseded by the narrated final demo.
 
 The whole run is reproducible against the **live production deployment**:
 <https://aftermath-7tij.vercel.app/>. Every figure it shows is read from the live
@@ -115,8 +119,8 @@ retrying (attempt 2/3)...
 - **Action:** read the headline counters, then run a recall query on the page.
 - **Observe:** **Completed Mainnet writes** and **Recall-verified** writes are
   kept separate, alongside **Memories in namespace** (the authoritative relayer
-  count). Read live, the instance currently shows 87 completed, 86
-  recall-verified, and 242 memories in the namespace. The two write counters
+  count). Read live (2026-11-03), the instance shows 180 completed, 177
+  recall-verified, and 335 memories in the namespace. The two write counters
   differ because a write can complete while its follow-up recall is itself
   rate-limited. The recall query returns real blobs (ids, similarity distances).
 - **Claim it supports:** the Walrus integration is real Mainnet persistence —
