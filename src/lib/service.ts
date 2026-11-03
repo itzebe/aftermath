@@ -192,10 +192,22 @@ async function probeWithin<T>(
 }
 
 let overviewCache: { at: number; payload: OverviewPayload } | null = null;
+/**
+ * The in-flight overview build, if any.
+ *
+ * A simultaneous burst of first requests (a cold instance serving the homepage,
+ * the memory page, and a retry together) must not each start their own build:
+ * that fans out into one set of Walrus/Tatum probes and one batch of aggregate
+ * queries *per request*, which is what pushes a cold serverless instance past
+ * the platform timeout. Concurrent misses share this one promise, exactly as
+ * {@link TtlCache} does for the other read views.
+ */
+let overviewInflight: Promise<OverviewPayload> | null = null;
 
 /** Drop the cached overview. Exported for tests and after a reset. */
 export function resetOverviewCache(): void {
   overviewCache = null;
+  overviewInflight = null;
 }
 
 async function buildOverview(): Promise<OverviewPayload> {
@@ -262,19 +274,29 @@ async function buildOverview(): Promise<OverviewPayload> {
  * Only a *successful* build is cached. A failure clears the cache and rethrows,
  * so a dependency going down is never masked by a stale success — the caller
  * still sees the error and the next request retries immediately.
+ *
+ * Concurrent misses are single-flighted: a burst of first requests shares one
+ * build rather than starting one each.
  */
 export async function getOverview(): Promise<OverviewPayload> {
   const now = Date.now();
   if (overviewCache && now - overviewCache.at < OVERVIEW_TTL_MS) {
     return overviewCache.payload;
   }
+  if (overviewInflight) {
+    return overviewInflight;
+  }
+  const load = buildOverview();
+  overviewInflight = load;
   try {
-    const payload = await buildOverview();
+    const payload = await load;
     overviewCache = { at: Date.now(), payload };
     return payload;
   } catch (err) {
     overviewCache = null;
     throw err;
+  } finally {
+    overviewInflight = null;
   }
 }
 
