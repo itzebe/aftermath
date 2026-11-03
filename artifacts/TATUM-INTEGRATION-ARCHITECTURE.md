@@ -1,7 +1,7 @@
 # AFTERMATH — Tatum Sui integration
 
 *Independently audited and verified on 2026-11-03 against production
-(`https://aftermath-7tij.vercel.app`, commit `b8ce867`).*
+(`https://aftermath-7tij.vercel.app`).*
 
 This document explains what Tatum actually does inside AFTERMATH, why it is
 load-bearing rather than decorative, and how each claim can be reproduced by a
@@ -74,6 +74,7 @@ wire protocol, so the transport can change without touching the pipeline.
 | `src/lib/adapters/tatum-sui-graphql.ts` | Fallback interface. GraphQL `transactionEffects`. |
 | `src/lib/adapters/tatum-sui.ts` | Legacy JSON-RPC adapter and the shared result types. Retained but **not wired** (see §6). |
 | `src/lib/adapters/tatum-retry.ts` | Retry with exponential backoff for gateway rate limits (`RESOURCE_EXHAUSTED` / HTTP 429). |
+| `src/lib/adapters/sui-network.ts` | Sui Mainnet chain identifier and `isSuiMainnet`, so health fails closed on the wrong network. |
 | `src/lib/adapters/sui-verifier.ts` | `SuiVerifier` interface and the `CompositeSuiVerifier` that prefers gRPC and falls back only on transport failure. |
 | `src/lib/adapters/finance-evidence.ts` | Domain adapter: digest extraction, then a Tatum lookup; reports `UNKNOWN` (never a fabricated outcome) when no lookup can run. |
 | `src/lib/demos/finance.ts` | Builds the verifier from config; live discovery of recent digests. |
@@ -118,6 +119,10 @@ GraphQL.
 - **Bounded.** Every lookup has a timeout (`TATUM_TIMEOUT_MS`, default 12 s) and
   rate-limit retries back off, so a slow or throttled gateway surfaces as a
   retryable condition, never as a held-open request or a wrong verdict.
+- **Network identity.** Both health checks assert the gateway's `chainIdentifier`
+  is Sui Mainnet's (`isSuiMainnet` in `src/lib/adapters/sui-network.ts`). A
+  gateway that is reachable and authenticated but on another network fails health
+  rather than reporting a healthy-but-wrong chain.
 
 ---
 

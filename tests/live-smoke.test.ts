@@ -7,6 +7,7 @@ import { TatumSuiGraphqlAdapter } from "@/lib/adapters/tatum-sui-graphql";
 import { loadConfig } from "@/lib/config";
 import { SafeguardMemoryRecordSchema } from "@/lib/schemas";
 import { buildSuiVerifier, runFinanceEvidenceCases } from "@/lib/demos/finance";
+import { SUI_MAINNET_CHAIN_IDENTIFIER } from "@/lib/adapters/sui-network";
 
 /**
  * Opt-in live smoke tests.
@@ -153,7 +154,8 @@ maybe("live smoke: Tatum Sui gRPC gateway (authenticated reads)", () => {
       const adapter = new TatumSuiGrpcAdapter(config.tatum);
       const health = await adapter.health();
       expect(health.ok).toBe(true);
-      expect(health.chainIdentifier).toBeTruthy();
+      // The gateway must be on Sui Mainnet, not merely reachable.
+      expect(health.chainIdentifier).toBe(SUI_MAINNET_CHAIN_IDENTIFIER);
 
       const digests = await adapter.discoverRecentDigests(5);
       expect(digests.length).toBeGreaterThan(0);
@@ -178,7 +180,7 @@ maybe("live smoke: Tatum Sui GraphQL gateway (authenticated reads)", () => {
       const adapter = new TatumSuiGraphqlAdapter(config.tatum);
       const health = await adapter.health();
       expect(health.ok).toBe(true);
-      expect(health.chainIdentifier).toBeTruthy();
+      expect(health.chainIdentifier).toBe(SUI_MAINNET_CHAIN_IDENTIFIER);
 
       const digests = await adapter.discoverRecentDigests(5);
       expect(digests.length).toBeGreaterThan(0);

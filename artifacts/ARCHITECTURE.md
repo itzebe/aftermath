@@ -115,9 +115,11 @@ it. This is what makes the learning claim inspectable rather than asserted.
 
 **Tatum Sui Mainnet gRPC.** The read-only authoritative verifier, with a GraphQL
 fallback. Authenticated with a server-side API key. It is load-bearing, not
-decorative: the verdict follows the ledger, not the agent's claim. See
-`artifacts/TATUM-INTEGRATION-ARCHITECTURE.md` for the full interface, the
-safety properties, and the live counterfactual evidence.
+decorative: the verdict follows the ledger, not the agent's claim. Health asserts
+the gateway's `chainIdentifier` is Sui Mainnet's, so a wrong-network gateway
+fails closed. See `artifacts/TATUM-INTEGRATION-ARCHITECTURE.md` for the interface
+and `artifacts/TATUM-INTEGRATION-EVIDENCE.md` for the live counterfactual and
+independent cross-check.
 
 **Neon / PostgreSQL.** The durable audit index. Records, learning retrieval
 entries, and the shared rate-limit counters live here, so they hold across

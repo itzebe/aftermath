@@ -162,12 +162,12 @@ describe("TatumSuiGraphqlAdapter — transport failures never become transaction
 describe("TatumSuiGraphqlAdapter — health and discovery", () => {
   it("reports health with the chain identifier", async () => {
     const fetchImpl = vi.fn(async () =>
-      graphqlResponse({ data: { chainIdentifier: "4btiui" } }),
+      graphqlResponse({ data: { chainIdentifier: "4btiuiMPvEENsttpZC7CZ53DruC3MAgfznDbASZ7DR6S" } }),
     ) as unknown as typeof fetch;
     const adapter = new TatumSuiGraphqlAdapter(CONFIG, fetchImpl);
     const health = await adapter.health();
     expect(health.ok).toBe(true);
-    expect(health.chainIdentifier).toBe("4btiui");
+    expect(health.chainIdentifier).toBe("4btiuiMPvEENsttpZC7CZ53DruC3MAgfznDbASZ7DR6S");
   });
 
   it("reports health as failed without a key, without making a request", async () => {

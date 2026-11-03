@@ -26,7 +26,7 @@ function stubClient(overrides: Partial<SuiGrpcClientLike>): SuiGrpcClientLike {
     },
     listTransactions: async () => ({ transactions: [], hasNextPage: false }),
     ledgerService: {
-      getServiceInfo: async () => ({ response: { chainId: "4btiui", chain: "mainnet" } }),
+      getServiceInfo: async () => ({ response: { chainId: "4btiuiMPvEENsttpZC7CZ53DruC3MAgfznDbASZ7DR6S", chain: "mainnet" } }),
     },
     ...overrides,
   } as SuiGrpcClientLike;
@@ -223,7 +223,7 @@ describe("TatumSuiGrpcAdapter configuration guards", () => {
     const adapter = grpcAdapter(stubClient({}));
     const health = await adapter.health();
     expect(health.ok).toBe(true);
-    expect(health.chainIdentifier).toBe("4btiui");
+    expect(health.chainIdentifier).toBe("4btiuiMPvEENsttpZC7CZ53DruC3MAgfznDbASZ7DR6S");
   });
 
   it("does not leak the api key in a health failure detail", async () => {
