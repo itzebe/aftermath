@@ -4,10 +4,10 @@
 
 > **Update (2026-11-03).** The counts in this article were read live on
 > 2026-10-29. The instance keeps writing, so the current figures are higher:
-> **180 completed** and **177 recall-verified** Mainnet writes, **335** memories
+> **189 completed** and **186 recall-verified** Mainnet writes, **344** memories
 > in the `aftermath` namespace, `simulatedWrites: 0`. The investigation
 > workspace is now public (a visitor can submit from the home page), and the
-> hermetic suite is now **620 passed / 12 skipped** with **17/17** E2E. Nothing
+> hermetic suite is now **620 passed / 12 skipped** with **18/18** E2E. Nothing
 > below is retracted; the numbers simply moved. Live values are always read from
 > `GET /api/overview` rather than quoted from here.
 
@@ -651,7 +651,7 @@ append-only, and it keeps counting everything that happened before the fix. I am
 not rewriting it, and I am not hiding it. Three distinctions matter:
 
 - **Completed writes and recall-verified writes are different numbers.** The
-  live instance reports **180 completed** Mainnet writes and **177
+  live instance reports **189 completed** Mainnet writes and **186
   recall-verified**. The gap is three writes that reached a blob id and were
   recorded as completed, but whose *follow-up recall query* was itself
   rate-limited — so they are completed-but-not-recall-verified. Each is counted
@@ -676,7 +676,7 @@ not rewriting it, and I am not hiding it. Three distinctions matter:
   observed it.
 
 None of this changes the headline the brief cares about: the requirement is ten
-genuine, completed Mainnet memories, and the instance has 180 completed and 177
+genuine, completed Mainnet memories, and the instance has 189 completed and 186
 recall-verified, all written through the real SDK against Mainnet.
 
 ## What I measured
@@ -704,9 +704,9 @@ The suites behind those figures, as last run:
 | --- | --- | --- |
 | Type check | `npm run typecheck` | clean |
 | Lint | `npm run lint` | clean |
-| Unit + integration (hermetic) | `npm test` | 620 passed, 12 skipped |
+| Unit + integration (hermetic) | `npm test` | 620 passed, 12 skipped (operator env, with `AFTERMATH_TEST_DATABASE_URL`); 595 passed, 40 skipped where no Postgres is reachable |
 | Live smoke (real relayer + gateway) | `npm run test:live` | not re-run this mission (needs live credentials) |
-| Browser (simulated backend) | `npm run test:e2e` | 17 passed |
+| Browser (simulated backend) | `npm run test:e2e` | 18 passed |
 
 The unit suite is hermetic — it makes no network calls — which is why it is
 distinct from the live smoke suite. The browser suite runs against a simulated
@@ -779,8 +779,8 @@ conflating them would be dishonest in one direction or the other:
 A single counter cannot be honest about both "what did this process do" and
 "what is actually on chain". So there are two.
 
-As of this submission, the operator's own instance reports **180 completed
-Mainnet writes and 177 recall-verified writes**, with zero simulated writes in
+As of this submission, the operator's own instance reports **189 completed
+Mainnet writes and 186 recall-verified writes**, with zero simulated writes in
 that total — read straight from `GET /api/overview` on the running application,
 not asserted from memory. The two numbers are deliberately different and are
 never presented as equivalent: three writes reached a blob id and were recorded

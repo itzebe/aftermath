@@ -5,6 +5,7 @@ import Link from "next/link";
 import { SubmitIncidentForm } from "@/components/submit-incident-form";
 import { RunScenariosButton } from "@/components/run-scenarios";
 import { Notice, PageHeader, Section } from "@/components/ui";
+import { SUBMISSION_SAMPLES } from "@/lib/samples";
 import {
   adminHeaders,
   clearAdminToken,
@@ -28,12 +29,6 @@ import {
  * sign-in reveals the operations; signing out discards the token and returns the
  * password prompt.
  */
-
-const SAMPLE = `2026-03-01T10:00:00Z ERROR checkout-service
-POST /v1/charge returned 503 Service Unavailable
-retrying (attempt 2/3)...
-2026-03-01T10:00:07Z WARN checkout-service charge status: unknown
-2026-03-01T10:00:08Z INFO agent "the charge completed successfully"`;
 
 export default function AdminPage() {
   const [authed, setAuthed] = useState(false);
@@ -184,7 +179,7 @@ function Console() {
         title="Investigate an incident"
         lead="Submit real incident material and get a Safeguard Record. The material is parsed with rules and never executed."
       >
-        <SubmitIncidentForm sample={SAMPLE} />
+        <SubmitIncidentForm samples={SUBMISSION_SAMPLES} />
       </Section>
 
       <Section

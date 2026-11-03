@@ -78,7 +78,11 @@ export default async function HomePage() {
           </h2>
           <p className="mt-3 text-[0.9375rem] leading-relaxed text-paper-500">
             The material is treated strictly as data: parsed with rules, never
-            executed, and never interpolated into a command or a query.
+            executed, and never interpolated into a command or a query. When the
+            material names a Sui transaction digest, AFTERMATH verifies it
+            read-only against Sui Mainnet through Tatum (gRPC, with a GraphQL
+            fallback) and folds the authoritative result into the record. Try the
+            Sui transaction sample to watch that path run.
           </p>
         </div>
         <PublicInvestigation />

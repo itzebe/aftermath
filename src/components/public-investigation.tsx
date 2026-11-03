@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { SubmitIncidentForm } from "@/components/submit-incident-form";
 import { Loading, Notice } from "@/components/ui";
+import { SUBMISSION_SAMPLES } from "@/lib/samples";
 
 /**
  * The public investigation workspace.
@@ -16,12 +17,6 @@ import { Loading, Notice } from "@/components/ui";
  * and states the honest reason when it is not. It never fabricates availability
  * and never presents the operator credential as a requirement for the product.
  */
-
-const SAMPLE = `2026-03-01T10:00:00Z ERROR checkout-service
-POST /v1/charge returned 503 Service Unavailable
-retrying (attempt 2/3)...
-2026-03-01T10:00:07Z WARN checkout-service charge status: unknown
-2026-03-01T10:00:08Z INFO agent "the charge completed successfully"`;
 
 interface ConfigSummary {
   publicSubmission?: { available: boolean; reason: string };
@@ -100,5 +95,5 @@ export function PublicInvestigation() {
     );
   }
 
-  return <SubmitIncidentForm sample={SAMPLE} anonymous />;
+  return <SubmitIncidentForm samples={SUBMISSION_SAMPLES} anonymous />;
 }

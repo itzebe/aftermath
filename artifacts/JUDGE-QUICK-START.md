@@ -13,15 +13,23 @@ administrator. Open one tab and follow along.
    is the product itself: an investigation form. The page states what AFTERMATH
    does and why persistent memory matters.
 
-2. **Submit an incident.** Click **Use a sample incident**, then **Investigate
-   incident**. In a few seconds you get a genuine **Safeguard Record** — the same
-   pipeline the operator console uses. No credential is requested.
+2. **Submit an incident — the on-chain path.** Click **Use a Sui transaction
+   sample**, then **Investigate incident**. The sample names a real Sui Mainnet
+   transaction that **failed**, while the agent claims it succeeded. AFTERMATH
+   verifies the digest read-only through **Tatum** (Sui Mainnet gRPC, GraphQL
+   fallback) and blocks the claim: the decision is **BLOCK**, and the record shows
+   the authoritative lookup, its source, and the digest reference. This is the
+   whole point of the product — the verdict follows the ledger, not the claim.
+   (Click **Use a sample incident** instead to see the no-source path, where the
+   evidence status is honestly `Unknown`.) No credential is requested either way.
 
 3. **Read the record top to bottom.** Notice:
    - **Evidence** — every fact carries a verbatim span copied out of the
      submission. A fact that cannot be copied out does not survive.
-   - **Evidence status: Unknown** — the sample names no authoritative source, so
-     AFTERMATH refuses to decide whether the charge succeeded. That refusal is the
+   - **Authoritative lookup** — for the Sui sample, the on-chain status
+     (`VERIFIED_FAILURE`), the interface that produced it, and the digest.
+   - **Evidence status** — `Unknown` when the sample names no authoritative
+     source. AFTERMATH refuses to decide rather than guessing. That refusal is the
      product working, not a gap.
    - **Hypothesis** — with a confidence, and the explanations it considered.
    - **Safeguard** — one scoped, testable rule with its verification state.
@@ -50,11 +58,15 @@ administrator. Open one tab and follow along.
 
 ## What you should see, and what is honest
 
-- **Live figures (2026-11-03):** 335 memories in the Walrus namespace; 180
-  completed writes; 177 recall-verified; 0 simulated; 4 verified safeguards; 3
-  persisted and recall-verified; 31 memories applied; 3 investigations
-  influenced; 3 requirements strengthened; **0 demonstrated repeat preventions**.
+- **Live figures (2026-11-03):** 344 memories in the Walrus namespace; 189
+  completed writes; 186 recall-verified; 0 simulated; 6 verified safeguards; 5
+  persisted and recall-verified; 33 memories applied; 4 investigations
+  influenced; 4 requirements strengthened; **0 demonstrated repeat preventions**.
   Read them yourself at `/api/overview` and `/api/learning`.
+- **Tatum is load-bearing.** The same class of submission — an agent claiming a
+  Sui transaction succeeded — resolves to `ALLOW` when Tatum confirms success,
+  `BLOCK` when Tatum reports failure, and `REQUIRE_VERIFICATION` when Tatum cannot
+  answer. See `artifacts/TATUM-INTEGRATION-ARCHITECTURE.md`.
 - **The null result is reported.** When a recalled safeguard changes nothing, the
   Learning Loop says so. A memory that is retrieved but not applicable is shown
   as "possible similarity — not applied", not as an influence.

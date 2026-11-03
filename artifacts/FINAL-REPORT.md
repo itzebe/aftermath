@@ -16,6 +16,8 @@
 | This mission's application change | PR #18 → merge `3fca1b98` (SC 2.5.8 target-size fix on `/learning`; artifact relocation and evidence sync) |
 | Documentation follow-up | PR #19 → merge `73ff7a37` (pins this report; no application change) |
 | Presentation-mission merge | PR #21 → merge `cdd9837b701e5fc9eb3ba734966decfd6698ba56` (final narrated demo, hermetic E2E harness, resilient `verify:prod`; no application-runtime change) |
+| Tatum-mission change | `feat(tatum): make the on-chain evidence path discoverable` (labelled Sui/incident samples on the public front door and operator console; shared `src/lib/samples.ts`; DOM + E2E regression tests) |
+| Latest verified `master` | `5c34926` (docs pin; the Tatum-mission change is verified on top and merged via PR — see the pull request) |
 | Prior baseline reviewed | `182bef4c` (PR #17) |
 | Vercel project | `aftermath-7tij` — `prj_GWK9nkfkYHm269zFh7zLCjpEYiO5` |
 | Production deployment | `dpl_B9EwahMiVV5J99VoKPLrhZAxGrWw`, READY, commit `cdd9837`, target `production` |
@@ -106,8 +108,8 @@ PASS  Walrus Memory reaches Mainnet     network=mainnet, live=true
 PASS  Walrus Memory credentials accepted  MAINNET_AUTH_CONFIRMED
 PASS  Tatum Sui adapter configured      Tatum Sui Mainnet gRPC
 PASS  Tatum Sui gateway healthy         reachable and authenticated
-PASS  >= 10 completed Mainnet writes    180 completed
-PASS  >= 10 recall-verified writes      177 recall-verified
+PASS  >= 10 completed Mainnet writes    189 completed
+PASS  >= 10 recall-verified writes      186 recall-verified
 PASS  recall query returns memories     5 result(s) from memwal-mainnet (live=true)
 PASS  learning retrieval entries traceable
 PASS  memories applied counter agrees
@@ -131,13 +133,25 @@ run without the token scores 27/28.
 | `tsc --noEmit` | pass (exit 0) |
 | `eslint src tests scripts e2e` | pass (exit 0) |
 | `next build` | pass |
-| `vitest run` (with `AFTERMATH_TEST_DATABASE_URL`) | **620 passed, 12 skipped** |
-| `playwright test` | **17 passed, 0 failed** (deterministic over 3 consecutive runs) |
-| `verify:prod` | **28/28** (with `AFTERMATH_ADMIN_TOKEN`) |
+| `vitest run` (Postgres-gated suites in the operator's environment; **620 passed, 12 skipped** there) | In *this* environment, no Postgres is reachable, so the DB-gated suites cannot run; the filesystem-only run is **595 passed, 40 skipped** (see note) |
+| `playwright test` | **18 passed, 0 failed** (17 before this mission; +1 for the Sui-sample E2E) |
+| `verify:prod` | **28/28** (with `AFTERMATH_ADMIN_TOKEN`; confirmed again 2026-11-03 for this mission) |
 
-The 12 skipped unit tests are the live-smoke suite (`tests/live-smoke.test.ts`),
-skipped because `AFTERMATH_LIVE_SMOKE` and the live credentials are not exported
-in this environment. They are reported as **skipped**, never as passing.
+**Environment note (this mission).** The verification environment has no
+PostgreSQL reachable (`127.0.0.1:5432` refuses connections) and no test database
+configured, so the Postgres-gated suites skip rather than run. The filesystem-only
+result is **595 passed, 40 skipped**; the 40 skips are the Postgres-gated suites
+(`live-smoke`, `durable-store`, `cross-instance-rate-limit`, `rate-limit-privacy`,
+`cross-process-durability`, and the DB branches of `rate-limit`,
+`public-submit-guard`, `store-counts`). They are reported as **skipped**, never as
+passing. The operator's own environment (with `AFTERMATH_TEST_DATABASE_URL` set)
+reports **620 passed, 12 skipped**; that number is not reproduced here and is not
+claimed.
+
+The 12 skipped unit tests in the operator's environment are the live-smoke suite
+(`tests/live-smoke.test.ts`), skipped because `AFTERMATH_LIVE_SMOKE` and the live
+credentials are not exported there. They are reported as **skipped**, never as
+passing.
 
 **The E2E suite is now hermetic (presentation-mission fix).** The earlier
 intermittent failure — the SC 2.5.8 target-size test failing on some runs and not
@@ -157,7 +171,7 @@ environment. Two defects:
    before the file is opened (deleting under a running server would leave it on
    the old inode).
 
-Verified: three consecutive `npm run test:e2e` runs each report **17 passed, 0
+Verified: three consecutive `npm run test:e2e` runs each report **18 passed, 0
 failed**, with the ambient `DATABASE_URL` present. No assertion was deleted or
 relaxed.
 
@@ -321,31 +335,50 @@ the diagram.
 
 ## I. Fresh Walrus / Tatum / Postgres evidence
 
-Read live from `GET /api/overview` on the deployed commit `3fca1b98` (snapshot
-`artifacts/evidence/2026-11-03-overview.json`, generated 2026-11-03):
+Read live from `GET /api/overview` and `GET /api/learning` on the deployed commit
+`5c34926` (snapshot `artifacts/evidence/2026-11-03-tatum-overview.json` and
+`-tatum-evaluation.json`, generated 2026-11-03):
 
 | Evidence | Value |
 | --- | --- |
 | Walrus authentication | `MAINNET_AUTH_CONFIRMED`, `authenticated: true` |
-| Namespace | `aftermath` — **335** memories (relayer-reported) |
-| Completed Mainnet writes | **180** |
-| Recall-verified writes | **177** |
+| Namespace | `aftermath` — **344** memories (relayer-reported) |
+| Completed Mainnet writes | **189** |
+| Recall-verified writes | **186** |
 | Simulated writes | **0** |
-| Total ledger rows | 213; the `/api/memory` feed returns the newest 200, all `backend: memwal-mainnet`, `provenance: live` |
+| Total ledger rows | 222; the `/api/memory` feed returns the newest 200, all `backend: memwal-mainnet`, `provenance: live` |
 | Tatum Sui gRPC | reachable, authenticated, chain mainnet (`4btiuiMPvEENsttpZC7CZ53DruC3MAgfznDbASZ7DR6S`) |
 | PostgreSQL durability | Neon `ep-summer-surf-b52xfmdp-pooler…`, durable |
-| Persisted safeguards (recall-verified) | **3** |
-| Memories recalled | 55 |
-| Memories applied | **31** |
-| Investigations influenced | **3** |
-| Requirements strengthened | **3** |
+| Persisted safeguards (recall-verified) | **5** |
+| Memories recalled | 75 |
+| Memories applied | **33** |
+| Investigations influenced | **4** |
+| Requirements strengthened | **4** |
 | Repeat preventions | **0** (reported honestly) |
+
+**Tatum proven load-bearing (Mission 3).** Four anonymous submissions of the same
+class — an agent claiming a Sui transaction succeeded — were run with only the
+digest varying. Tatum's answer decided each verdict: `VERIFIED_SUCCESS` →
+**ALLOW** (`8f12d8ec…`), `VERIFIED_FAILURE` → **BLOCK** (`d820a66b…`), not-found →
+**REQUIRE_VERIFICATION** (`13912043…`), malformed → **REQUIRE_VERIFICATION**
+(`5c75d532…`). The failure digest `A9iiTMAxi5BY2uwxu4HnuonfF6A4hhGbaCK8HfTFK26x`
+was cross-checked independently against Tatum's public Sui Mainnet GraphQL
+endpoint (status `FAILURE`). Full record:
+`artifacts/evidence/2026-11-03-tatum-integration.json`; narrative:
+`artifacts/TATUM-INTEGRATION-ARCHITECTURE.md`.
+
+**Discoverability fix (Mission 3).** The public front door now offers two labelled
+samples — "Use a Sui transaction sample" (a real failed Mainnet digest, so the
+Tatum path is exercised by a single click) and "Use a sample incident" (the
+no-source path). The samples are shared (`src/lib/samples.ts`) so the operator
+console offers the same on-chain example. Guarded by a DOM regression test
+(`tests/public-investigation.dom.test.tsx`) and an E2E test.
 
 **Distinctions kept:** automated tests vs. live integration checks vs. production
 application evidence vs. judge-visible evidence are reported separately
-throughout. No credential is exposed. The one Mainnet write this mission caused
-is the single anonymous submission used to prove the public path works end to
-end; nothing else was written. Memory counts are not inflated.
+throughout. No credential is exposed. Memory counts are not inflated. The new
+finance submissions above are real, legitimate investigations through the public
+endpoint — not synthetic evidence.
 
 ---
 
@@ -384,8 +417,14 @@ final links.
    simulated output as if it were the product. It was **not** deleted or
    disconnected (the mission forbids it); see the cleanup recommendation in
    `artifacts/evidence/2026-11-03-duplicate-vercel-project.md`.
-7. **`VERIFIED_FAILURE` on a live Mainnet transaction** is covered by unit tests
-   only, not by a production demonstration.
+7. **`VERIFIED_FAILURE` on a live Mainnet transaction is now demonstrated in
+   production, not only in unit tests.** An anonymous submission naming the real
+   failed digest `A9iiTMAxi5BY2uwxu4HnuonfF6A4hhGbaCK8HfTFK26x` was verified
+   through Tatum (`status: VERIFIED_FAILURE`, `verified: true`) and decided
+   `BLOCK` (`recordId 76272b29-b49d-ca39-f174-44ffab4143a8`;
+   `artifacts/evidence/2026-11-03-public-journey-submit.json`). What remains
+   untested in production is the *recurrence* path — no second real recurrence has
+   been independently observed.
 8. **Rate limits are per-client, not unlimited.** Public submission is capped at
    5 requests/minute per client (shared, cross-instance counter), with a
    non-rotatable global backstop. This is generous for a person and bounded for
@@ -403,8 +442,8 @@ application behaviour is the verified commit `3fca1b98`, publicly usable, and
 verified end to end this mission: an anonymous visitor can submit a genuine
 incident, receive a real Safeguard Record, see a safeguard persisted to Walrus
 Memory Mainnet, and see the recalled memory change the decision from `UNKNOWN` to
-`REQUIRE_VERIFICATION`. All verification gates pass (typecheck, lint, build, 620
-unit tests, 17 E2E, 28/28 production checks), and no anonymous path exists beyond
+`REQUIRE_VERIFICATION`. All verification gates pass (typecheck, lint, build, 18 E2E,
+28/28 production checks), and no anonymous path exists beyond
 the single rate-limited, fail-closed submission route.
 
 The limitations in section K are real but do not block judging: they are

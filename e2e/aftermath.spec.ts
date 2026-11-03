@@ -115,6 +115,19 @@ test("the public home page offers the investigation workspace honestly", async (
   await expect(form.or(unavailable)).toBeVisible({ timeout: 15_000 });
 });
 
+test("the Sui transaction sample loads a real digest into the operator form", async ({
+  page,
+}) => {
+  // The Tatum-backed on-chain evidence path must be discoverable, not hidden
+  // behind prior knowledge. The admin console always renders the form (it is
+  // operator-gated rather than availability-gated), so it is the stable surface
+  // to assert the sample on regardless of the deployment's memory backend.
+  await signInAsOperator(page);
+  await page.getByRole("button", { name: /Use a Sui transaction sample/i }).click();
+  const material = page.getByLabel(/Incident material/i);
+  await expect(material).toHaveValue(/A9iiTMAxi5BY2uwxu4HnuonfF6A4hhGbaCK8HfTFK26x/);
+});
+
 test("incident explorer shows evidence, diagnosis, and decision", async ({ page }) => {
   await page.goto("/incidents");
   await expect(

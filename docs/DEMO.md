@@ -119,8 +119,8 @@ retrying (attempt 2/3)...
 - **Action:** read the headline counters, then run a recall query on the page.
 - **Observe:** **Completed Mainnet writes** and **Recall-verified** writes are
   kept separate, alongside **Memories in namespace** (the authoritative relayer
-  count). Read live (2026-11-03), the instance shows 180 completed, 177
-  recall-verified, and 335 memories in the namespace. The two write counters
+  count). Read live (2026-11-03), the instance shows 189 completed, 186
+  recall-verified, and 344 memories in the namespace. The two write counters
   differ because a write can complete while its follow-up recall is itself
   rate-limited. The recall query returns real blobs (ids, similarity distances).
 - **Claim it supports:** the Walrus integration is real Mainnet persistence —
