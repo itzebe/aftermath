@@ -12,15 +12,18 @@
 | --- | --- |
 | Remote | `https://github.com/itzebe/aftermath.git` |
 | Branch | `master` |
-| HEAD verified this mission | `182bef4c47efb5a69a2fa5dcf110ce0fe7628660` |
-| This mission's change | PR #17 → merge `182bef4` (bounded timeout for the cross-instance rate-limit suite) |
+| HEAD verified this mission | `3fca1b9849cdc51fd15f0a4454d6d5ea53953283` |
+| This mission's change | PR #18 → merge `3fca1b98` (SC 2.5.8 target-size fix on `/learning`; artifact relocation and evidence sync) |
+| Prior baseline reviewed | `182bef4c` (PR #17) |
 | Vercel project | `aftermath-7tij` — `prj_GWK9nkfkYHm269zFh7zLCjpEYiO5` |
-| Production deployment | `dpl_CdHvL53vFBb7NMNmNnNZyKtvuSYv`, READY, commit `182bef4c` |
-| Production alias | `aftermath-7tij.vercel.app` → `182bef4c` |
+| Production deployment | `dpl` `aftermath-7tij-oj062s7j7`, READY, commit `3fca1b98` |
+| Production alias | `aftermath-7tij.vercel.app` → `3fca1b98` |
 
 Confirmed by the Vercel API and by the deployed app, not assumed: the newest
-production deployment is built from `182bef4c`, and the production alias
-resolves to that deployment.
+production deployment is built from `3fca1b98`, and the production alias
+resolves to that deployment. The fix was first verified on the local production
+build by negative control, then confirmed live: the `/learning` record links now
+measure 93×24 px on production (they were 63×14 px).
 
 ---
 
@@ -61,13 +64,13 @@ token, and the fail-closed defaults. No new dependency.
 
 - Baseline reported before this mission: `cc009af`. Merged since: PR #12
   (`076b245`), #13 (`118f376`), #14 (`7a172ac`), #15 (`5e6ddaf`), #16 (`9a4f753`),
-  #17 (`182bef4`).
-- **HEAD verified:** `182bef4c47efb5a69a2fa5dcf110ce0fe7628660` (PR #17).
+  #17 (`182bef4`), #18 (`3fca1b98`).
+- **HEAD verified:** `3fca1b9849cdc51fd15f0a4454d6d5ea53953283` (PR #18).
 - `origin/master` contains the merge; `master` is the PR's base.
-- Production deployment `dpl_CdHvL53vFBb7NMNmNnNZyKtvuSYv` reached READY on
-  `182bef4c`, and the production alias `aftermath-7tij.vercel.app` resolves to it
+- Production deployment `aftermath-7tij-oj062s7j7` reached READY on
+  `3fca1b98`, and the production alias `aftermath-7tij.vercel.app` resolves to it
   (confirmed by the Vercel API: newest production deployment carries commit
-  `182bef4c`).
+  `3fca1b98`).
 - No deploy from a feature branch; no stale-code merge.
 
 ---
@@ -77,7 +80,7 @@ token, and the fail-closed defaults. No new dependency.
 **The rate-limit regression.** Twelve concurrent requests to `/api/config` on the
 deployed commit:
 
-| Metric | Before the fix | After the fix (fresh, `182bef4c`) |
+| Metric | Before the fix | After the fix (fresh, `3fca1b98`) |
 | --- | --- | --- |
 | `/api/overview` latency | 37–90 s (two timeouts at 90 s) | 12/12 → HTTP 200, max 2.32 s |
 | Concurrent `/api/config` | requests hung to the 60 s timeout | 12/12 → HTTP 200, max 3.87 s |
@@ -116,7 +119,7 @@ check is reported as an explicit failure, never silently skipped — a read-only
 run without the token scores 27/28.
 ```
 
-**Suite results (fresh, on `182bef4c`):**
+**Suite results (fresh, on `3fca1b98`):**
 
 | Gate | Result |
 | --- | --- |
@@ -278,7 +281,7 @@ the diagram.
 
 ## I. Fresh Walrus / Tatum / Postgres evidence
 
-Read live from `GET /api/overview` on the deployed commit `182bef4c` (snapshot
+Read live from `GET /api/overview` on the deployed commit `3fca1b98` (snapshot
 `artifacts/evidence/2026-11-03-overview.json`, generated 2026-11-03):
 
 | Evidence | Value |
@@ -354,7 +357,7 @@ final links.
 # READY FOR PUBLIC USE AND JUDGING
 
 The product is deployed at `aftermath-7tij.vercel.app` on the verified commit
-`182bef4c`, publicly usable, and verified end to end this mission: an anonymous
+`3fca1b98`, publicly usable, and verified end to end this mission: an anonymous
 visitor can submit a genuine incident, receive a real Safeguard Record, see a
 safeguard persisted to Walrus Memory Mainnet, and see the recalled memory change
 the decision from `UNKNOWN` to `REQUIRE_VERIFICATION`. All verification gates
@@ -396,7 +399,7 @@ Confirmed explicitly:
   frontend code, error messages, evidence files, the video, or this report.
 - **The correct production project is deployed** — true. `aftermath-7tij`
   (`prj_GWK9nkfkYHm269zFh7zLCjpEYiO5`) serves the alias
-  `aftermath-7tij.vercel.app` from commit `182bef4c`. The duplicate `aftermath`
+  `aftermath-7tij.vercel.app` from commit `3fca1b98`. The duplicate `aftermath`
   project was classified and left untouched.
 - **The demo is genuine** — true. Captured live from production as an anonymous
   visitor; every figure read from the live ledger; no fabricated hash, balance,

@@ -7,7 +7,7 @@
 > **180 completed** and **177 recall-verified** Mainnet writes, **335** memories
 > in the `aftermath` namespace, `simulatedWrites: 0`. The investigation
 > workspace is now public (a visitor can submit from the home page), and the
-> hermetic suite is now **620 passed / 12 skipped** with **16/16** E2E. Nothing
+> hermetic suite is now **620 passed / 12 skipped** with **17/17** E2E. Nothing
 > below is retracted; the numbers simply moved. Live values are always read from
 > `GET /api/overview` rather than quoted from here.
 
@@ -706,7 +706,7 @@ The suites behind those figures, as last run:
 | Lint | `npm run lint` | clean |
 | Unit + integration (hermetic) | `npm test` | 620 passed, 12 skipped |
 | Live smoke (real relayer + gateway) | `npm run test:live` | not re-run this mission (needs live credentials) |
-| Browser (simulated backend) | `npm run test:e2e` | 16 passed |
+| Browser (simulated backend) | `npm run test:e2e` | 17 passed |
 
 The unit suite is hermetic — it makes no network calls — which is why it is
 distinct from the live smoke suite. The browser suite runs against a simulated
