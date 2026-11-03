@@ -15,19 +15,20 @@
 | Application commit verified end to end | `3fca1b9849cdc51fd15f0a4454d6d5ea53953283` |
 | This mission's application change | PR #18 → merge `3fca1b98` (SC 2.5.8 target-size fix on `/learning`; artifact relocation and evidence sync) |
 | Documentation follow-up | PR #19 → merge `73ff7a37` (pins this report; no application change) |
+| Presentation-mission merge | PR #21 → merge `cdd9837b701e5fc9eb3ba734966decfd6698ba56` (final narrated demo, hermetic E2E harness, resilient `verify:prod`; no application-runtime change) |
 | Prior baseline reviewed | `182bef4c` (PR #17) |
 | Vercel project | `aftermath-7tij` — `prj_GWK9nkfkYHm269zFh7zLCjpEYiO5` |
-| Production deployment | READY; application code `3fca1b98` |
+| Production deployment | `dpl_B9EwahMiVV5J99VoKPLrhZAxGrWw`, READY, commit `cdd9837`, target `production` |
 | Production alias | `aftermath-7tij.vercel.app` → the production deployment |
 
-Confirmed by the Vercel API and by the deployed app, not assumed. Every figure
-in this report was measured against the deployment built from the application
-commit `3fca1b98`. A later docs-only merge (PR #19, `73ff7a37`) advances the
-production deployment SHA without changing application behaviour, so this report
-pins the application commit rather than the ever-moving deployment SHA. The fix
-was first verified on the local production build by negative control, then
-confirmed live: the `/learning` record links now measure 93×24 px on production
-(they were 63×14 px).
+Confirmed by the Vercel API and by the deployed app, not assumed. The
+application behaviour verified end to end is the code from commit `3fca1b98`.
+Two later merges — PR #19 (`73ff7a37`) and PR #21 (`cdd9837`) — advance the
+production deployment SHA without changing application-runtime behaviour, so the
+report pins the application commit *and* records the live deployment SHA. The
+SC 2.5.8 fix was first verified on the local production build by negative control,
+then confirmed live: the `/learning` record links now measure 93×24 px on
+production (they were 63×14 px).
 
 ---
 
@@ -396,14 +397,15 @@ final links.
 
 # READY FOR PUBLIC USE AND JUDGING
 
-The product is deployed at `aftermath-7tij.vercel.app` on the verified commit
-`3fca1b98`, publicly usable, and verified end to end this mission: an anonymous
-visitor can submit a genuine incident, receive a real Safeguard Record, see a
-safeguard persisted to Walrus Memory Mainnet, and see the recalled memory change
-the decision from `UNKNOWN` to `REQUIRE_VERIFICATION`. All verification gates
-pass (typecheck, lint, build, 620 unit tests, 17 E2E, 28/28 production checks),
-and no anonymous path exists beyond the single rate-limited, fail-closed
-submission route.
+The product is deployed at `aftermath-7tij.vercel.app` on the live production
+deployment `dpl_B9EwahMiVV5J99VoKPLrhZAxGrWw` (commit `cdd9837`), whose
+application behaviour is the verified commit `3fca1b98`, publicly usable, and
+verified end to end this mission: an anonymous visitor can submit a genuine
+incident, receive a real Safeguard Record, see a safeguard persisted to Walrus
+Memory Mainnet, and see the recalled memory change the decision from `UNKNOWN` to
+`REQUIRE_VERIFICATION`. All verification gates pass (typecheck, lint, build, 620
+unit tests, 17 E2E, 28/28 production checks), and no anonymous path exists beyond
+the single rate-limited, fail-closed submission route.
 
 The limitations in section K are real but do not block judging: they are
 documented rather than hidden, and the presentation gap that mattered most — a
