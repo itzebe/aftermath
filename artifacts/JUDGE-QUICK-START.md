@@ -58,9 +58,9 @@ administrator. Open one tab and follow along.
 
 ## What you should see, and what is honest
 
-- **Live figures (2026-11-03):** 344 memories in the Walrus namespace; 189
-  completed writes; 186 recall-verified; 0 simulated; 6 verified safeguards; 5
-  persisted and recall-verified; 33 memories applied; 4 investigations
+- **Live figures (2026-11-03):** 346 memories in the Walrus namespace; 191
+  completed writes; 188 recall-verified; 0 simulated; 6 verified safeguards; 5
+  persisted and recall-verified; 36 memories applied; 4 investigations
   influenced; 4 requirements strengthened; **0 demonstrated repeat preventions**.
   Read them yourself at `/api/overview` and `/api/learning`.
 - **Tatum is load-bearing.** The same class of submission — an agent claiming a

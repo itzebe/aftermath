@@ -16,9 +16,9 @@ sidecar `artifacts/demo-narration.srt`.
 > and 5 (completed 180, recall-verified 177, namespace 335) are the values read
 > live at recording time on 2026-11-03 and are what the video shows on screen.
 > They are kept here because they must match the recording. The current live
-> figures — verified independently the same day — are **189 completed**, **186
-> recall-verified**, **0 simulated**, **344** memories in the namespace, **5**
-> persisted recall-verified safeguards, **33** memories applied, **4**
+> figures — verified independently the same day — are **191 completed**, **188
+> recall-verified**, **0 simulated**, **346** memories in the namespace, **5**
+> persisted recall-verified safeguards, **36** memories applied, **4**
 > investigations influenced, **4** requirements strengthened, **0** demonstrated
 > repeat preventions. See `artifacts/evidence/2026-11-03-tatum-integration.json`
 > and `GET /api/overview`.
