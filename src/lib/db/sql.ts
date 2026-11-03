@@ -38,6 +38,69 @@ export interface Db {
 /** Advisory-lock key shared by every migrator ("AFTR"). */
 export const MIGRATION_LOCK_KEY = 0x41465452;
 
+/**
+ * How long a migrator waits for the cross-instance advisory lock before giving
+ * up and running its (idempotent) DDL without it.
+ *
+ * The lock exists only to keep two *simultaneous* cold starts from colliding on
+ * the catalog. It must never be able to block a request. Production reaches
+ * Postgres through Neon's transaction-mode pooler, where a session-level
+ * advisory lock is not reliably bound to the server connection that holds it —
+ * a lock can be left behind, and a later instance's blocking `pg_advisory_lock`
+ * then waits forever, running the request to the platform's 300 s limit. The
+ * acquisition below is therefore non-blocking (`pg_try_advisory_lock`) and
+ * bounded; on timeout the DDL runs unlocked, which at worst re-creates an
+ * already-existing table.
+ */
+export const MIGRATION_LOCK_TIMEOUT_MS = 5_000;
+const MIGRATION_LOCK_RETRY_MS = 150;
+
+/** The minimal client shape the migration lock needs. */
+export interface LockClient {
+  query(
+    sql: string,
+    params?: unknown[],
+  ): Promise<{ rows: Array<Record<string, unknown>> }>;
+}
+
+/**
+ * Run `fn` while holding the cross-instance migration lock, but never wait
+ * longer than {@link MIGRATION_LOCK_TIMEOUT_MS} for it.
+ *
+ * The lock is acquired with the non-blocking `pg_try_advisory_lock` and retried
+ * on a short interval, so a lock left behind by an earlier instance (or by the
+ * pooler) degrades to "run the idempotent DDL unlocked" rather than a hang.
+ */
+export async function withMigrationLock<T>(
+  client: LockClient,
+  fn: () => Promise<T>,
+  timeoutMs: number = MIGRATION_LOCK_TIMEOUT_MS,
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  let locked = false;
+  while (Date.now() < deadline) {
+    const res = await client.query(
+      `SELECT pg_try_advisory_lock($1) AS locked`,
+      [MIGRATION_LOCK_KEY],
+    );
+    if (res.rows[0]?.locked === true) {
+      locked = true;
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, MIGRATION_LOCK_RETRY_MS));
+  }
+  try {
+    return await fn();
+  } finally {
+    if (locked) {
+      // Best-effort: the DDL has already run, so a failed unlock is harmless.
+      await client
+        .query(`SELECT pg_advisory_unlock($1)`, [MIGRATION_LOCK_KEY])
+        .catch(() => {});
+    }
+  }
+}
+
 /** True when a statement produces result rows rather than only a row count. */
 function returnsRows(sql: string): boolean {
   const s = sql.trimStart().toLowerCase();
@@ -118,15 +181,14 @@ export class PgDb implements Db {
   }
 
   async lockMigration<T>(fn: () => Promise<T>): Promise<T> {
-    // The lock and the body must share one session: a session-level advisory
-    // lock is released explicitly, so a dedicated client is checked out for the
-    // whole migration rather than borrowing one per statement.
+    // The lock and the body share one client so the lock is held for the whole
+    // migration. The acquisition is bounded (see `withMigrationLock`), because
+    // through a transaction-mode pooler a blocking session lock can wait
+    // forever — the request must never do that.
     const client = await this.pool.connect();
     try {
-      await client.query(`SELECT pg_advisory_lock($1)`, [MIGRATION_LOCK_KEY]);
-      return await fn();
+      return await withMigrationLock(client, fn);
     } finally {
-      await client.query(`SELECT pg_advisory_unlock($1)`, [MIGRATION_LOCK_KEY]);
       client.release();
     }
   }
