@@ -2,7 +2,11 @@
   "artifact": "Tatum integration \u2014 live evidence",
   "capturedAt": "2026-11-03T20:33:05Z",
   "production": {
-    "url": "https://aftermath-7tij.vercel.app"
+    "url": "https://aftermath-7tij.vercel.app",
+    "branch": "master",
+    "verifiedHeadCommit": "9f8dd84",
+    "deployment": "dpl_8GZhWM9v6BBHb7rJDFZV1BvP1cGX",
+    "deployedSha": "9f8dd843c5"
   },
   "tatumHealth": {
     "ok": true,
@@ -26,5 +30,39 @@
     "simulatedWrites": 0,
     "totalWrites": 224,
     "records": 20
+  },
+  "independentCrossCheck": {
+    "method": "POST https://sui-mainnet.gateway.tatum.io/graphql from the shell, no API key, no application code",
+    "results": [
+      {
+        "digest": "GHAuBeydSov1zyT6sUKS2cFxWtNWkeamtKANsHwZJHve",
+        "transactionEffects.status": "SUCCESS",
+        "appVerdict": "VERIFIED_SUCCESS -> ALLOW"
+      },
+      {
+        "digest": "A9iiTMAxi5BY2uwxu4HnuonfF6A4hhGbaCK8HfTFK26x",
+        "transactionEffects.status": "FAILURE",
+        "appVerdict": "VERIFIED_FAILURE -> BLOCK"
+      },
+      {
+        "digest": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
+        "transactionEffects.status": null,
+        "appVerdict": "UNKNOWN -> REQUIRE_VERIFICATION"
+      }
+    ]
+  },
+  "livePublicSubmission": {
+    "endpoint": "POST /api/incidents/submit (anonymous)",
+    "recordId": "76272b29-b49d-ca39-f174-44ffab4143a8",
+    "evidenceStatus": "VERIFIED_FAILURE",
+    "verified": true,
+    "source": "Tatum Sui Mainnet gRPC (primary; fallback: Tatum Sui Mainnet GraphQL)",
+    "decision": "BLOCK",
+    "idempotent": true
+  },
+  "networkIdentityGuard": {
+    "added": "src/lib/adapters/sui-network.ts",
+    "constant": "4btiuiMPvEENsttpZC7CZ53DruC3MAgfznDbASZ7DR6S",
+    "behaviour": "both gRPC and GraphQL health checks fail closed when chainIdentifier is not Sui Mainnet"
   }
 }
