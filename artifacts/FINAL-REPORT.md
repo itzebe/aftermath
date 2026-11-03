@@ -123,7 +123,7 @@ check is reported as an explicit failure, never silently skipped — a read-only
 run without the token scores 27/28.
 ```
 
-**Suite results (fresh, on `3fca1b98`):**
+**Suite results (fresh, on `3fca1b98`; re-run for the presentation mission):**
 
 | Gate | Result |
 | --- | --- |
@@ -131,20 +131,41 @@ run without the token scores 27/28.
 | `eslint src tests scripts e2e` | pass (exit 0) |
 | `next build` | pass |
 | `vitest run` (with `AFTERMATH_TEST_DATABASE_URL`) | **620 passed, 12 skipped** |
-| `playwright test` | **17 passed, 0 failed** |
+| `playwright test` | **17 passed, 0 failed** (deterministic over 3 consecutive runs) |
 | `verify:prod` | **28/28** (with `AFTERMATH_ADMIN_TOKEN`) |
 
 The 12 skipped unit tests are the live-smoke suite (`tests/live-smoke.test.ts`),
 skipped because `AFTERMATH_LIVE_SMOKE` and the live credentials are not exported
 in this environment. They are reported as **skipped**, never as passing.
 
-**The four previously-failing E2E tests are fixed, not weakened.** The earlier
-failure was environmental: the isolated E2E database was not seeded with an
-operator-authenticated scenario, so four tests failed identically on unmodified
-master. They now pass because `e2e/global-setup.ts` seeds the isolated database
-by running the real scenario pipeline (`e2e/seed-e2e.ts`) and the operator tests
-sign in on `/admin` the way an operator does. No assertion was deleted or
-relaxed; the tests still exercise the intended production behaviour.
+**The E2E suite is now hermetic (presentation-mission fix).** The earlier
+intermittent failure — the SC 2.5.8 target-size test failing on some runs and not
+others — had a single root cause: the harness was not isolated from the ambient
+environment. Two defects:
+
+1. `playwright.config.ts`'s `webServer.env` did not blank `DATABASE_URL`, so when
+   the ambient environment set it (as it is on this machine, and as CI may), the
+   server read Postgres while `global-setup.ts` seeded SQLite — the seeded state
+   was invisible to the suite. Fixed by blanking the database variables in the
+   server env, matching `global-setup.ts`.
+2. `global-setup.ts` never reset the isolated database. The seed is not
+   idempotent: its two matching submissions become duplicates against a database
+   that already holds them, so the learning view stops rendering the retrieval
+   links the test needs. Fixed by deleting the SQLite file (and its sidecars)
+   before the server opens it — in the webServer command, so the reset happens
+   before the file is opened (deleting under a running server would leave it on
+   the old inode).
+
+Verified: three consecutive `npm run test:e2e` runs each report **17 passed, 0
+failed**, with the ambient `DATABASE_URL` present. No assertion was deleted or
+relaxed.
+
+**`verify:prod` no longer fails on a cold-start blip.** The public-route checks
+now retry a bounded 3 times on a 5xx or network error (with backoff), because a
+serverless function's first request after a cold start can return a gateway
+timeout and then succeed. A route that is *persistently* 5xx still fails after the
+retries; a 4xx is returned immediately as a real answer. The change removes a
+false negative without hiding a real defect.
 
 **Cross-instance rate limiting.** `tests/cross-instance-rate-limit.test.ts`
 passed 4/4 against a real PostgreSQL-backed shared counter. This suite spawns
@@ -162,18 +183,23 @@ run and pass.
 
 Verified on the **production build**, not only in source:
 
-- **axe** over `/`, `/records`, `/learning`, `/memory`, `/lab`, `/admin`:
-  **0 serious, 0 critical** violations.
+- **axe** over all eight public routes (`/`, `/records`, `/learning`, `/lab`,
+  `/incidents`, `/safeguards`, `/memory`, `/evaluation`), driven live as an
+  anonymous visitor (2026-11-03): **0 serious, 0 critical, 0 any-impact
+  violations** on every route. Report: `artifacts/evidence/public-experience-audit.json`.
 - **Console/page errors:** none on any route.
-- **Mobile (iPhone 13 viewport):** horizontal overflow **0 px**.
-- **Target size (WCAG 2.2 SC 2.5.8):** one genuine defect found and fixed this
-  mission. The learning view's record-id links render as their own list-item
-  targets (63×14 px on production), below the 24×24 px minimum. axe's target-size
-  rule passed them because of its spacing heuristic, so a direct measurement
-  was needed. They now carry a `.link-chip` class (24 px minimum height, 0.5 rem
-  horizontal padding); a new E2E test measures every list-item record link
-  directly. The inline link inside the retrieval card sits within a sentence and
-  is exempt under SC 2.5.8.
+- **Mobile (390×844, touch):** the primary nav collapses to the disclosure menu,
+  the menu holds the same destinations, and the sample submission completes with
+  the Safeguard Record rendered — no page errors.
+- **Target size (WCAG 2.2 SC 2.5.8):** one genuine defect found and fixed in the
+  Mission 9 cycle. The learning view's record-id links render as their own
+  list-item targets (63×14 px on production), below the 24×24 px minimum. axe's
+  target-size rule passed them because of its spacing heuristic, so a direct
+  measurement was needed. They now carry a `.link-chip` class (24 px minimum
+  height, 0.5 rem horizontal padding); a dedicated E2E test measures every
+  list-item record link directly and now passes deterministically. The inline
+  link inside the retrieval card sits within a sentence and is exempt under
+  SC 2.5.8.
 - **SC 1.4.1 (Use of Color):** `.link-quiet` carries a real underline at rest,
   not only on hover.
 - **SC 2.5.3 (Label in Name):** the brand link's accessible name contains its
@@ -245,34 +271,43 @@ the size error. Twelve concurrent `/api/config` and twelve concurrent
 
 ## G. Genuine demo recording
 
-- **Artifact:** `artifacts/mission9/aftermath-demo-m9.mp4` (kept locally; ignored
-  by git to avoid a 4.7 MB binary in the repository).
-- **Duration:** 2:24 (143.64 s) — within the 90–150 s target.
-- **Format:** 1280×800, H.264 (yuv420p), no audio track.
-- **Captions:** burned in; the caption text is also in
-  `artifacts/mission9/aftermath-demo-m9.srt`, timed from
-  `artifacts/mission9/demo-capture-log.json`.
+**Final presentation demo (narrated).**
+
+- **Artifact:** `artifacts/aftermath-final-demo.mp4` (kept locally; git-ignored to
+  avoid an 8 MB binary in the repository).
+- **Duration:** 2:01 (121.4 s) — within the 90–150 s target.
+- **Format:** 1280×800, H.264 (yuv420p), 25 fps, **AAC stereo narration**,
+  burned-in captions.
+- **Narration:** synthesized locally with the Piper neural voice
+  (`en_US-lessac-medium`); the same text is the burned-in captions and the
+  sidecar `artifacts/demo-narration.srt`.
 - **Source:** captured live from <https://aftermath-7tij.vercel.app/> with
-  Playwright (Chromium) driving the real site as an anonymous visitor, cut with
-  ffmpeg. Reproducible with `node scripts/record-demo.mjs`.
-- **SHA-256:** `d63fa25793fae4c7b9c827a7e93ed2c51de2ed3aad1225cfe780b95dde1c9fdb`
-  (`artifacts/mission9/SHA256SUMS.txt`).
-- **Scene timings:** `artifacts/mission9/scene-timings.json`.
-- **Content:** title card, the problem, the public investigation workspace, a real
-  anonymous incident submission, the Safeguard Record, Safeguard Records, the
-  Memory Ledger, the Learning Loop, the two-arm behaviour change, provenance, and
-  an end card.
-- **Integrity:** no incident invented, no hash fabricated, no simulated write
-  presented as Mainnet; every figure shown is read from the live ledger at
-  recording time. The recording contains no administrator action.
-- **Secrets:** none visible (`strings` scan for token/secret/key shapes: clean).
+  Playwright (Chromium) driving the real site as an anonymous visitor, with each
+  scene held for the length of its narration, cut and muxed with ffmpeg.
+  Reproducible with `python3 scripts/demo-tts.py` → `node scripts/record-demo.mjs`
+  → `python3 scripts/build-demo.py`.
+- **SHA-256:** `06edb0695dd130106e9fad3cb5c317d8c7b44525856dcdcd20ddefd1404dca03`.
+- **Script and accuracy notes:** `artifacts/DEMO-SCRIPT.md`.
+- **Content:** the problem, the public investigation workspace, a real anonymous
+  sample submission, the Safeguard Record, the Memory Ledger (live Walrus Memory
+  Mainnet), the two-arm behaviour change, provenance, and an end card.
+- **Integrity:** the sample submission is idempotent (returns the existing record
+  `3d8a0234…`), so recording caused **no new Mainnet write**. No incident
+  invented, no hash fabricated, no simulated write presented as Mainnet; every
+  figure shown is read from the live ledger at recording time. The recording
+  contains no administrator action.
+- **Secrets:** none visible.
 - **Correct domain:** `aftermath-7tij.vercel.app` is on screen.
 
-**Honest limitation.** This environment has **no TTS engine and no microphone**
-(espeak, piper, festival, and pyttsx3 are all absent), so a *narrated* track
-could not be produced. The recording is silent with burned-in captions that carry
-the narration. The published, narrated video remains the `demo-v2` release asset
-(2:36). This recording was **not** published or uploaded anywhere.
+**Mission 9 silent recording (superseded).**
+
+- `artifacts/mission9/aftermath-demo-m9.mp4` — 2:24 (143.64 s), 1280×800, H.264,
+  no audio, burned-in captions. SHA-256
+  `d63fa25793fae4c7b9c827a7e93ed2c51de2ed3aad1225cfe780b95dde1c9fdb`. Kept for
+  provenance; superseded by the narrated final demo above.
+
+**Honest limitation.** The narrated demo uses a synthetic voice (Piper), not a
+human speaker. It was **not** published or uploaded anywhere.
 
 ---
 
@@ -324,8 +359,9 @@ final links.
 
 ## K. Remaining limitations
 
-1. **No fresh narrated demo video.** No TTS/microphone in this environment; the
-   Mission 9 recording is silent with burned-in captions that carry the narration.
+1. **Narrated demo uses a synthetic voice.** The final demo (`artifacts/aftermath-final-demo.mp4`)
+   is narrated with a local Piper neural voice, not a human speaker. This is
+   honest and clear, but a human narration would be warmer.
 2. **`verify:prod` needs `AFTERMATH_ADMIN_TOKEN` for its recall check.** With
    the token, 28/28 pass; without it, that one check is reported as an explicit
    failure rather than skipped (27/28). The token is set in production.
@@ -370,9 +406,9 @@ and no anonymous path exists beyond the single rate-limited, fail-closed
 submission route.
 
 The limitations in section K are real but do not block judging: they are
-documented rather than hidden, and the one that matters most for trust — a fresh
-*narrated* demo — is mitigated by the silent captioned recording plus the
-existing published narrated video.
+documented rather than hidden, and the presentation gap that mattered most — a
+fresh, narrated, captioned demo — is now closed by
+`artifacts/aftermath-final-demo.mp4`.
 
 ---
 

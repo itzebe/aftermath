@@ -1,0 +1,94 @@
+{
+  "target": "https://aftermath-7tij.vercel.app",
+  "capturedAt": "2026-11-03T08:17:13.536Z",
+  "routes": [
+    {
+      "route": "/",
+      "httpStatus": 200,
+      "title": "AFTERMATH — Every failure should leave a safeguard",
+      "a11y": {
+        "violations": [],
+        "blocking": [],
+        "passes": 26
+      },
+      "errors": []
+    },
+    {
+      "route": "/records",
+      "httpStatus": 200,
+      "title": "AFTERMATH — Every failure should leave a safeguard",
+      "a11y": {
+        "violations": [],
+        "blocking": [],
+        "passes": 22
+      },
+      "errors": []
+    },
+    {
+      "route": "/learning",
+      "httpStatus": 200,
+      "title": "AFTERMATH — Every failure should leave a safeguard",
+      "a11y": {
+        "violations": [],
+        "blocking": [],
+        "passes": 23
+      },
+      "errors": []
+    },
+    {
+      "route": "/lab",
+      "httpStatus": 200,
+      "title": "AFTERMATH — Every failure should leave a safeguard",
+      "a11y": {
+        "violations": [],
+        "blocking": [],
+        "passes": 22
+      },
+      "errors": []
+    },
+    {
+      "route": "/incidents",
+      "httpStatus": 200,
+      "title": "AFTERMATH — Every failure should leave a safeguard",
+      "a11y": {
+        "violations": [],
+        "blocking": [],
+        "passes": 23
+      },
+      "errors": []
+    },
+    {
+      "route": "/safeguards",
+      "httpStatus": 200,
+      "title": "AFTERMATH — Every failure should leave a safeguard",
+      "a11y": {
+        "violations": [],
+        "blocking": [],
+        "passes": 22
+      },
+      "errors": []
+    },
+    {
+      "route": "/memory",
+      "httpStatus": 200,
+      "title": "AFTERMATH — Every failure should leave a safeguard",
+      "a11y": {
+        "violations": [],
+        "blocking": [],
+        "passes": 23
+      },
+      "errors": []
+    },
+    {
+      "route": "/evaluation",
+      "httpStatus": 200,
+      "title": "AFTERMATH — Every failure should leave a safeguard",
+      "a11y": {
+        "violations": [],
+        "blocking": [],
+        "passes": 22
+      },
+      "errors": []
+    }
+  ]
+}

@@ -14,6 +14,21 @@ that change rather than claiming it.**
 
 ---
 
+## Project summary
+
+AFTERMATH is an evidence-first failure-prevention engine for AI agents. An agent
+reporting "the charge completed successfully" is making a *claim*; AFTERMATH asks
+what the authoritative source actually says. When a failure is verified, it turns
+the lesson into a scoped safeguard, persists it to Walrus Memory Mainnet, and —
+during a later investigation — recalls it, applies it, and shows exactly what it
+changed. The system runs the decision engine twice over identical evidence with
+only the recalled memory differing, so the memory's own contribution is a real
+counterfactual rather than a narrative. The investigation workspace is public:
+anyone can submit an incident and get a genuine Safeguard Record without an
+account, an invitation, or an administrator.
+
+---
+
 ## Inspiration
 
 An AI agent says "the charge completed successfully." Is that true?
@@ -286,6 +301,30 @@ report those numbers as they are.
 
 ---
 
+## Evidence of real implementation
+
+Everything a judge can check independently, without trusting this document:
+
+- **Production application** — <https://aftermath-7tij.vercel.app/> (verified 200),
+  live and public, serving application commit `3fca1b98`.
+- **`GET /api/config`** — reports `publicSubmission.available: true` with the exact
+  reason, and fails closed otherwise.
+- **`GET /api/overview`** — reports the live Walrus namespace count (**335**),
+  completed (**180**) and recall-verified (**177**) writes, simulated writes
+  (**0**), Tatum Sui Mainnet health, and the persistence backend — all read from
+  the real services, not asserted.
+- **`GET /api/learning`** — returns the impact counters, the behaviour-change
+  counterfactuals (Arm A / Arm B), and the provenance chain.
+- **Source and tests** — <https://github.com/itzebe/aftermath>; the evidence
+  artifacts live under `artifacts/` (architecture, final report, evidence JSON,
+  screenshots, demo script).
+- **Production verification** — `npm run verify:prod` → **28/28** with the operator
+  token for the recall-query check (27/28 without it, reported explicitly).
+- **Demo video** — `artifacts/aftermath-final-demo.mp4`, recorded live from the
+  production deployment.
+
+---
+
 ## Demo instructions
 
 **Production URL:** <https://aftermath-7tij.vercel.app/>
@@ -336,7 +375,9 @@ admin token; it is not needed for any of the steps above.
 | --- | --- | --- |
 | Production application | <https://aftermath-7tij.vercel.app/> | verified 200 |
 | Public repository | <https://github.com/itzebe/aftermath> | verified 200 |
-| Narrated demo video | <https://github.com/itzebe/aftermath/releases/tag/demo-v2> | verified (2:36) |
+| Final demo (this submission) | `artifacts/aftermath-final-demo.mp4` | 2:01, narrated + captioned, not published |
+| Narrated demo video (v2) | <https://github.com/itzebe/aftermath/releases/tag/demo-v2> | verified (2:36) |
 | Silent captioned demo (Mission 9) | `artifacts/mission9/aftermath-demo-m9.mp4` | verified (2:24), not published |
 | Rendered blog | <https://itzebe.github.io/aftermath/> | verified 200 |
 | Published blog (Medium) | <https://medium.com/@jonathanebi05/aftermath-every-failure-should-leave-a-safeguard-25446fdbcd71> | provided by the operator; Medium blocks this environment's IP (HTTP 403), so it was not re-verified here |
+| Judge quick start | `artifacts/JUDGE-QUICK-START.md` | one-minute path |

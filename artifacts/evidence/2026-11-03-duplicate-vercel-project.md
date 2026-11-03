@@ -12,7 +12,7 @@
 | Production alias | `aftermath-7tij.vercel.app` | `aftermath-theta.vercel.app` |
 | Git | `itzebe/aftermath` @ `master` | `itzebe/aftermath` @ `master` |
 | Framework | Next.js | Next.js |
-| Latest deployment | `dpl_CdHvL53vFBb7NMNmNnNZyKtvuSYv` (`182bef4c`) | `dpl_6JdMZVnm8fRQqw1oZgifEfQgLefv` (`182bef4c`) |
+| Latest deployment | tracks `master` (currently `964988f`) | tracks `master` (currently `964988f`) |
 
 Both projects deploy the same repository on every push to `master`; the
 duplicate is a second, independent Vercel project, not a preview of the first.

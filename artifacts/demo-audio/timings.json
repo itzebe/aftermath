@@ -1,0 +1,38 @@
+[
+ {
+  "id": "problem",
+  "title": "The problem",
+  "seconds": 14.745,
+  "narration": "An investigation can find out why something failed. But what happens when the same mistake happens again? Most incident reports are read once, then filed away, and the lesson stays trapped inside the report it came from. AFTERMATH exists to close that gap."
+ },
+ {
+  "id": "investigate",
+  "title": "Investigate",
+  "seconds": 24.706,
+  "narration": "This is the real, deployed product, and it is public: a visitor submits failure material with no account and no approval. I will use the built-in sample. A checkout service returned a 503, the charge status came back unknown, and an agent still reported the charge as completed successfully. AFTERMATH parses the material strictly as data, never executes it, and grounds every fact in a verbatim span from the submission."
+ },
+ {
+  "id": "record",
+  "title": "The safeguard",
+  "seconds": 18.379,
+  "narration": "The result is a Safeguard Record: evidence with its verbatim spans, a hypothesis with a confidence, and one proposed safeguard. Notice the evidence status is Unknown. The material names no authoritative source, so AFTERMATH refuses to decide whether the charge succeeded. That refusal is the product working, not a gap."
+ },
+ {
+  "id": "walrus",
+  "title": "Persist to Walrus Memory",
+  "seconds": 17.67,
+  "narration": "Verified safeguards are written to Walrus Memory on Mainnet, and a write counts as verified only when a recall query returns it. This ledger reads live from the relayer: one hundred eighty completed writes, one hundred seventy-seven recall-verified, zero simulated, and three hundred thirty-five memories in the namespace."
+ },
+ {
+  "id": "recall",
+  "title": "Recall changes a later decision",
+  "seconds": 29.222,
+  "narration": "Here is the moment that matters. A later investigation reports a build passing in continuous integration with no log attached. AFTERMATH recalls an applicable safeguard, then runs the decision engine twice over identical evidence: once with the memory held out, once enforced. The only difference is the memory. The verdict is unchanged, but the memory adds two required verification checks the engine would not otherwise require. Provenance shows the chain from that incident, to this Walrus blob, to these later investigations."
+ },
+ {
+  "id": "close",
+  "title": "Close",
+  "seconds": 9.021,
+  "narration": "AFTERMATH does not merely remember that something happened. It makes the next investigation check what the last one taught us to check. Every failure should leave a safeguard."
+ }
+]
