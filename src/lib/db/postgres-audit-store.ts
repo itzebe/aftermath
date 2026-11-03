@@ -1,5 +1,5 @@
 import { Pool, type PoolConfig } from "pg";
-import { MIGRATION_LOCK_KEY } from "@/lib/db/sql";
+import { withMigrationLock } from "@/lib/db/sql";
 import type {
   AuditCounts,
   AuditStore,
@@ -70,14 +70,17 @@ export class PostgresAuditStore implements AuditStore {
   }
 
   private async migrate(): Promise<void> {
-    // Hold a cross-instance advisory lock while creating the tables. Without
-    // it, two instances starting together both pass the `IF NOT EXISTS` check
-    // and collide on the catalog's unique index. A dedicated client is checked
-    // out so the lock and the DDL share one session.
+    // Hold a cross-instance advisory lock while creating the tables, so two
+    // instances starting together cannot both pass the `IF NOT EXISTS` check
+    // and collide on the catalog's unique index. The lock is acquired on a
+    // dedicated client but with a bounded, non-blocking try (see
+    // `withMigrationLock`): production reaches Postgres through Neon's
+    // transaction-mode pooler, where a blocking session lock can be left behind
+    // and would then wait forever, running the request to the platform limit.
     const client = await this.pool.connect();
     try {
-      await client.query(`SELECT pg_advisory_lock($1)`, [MIGRATION_LOCK_KEY]);
-      await client.query(`
+      await withMigrationLock(client, async () => {
+        await client.query(`
       CREATE TABLE IF NOT EXISTS incidents (
         incident_id TEXT PRIMARY KEY,
         domain TEXT NOT NULL,
@@ -138,8 +141,8 @@ export class PostgresAuditStore implements AuditStore {
       CREATE INDEX IF NOT EXISTS idx_writes_backend ON memory_writes(backend, state);
       CREATE INDEX IF NOT EXISTS idx_records_created ON safeguard_records(created_at);
     `);
+      });
     } finally {
-      await client.query(`SELECT pg_advisory_unlock($1)`, [MIGRATION_LOCK_KEY]);
       client.release();
     }
   }
