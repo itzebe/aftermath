@@ -1,6 +1,7 @@
 import { EvidenceAssessmentSchema } from "@/lib/schemas";
 import { redact } from "@/lib/util/redact";
 import { withRateLimitRetry, type RetryOptions } from "@/lib/adapters/tatum-retry";
+import { isSuiMainnet } from "@/lib/adapters/sui-network";
 import {
   TatumSuiTransportError,
   type FailureKind,
@@ -80,6 +81,14 @@ export class TatumSuiGraphqlAdapter {
       const data = await this.query<{ chainIdentifier: string }>(
         "query { chainIdentifier }",
       );
+      // The gateway must be on the network this deployment verifies against.
+      if (!isSuiMainnet(data.chainIdentifier)) {
+        return {
+          ok: false,
+          detail: `Tatum Sui GraphQL gateway is not on Sui Mainnet (chain identifier ${data.chainIdentifier ?? "unknown"}).`,
+          chainIdentifier: data.chainIdentifier,
+        };
+      }
       return {
         ok: true,
         detail: "Tatum Sui Mainnet GraphQL reachable and authenticated.",

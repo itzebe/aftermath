@@ -157,7 +157,11 @@ the chain reports failure, and **REQUIRE_VERIFICATION** when the chain cannot
 answer — three different decisions from one claim, decided by on-chain truth. No
 transaction is broadcast and no wallet key is requested. A transport failure, an
 auth failure, or a missing transaction always resolves to `UNKNOWN`, never to a
-fabricated outcome. See `artifacts/TATUM-INTEGRATION-ARCHITECTURE.md`.
+fabricated outcome. Both health checks assert the gateway is actually on Sui
+Mainnet (its `chainIdentifier`), so a reachable-but-wrong-network gateway fails
+closed rather than verifying against the wrong chain. See
+`artifacts/TATUM-INTEGRATION-ARCHITECTURE.md` and
+`artifacts/TATUM-INTEGRATION-EVIDENCE.md`.
 
 **How it is persisted.** The rule and its lesson are written to Walrus Memory
 Mainnet under a content-hash idempotency key. The write is awaited to a blob id.

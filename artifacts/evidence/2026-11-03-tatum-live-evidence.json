@@ -1,0 +1,30 @@
+{
+  "artifact": "Tatum integration \u2014 live evidence",
+  "capturedAt": "2026-11-03T20:33:05Z",
+  "production": {
+    "url": "https://aftermath-7tij.vercel.app"
+  },
+  "tatumHealth": {
+    "ok": true,
+    "detail": "Tatum Sui Mainnet gRPC reachable and authenticated (chain mainnet).",
+    "chainIdentifier": "4btiuiMPvEENsttpZC7CZ53DruC3MAgfznDbASZ7DR6S"
+  },
+  "tatumConfig": {
+    "grpcUrl": "https://sui-mainnet-grpc.gateway.tatum.io",
+    "rpcUrl": "https://sui-mainnet.gateway.tatum.io",
+    "interface": "Tatum Sui Mainnet gRPC (primary; fallback: Tatum Sui Mainnet GraphQL)",
+    "apiKey": "(51 chars, hidden)",
+    "configured": true
+  },
+  "counts": {
+    "incidents": 26,
+    "verifiedFailures": 6,
+    "activeRules": 3,
+    "unresolved": 18,
+    "completedLiveWrites": 191,
+    "recallVerifiedWrites": 188,
+    "simulatedWrites": 0,
+    "totalWrites": 224,
+    "records": 20
+  }
+}

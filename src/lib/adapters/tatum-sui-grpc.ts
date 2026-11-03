@@ -9,6 +9,7 @@ import {
   type FailureKind,
   type SuiTransactionLookupResult,
 } from "@/lib/adapters/tatum-sui";
+import { isSuiMainnet } from "@/lib/adapters/sui-network";
 
 export interface TatumSuiGrpcConfig {
   grpcUrl: string;
@@ -136,10 +137,21 @@ export class TatumSuiGrpcAdapter {
         () => client.ledgerService.getServiceInfo({}),
         this.config.retry,
       );
+      const chainIdentifier = info.response.chainId;
+      // The gateway must be on the network this deployment verifies against.
+      // A non-Mainnet identifier means lookups are answered from another chain,
+      // so health fails closed rather than reporting a healthy-but-wrong chain.
+      if (!isSuiMainnet(chainIdentifier)) {
+        return {
+          ok: false,
+          detail: `Tatum Sui gRPC gateway is not on Sui Mainnet (chain identifier ${chainIdentifier ?? "unknown"}).`,
+          chainIdentifier,
+        };
+      }
       return {
         ok: true,
-        detail: `Tatum Sui Mainnet gRPC reachable and authenticated (chain ${info.response.chain ?? "?"}).`,
-        chainIdentifier: info.response.chainId,
+        detail: `Tatum Sui Mainnet gRPC reachable and authenticated (chain ${info.response.chain ?? "mainnet"}).`,
+        chainIdentifier,
       };
     } catch (err) {
       return { ok: false, detail: redact(classifyError(err).message) };
