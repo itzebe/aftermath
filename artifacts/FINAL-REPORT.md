@@ -441,8 +441,10 @@ Confirmed explicitly:
   frontend code, error messages, evidence files, the video, or this report.
 - **The correct production project is deployed** — true. `aftermath-7tij`
   (`prj_GWK9nkfkYHm269zFh7zLCjpEYiO5`) serves the alias
-  `aftermath-7tij.vercel.app` from commit `3fca1b98`. The duplicate `aftermath`
-  project was classified and left untouched.
+  `aftermath-7tij.vercel.app` from the live production deployment
+  `dpl_B9EwahMiVV5J99VoKPLrhZAxGrWw` (commit `cdd9837`, READY, target production),
+  whose application behaviour is the verified commit `3fca1b98`. The duplicate
+  `aftermath` project was classified and left untouched.
 - **The demo is genuine** — true. Captured live from production as an anonymous
   visitor; every figure read from the live ledger; no fabricated hash, balance,
   incident, memory, or transaction.
