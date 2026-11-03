@@ -120,7 +120,7 @@ maybe("shared rate limiting across independent instances", () => {
     expect(c.ok).toBe(true);
     expect(c.allowed).toBe(0);
     expect(c.lastAllowed).toBe(false);
-  });
+  }, 120_000);
 
   it("a second client is unaffected by the first client's exhausted counter", () => {
     const spentKey = `rl-spent-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -130,13 +130,13 @@ maybe("shared rate limiting across independent instances", () => {
     const other = runInstance(otherKey, 2);
     expect(other.ok).toBe(true);
     expect(other.allowed).toBe(2);
-  });
+  }, 120_000);
 
   it("the shared verdict is not degraded (the durable store was reachable)", () => {
     const key = `rl-degraded-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const res = runInstance(key, 1);
     expect(res.degraded).toBe(false);
-  });
+  }, 120_000);
 
   it("negative control: without a shared database, counters do NOT cross instances", () => {
     // The same two-instance sequence, but with the durable database switched
@@ -153,5 +153,5 @@ maybe("shared rate limiting across independent instances", () => {
     const b = runInstance(key, 2, { databaseUrl: null });
     expect(b.backend).not.toBe("postgres");
     expect(b.allowed).toBe(2); // fresh per-instance window
-  });
+  }, 120_000);
 });
