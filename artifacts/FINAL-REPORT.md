@@ -12,18 +12,22 @@
 | --- | --- |
 | Remote | `https://github.com/itzebe/aftermath.git` |
 | Branch | `master` |
-| HEAD verified this mission | `3fca1b9849cdc51fd15f0a4454d6d5ea53953283` |
-| This mission's change | PR #18 → merge `3fca1b98` (SC 2.5.8 target-size fix on `/learning`; artifact relocation and evidence sync) |
+| Application commit verified end to end | `3fca1b9849cdc51fd15f0a4454d6d5ea53953283` |
+| This mission's application change | PR #18 → merge `3fca1b98` (SC 2.5.8 target-size fix on `/learning`; artifact relocation and evidence sync) |
+| Documentation follow-up | PR #19 → merge `73ff7a37` (pins this report; no application change) |
 | Prior baseline reviewed | `182bef4c` (PR #17) |
 | Vercel project | `aftermath-7tij` — `prj_GWK9nkfkYHm269zFh7zLCjpEYiO5` |
-| Production deployment | `dpl` `aftermath-7tij-oj062s7j7`, READY, commit `3fca1b98` |
-| Production alias | `aftermath-7tij.vercel.app` → `3fca1b98` |
+| Production deployment | READY; application code `3fca1b98` |
+| Production alias | `aftermath-7tij.vercel.app` → the production deployment |
 
-Confirmed by the Vercel API and by the deployed app, not assumed: the newest
-production deployment is built from `3fca1b98`, and the production alias
-resolves to that deployment. The fix was first verified on the local production
-build by negative control, then confirmed live: the `/learning` record links now
-measure 93×24 px on production (they were 63×14 px).
+Confirmed by the Vercel API and by the deployed app, not assumed. Every figure
+in this report was measured against the deployment built from the application
+commit `3fca1b98`. A later docs-only merge (PR #19, `73ff7a37`) advances the
+production deployment SHA without changing application behaviour, so this report
+pins the application commit rather than the ever-moving deployment SHA. The fix
+was first verified on the local production build by negative control, then
+confirmed live: the `/learning` record links now measure 93×24 px on production
+(they were 63×14 px).
 
 ---
 
