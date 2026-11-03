@@ -417,8 +417,14 @@ final links.
    simulated output as if it were the product. It was **not** deleted or
    disconnected (the mission forbids it); see the cleanup recommendation in
    `artifacts/evidence/2026-11-03-duplicate-vercel-project.md`.
-7. **`VERIFIED_FAILURE` on a live Mainnet transaction** is covered by unit tests
-   only, not by a production demonstration.
+7. **`VERIFIED_FAILURE` on a live Mainnet transaction is now demonstrated in
+   production, not only in unit tests.** An anonymous submission naming the real
+   failed digest `A9iiTMAxi5BY2uwxu4HnuonfF6A4hhGbaCK8HfTFK26x` was verified
+   through Tatum (`status: VERIFIED_FAILURE`, `verified: true`) and decided
+   `BLOCK` (`recordId 76272b29-b49d-ca39-f174-44ffab4143a8`;
+   `artifacts/evidence/2026-11-03-public-journey-submit.json`). What remains
+   untested in production is the *recurrence* path — no second real recurrence has
+   been independently observed.
 8. **Rate limits are per-client, not unlimited.** Public submission is capped at
    5 requests/minute per client (shared, cross-instance counter), with a
    non-rotatable global backstop. This is generous for a person and bounded for
