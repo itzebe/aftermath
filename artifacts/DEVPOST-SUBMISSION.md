@@ -1,7 +1,7 @@
 # AFTERMATH — Every Failure Should Leave a Safeguard
 
 *Devpost submission copy. Paste-ready. Every figure below was read live from the
-production deployment on 2026-11-02; where a capability depends on a credential
+production deployment on 2026-11-03; where a capability depends on a credential
 or is covered only by tests, it says so.*
 
 ---
@@ -266,8 +266,8 @@ same way twice.
 The safeguard is written to Walrus Memory Mainnet and counted as verified only
 when a recall query returns it. Recall is what makes the behaviour change
 possible: without a working recall path there is no second arm in the
-comparison. As of 2026-11-02 the instance reports **167 completed** and **166
-recall-verified** Mainnet writes, `simulatedWrites: 0`, with **322** memories in
+comparison. As of 2026-11-03 the instance reports **180 completed** and **177
+recall-verified** Mainnet writes, `simulatedWrites: 0`, with **335** memories in
 the namespace.
 
 **Deepest learning loop.** The brief asks for the deepest loop, and that is the
@@ -279,8 +279,8 @@ The change is demonstrated by a real counterfactual over the decision engine (th
 same engine, twice, with only the memory varying), and the provenance shows the
 memory's contribution — including the cases where it changed nothing.
 
-*Honest scoping.* The instance currently shows **1** persisted, recall-verified
-safeguard, **13** memories applied, **3** investigations influenced, and **3**
+*Honest scoping.* The instance currently shows **3** persisted, recall-verified
+safeguards, **31** memories applied, **3** investigations influenced, and **3**
 requirements strengthened. It shows **0** demonstrated repeat preventions. We
 report those numbers as they are.
 
@@ -337,6 +337,6 @@ admin token; it is not needed for any of the steps above.
 | Production application | <https://aftermath-7tij.vercel.app/> | verified 200 |
 | Public repository | <https://github.com/itzebe/aftermath> | verified 200 |
 | Narrated demo video | <https://github.com/itzebe/aftermath/releases/tag/demo-v2> | verified (2:36) |
-| Silent captioned demo (Mission 9) | `artifacts/mission9/aftermath-demo-m9.mp4` | verified (1:31), not published |
+| Silent captioned demo (Mission 9) | `artifacts/mission9/aftermath-demo-m9.mp4` | verified (2:24), not published |
 | Rendered blog | <https://itzebe.github.io/aftermath/> | verified 200 |
 | Published blog (Medium) | <https://medium.com/@jonathanebi05/aftermath-every-failure-should-leave-a-safeguard-25446fdbcd71> | provided by the operator; Medium blocks this environment's IP (HTTP 403), so it was not re-verified here |

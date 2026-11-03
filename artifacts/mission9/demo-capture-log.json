@@ -1,0 +1,108 @@
+[
+ {
+  "step": "title-card",
+  "ok": true,
+  "ms": 18
+ },
+ {
+  "step": "home",
+  "ok": true,
+  "ms": 1030
+ },
+ {
+  "at": 10.1,
+  "caption": "AFTERMATH — Every failure should leave a safeguard. Recorded live from aftermath-7tij.vercel.app."
+ },
+ {
+  "at": 17.6,
+  "caption": "A claim is not evidence. When an agent says the work succeeded, AFTERMATH asks for the proof."
+ },
+ {
+  "at": 26.8,
+  "caption": "The investigation workspace is public: a visitor submits an incident with no credential."
+ },
+ {
+  "at": 31.7,
+  "caption": "Paste the incident. The material is parsed as data — never executed, never interpolated into a command."
+ },
+ {
+  "step": "use-sample",
+  "ok": true,
+  "ms": 71
+ },
+ {
+  "step": "submit",
+  "ok": true,
+  "ms": 21
+ },
+ {
+  "at": 33,
+  "caption": "Investigating: parse the evidence, form a hypothesis, propose a safeguard, then verify it against the decision engine."
+ },
+ {
+  "step": "await-result",
+  "ok": true,
+  "ms": 38061
+ },
+ {
+  "at": 74.3,
+  "caption": "The result is a Safeguard Record: evidence with verbatim spans, hypotheses with confidence, and a proposed safeguard."
+ },
+ {
+  "at": 80.5,
+  "caption": "Every link carries an honest state — observed, confirmed, unknown. A lookup that cannot run resolves to unknown, never to success."
+ },
+ {
+  "at": 91.2,
+  "caption": "Safeguard Records: every investigation, newest first — a connected chain from incident to memory."
+ },
+ {
+  "step": "records",
+  "ok": true,
+  "ms": 25
+ },
+ {
+  "at": 96.7,
+  "caption": "The Memory Ledger reads live Walrus Memory Mainnet state from the relayer, namespace aftermath."
+ },
+ {
+  "step": "system-menu",
+  "ok": true,
+  "ms": 21
+ },
+ {
+  "step": "memory",
+  "ok": true,
+  "ms": 30
+ },
+ {
+  "at": 102.7,
+  "caption": "Completed and recall-verified writes are counted from durable records; simulated writes are excluded. The figures on screen are read live from this ledger."
+ },
+ {
+  "at": 108.1,
+  "caption": "The learning loop: investigate, learn, persist to Walrus Memory, recall during a later investigation, and change a decision."
+ },
+ {
+  "step": "learning",
+  "ok": true,
+  "ms": 26
+ },
+ {
+  "at": 114.2,
+  "caption": "Behaviour change is a real counterfactual: the same engine run with the recalled safeguard held out, then enforced."
+ },
+ {
+  "at": 120.1,
+  "caption": "Provenance closes the loop: the safeguard links back to the incident that produced it and every later investigation it reached."
+ },
+ {
+  "at": 126.1,
+  "caption": "Every failure should leave a safeguard."
+ },
+ {
+  "step": "end-card",
+  "ok": true,
+  "ms": 14
+ }
+]

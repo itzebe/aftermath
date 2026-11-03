@@ -255,6 +255,19 @@ button.action.primary:hover:not(:disabled) {
   text-decoration-color: var(--info);
 }
 
+/* A quiet link that stands alone as a list item rather than sitting inside a
+   sentence. WCAG 2.2 SC 2.5.8 (Target Size Minimum) exempts a link that is
+   inline in a block of text but not one that is its own target, so these get a
+   24px minimum height and horizontal padding. The inline uses of `.link-quiet`
+   in prose keep the plain underline. */
+.link-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 0.5rem;
+  border-radius: 5px;
+}
+
 /* ---- navigation ----------------------------------------------------- */
 
 a.nav-item,
