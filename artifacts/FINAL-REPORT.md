@@ -16,18 +16,22 @@
 | This mission's application change | PR #18 → merge `3fca1b98` (SC 2.5.8 target-size fix on `/learning`; artifact relocation and evidence sync) |
 | Documentation follow-up | PR #19 → merge `73ff7a37` (pins this report; no application change) |
 | Presentation-mission merge | PR #21 → merge `cdd9837b701e5fc9eb3ba734966decfd6698ba56` (final narrated demo, hermetic E2E harness, resilient `verify:prod`; no application-runtime change) |
-| Tatum-mission change | `feat(tatum): make the on-chain evidence path discoverable` (labelled Sui/incident samples on the public front door and operator console; shared `src/lib/samples.ts`; DOM + E2E regression tests) |
-| Latest verified `master` | `5c34926` (docs pin; the Tatum-mission change is verified on top and merged via PR — see the pull request) |
+| Tatum-mission change | PR #24 → merge `b8ce867982a527d54f7bd89e13690eb7f087ba59` (`feat(tatum): make the on-chain evidence path discoverable` — labelled Sui/incident samples on the public front door and operator console; shared `src/lib/samples.ts`; DOM + E2E regression tests) |
+| Latest verified `master` | `b8ce867` |
 | Prior baseline reviewed | `182bef4c` (PR #17) |
 | Vercel project | `aftermath-7tij` — `prj_GWK9nkfkYHm269zFh7zLCjpEYiO5` |
-| Production deployment | `dpl_B9EwahMiVV5J99VoKPLrhZAxGrWw`, READY, commit `cdd9837`, target `production` |
+| Production deployment | `dpl_3mZnYXKgY1AS4Bf7HRLwa2M3btGF`, READY, commit `b8ce867`, target `production` (supersedes `dpl_B9EwahMiVV5J99VoKPLrhZAxGrWw`) |
 | Production alias | `aftermath-7tij.vercel.app` → the production deployment |
 
 Confirmed by the Vercel API and by the deployed app, not assumed. The
-application behaviour verified end to end is the code from commit `3fca1b98`.
-Two later merges — PR #19 (`73ff7a37`) and PR #21 (`cdd9837`) — advance the
-production deployment SHA without changing application-runtime behaviour, so the
-report pins the application commit *and* records the live deployment SHA. The
+application behaviour verified end to end in the Mission-9 baseline is the code
+from commit `3fca1b98`. Two later merges — PR #19 (`73ff7a37`) and PR #21
+(`cdd9837`) — advanced the production deployment SHA without changing
+application-runtime behaviour, so the report pins the application commit *and*
+records the live deployment SHA. The current live deployment (`b8ce867`, PR #24)
+adds the discoverable on-chain evidence path; it was verified end to end this
+mission (typecheck, lint, build, 18 E2E, 28/28 production checks, and a live
+anonymous journey). The
 SC 2.5.8 fix was first verified on the local production build by negative control,
 then confirmed live: the `/learning` record links now measure 93×24 px on
 production (they were 63×14 px).
@@ -336,7 +340,7 @@ the diagram.
 ## I. Fresh Walrus / Tatum / Postgres evidence
 
 Read live from `GET /api/overview` and `GET /api/learning` on the deployed commit
-`5c34926` (snapshot `artifacts/evidence/2026-11-03-tatum-overview.json` and
+`b8ce867` (snapshot `artifacts/evidence/2026-11-03-tatum-overview.json` and
 `-tatum-evaluation.json`, generated 2026-11-03):
 
 | Evidence | Value |
@@ -437,8 +441,9 @@ final links.
 # READY FOR PUBLIC USE AND JUDGING
 
 The product is deployed at `aftermath-7tij.vercel.app` on the live production
-deployment `dpl_B9EwahMiVV5J99VoKPLrhZAxGrWw` (commit `cdd9837`), whose
-application behaviour is the verified commit `3fca1b98`, publicly usable, and
+deployment `dpl_3mZnYXKgY1AS4Bf7HRLwa2M3btGF` (commit `b8ce867`), whose
+application behaviour was verified this mission (typecheck, lint, build, 18 E2E,
+28/28 production checks, and a live anonymous journey), publicly usable, and
 verified end to end this mission: an anonymous visitor can submit a genuine
 incident, receive a real Safeguard Record, see a safeguard persisted to Walrus
 Memory Mainnet, and see the recalled memory change the decision from `UNKNOWN` to
@@ -481,8 +486,8 @@ Confirmed explicitly:
 - **The correct production project is deployed** — true. `aftermath-7tij`
   (`prj_GWK9nkfkYHm269zFh7zLCjpEYiO5`) serves the alias
   `aftermath-7tij.vercel.app` from the live production deployment
-  `dpl_B9EwahMiVV5J99VoKPLrhZAxGrWw` (commit `cdd9837`, READY, target production),
-  whose application behaviour is the verified commit `3fca1b98`. The duplicate
+  `dpl_3mZnYXKgY1AS4Bf7HRLwa2M3btGF` (commit `b8ce867`, READY, target production),
+  whose application behaviour was verified this mission. The duplicate
   `aftermath` project was classified and left untouched.
 - **The demo is genuine** — true. Captured live from production as an anonymous
   visitor; every figure read from the live ledger; no fabricated hash, balance,
