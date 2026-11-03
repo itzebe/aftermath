@@ -10,7 +10,7 @@ and the claim it supports; the verbatim narration is in
 
 A second, **silent captioned** recording was produced for Mission 9 from the
 current production build: [`artifacts/mission9/aftermath-demo-m9.mp4`](../artifacts/mission9/aftermath-demo-m9.mp4)
-(1:31, burned-in captions). It is silent because this environment has no TTS
+(2:24, 1280×800, burned-in captions). It is silent because this environment has no TTS
 engine or microphone, so a fresh narrated track could not be produced; the
 captions carry the same narration. It shows the now-public investigation
 workspace and the current live figures.

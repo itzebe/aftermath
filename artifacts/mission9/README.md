@@ -2,12 +2,15 @@
 
 ## `aftermath-demo-m9.mp4` — silent captioned demo (not committed)
 
-- **Duration:** 1:31 (91.4 s)
-- **Resolution:** 1920×1080, H.264 (yuv420p), AAC silent track
-- **Captions:** burned in, from `aftermath-demo-m9.srt`
+- **Duration:** 2:24 (143.64 s)
+- **Resolution:** 1280×800, H.264 (yuv420p), 25 fps, no audio track
+- **Captions:** burned in; caption text in `aftermath-demo-m9.srt`, timed from
+  `demo-capture-log.json`
 - **Source:** captured live from <https://aftermath-7tij.vercel.app/> with
-  Playwright (Chromium), cut with ffmpeg
-- **SHA-256:** see `SHA256SUMS.txt`
+  Playwright (Chromium) driving the real site as an anonymous visitor, cut with
+  ffmpeg. Reproduce with `node scripts/record-demo.mjs`.
+- **SHA-256:** `d63fa25793fae4c7b9c827a7e93ed2c51de2ed3aad1225cfe780b95dde1c9fdb`
+  (see `SHA256SUMS.txt`)
 - **Scene timings:** `scene-timings.json` (captured from the recording clock)
 
 The MP4 is **not committed** to keep the repository small. It exists at
@@ -18,4 +21,5 @@ published, narrated video is the `demo-v2` release asset.
 
 Every figure shown in the video is read from the live ledger at recording time
 (`GET /api/overview`, `GET /api/memory`). No incident is invented, no hash is
-fabricated, and no simulated write is presented as a Mainnet write.
+fabricated, and no simulated write is presented as a Mainnet write. No
+administrator action appears in the recording.

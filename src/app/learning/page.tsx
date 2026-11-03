@@ -364,7 +364,7 @@ function HistoryCard({ entry }: { entry: LearningHistoryEntry }) {
               <li key={id}>
                 <Link
                   href={`/records/${id}`}
-                  className="link-quiet mono text-[0.6875rem]"
+                  className="link-quiet link-chip mono text-[0.6875rem]"
                 >
                   {id.slice(0, 8)}… →
                 </Link>
@@ -611,7 +611,7 @@ function ProvenanceCard({ entry }: { entry: LearningProvenanceEntry }) {
                 <li key={id}>
                   <Link
                     href={`/records/${id}`}
-                    className="link-quiet mono text-[0.6875rem]"
+                    className="link-quiet link-chip mono text-[0.6875rem]"
                   >
                     {id.slice(0, 8)}…
                   </Link>
@@ -632,7 +632,7 @@ function ProvenanceCard({ entry }: { entry: LearningProvenanceEntry }) {
                 <li key={id}>
                   <Link
                     href={`/records/${id}`}
-                    className="link-quiet mono text-[0.6875rem]"
+                    className="link-quiet link-chip mono text-[0.6875rem]"
                   >
                     {id.slice(0, 8)}…
                   </Link>

@@ -2,12 +2,12 @@
 
 *A submission for Total Recall (Tatum × Walrus).*
 
-> **Update (2026-11-02).** The counts in this article were read live on
+> **Update (2026-11-03).** The counts in this article were read live on
 > 2026-10-29. The instance keeps writing, so the current figures are higher:
-> **167 completed** and **166 recall-verified** Mainnet writes, **322** memories
+> **180 completed** and **177 recall-verified** Mainnet writes, **335** memories
 > in the `aftermath` namespace, `simulatedWrites: 0`. The investigation
 > workspace is now public (a visitor can submit from the home page), and the
-> hermetic suite is now **587 passed / 40 skipped** with **16/16** E2E. Nothing
+> hermetic suite is now **620 passed / 12 skipped** with **16/16** E2E. Nothing
 > below is retracted; the numbers simply moved. Live values are always read from
 > `GET /api/overview` rather than quoted from here.
 
@@ -651,11 +651,12 @@ append-only, and it keeps counting everything that happened before the fix. I am
 not rewriting it, and I am not hiding it. Three distinctions matter:
 
 - **Completed writes and recall-verified writes are different numbers.** The
-  live instance reports **88 completed** Mainnet writes and **87
-  recall-verified**. The gap is one write that reached a blob id and was
+  live instance reports **180 completed** Mainnet writes and **177
+  recall-verified**. The gap is three writes that reached a blob id and were
   recorded as completed, but whose *follow-up recall query* was itself
-  rate-limited — so it is completed-but-not-recall-verified. It is counted once,
-  in the correct column. The two figures must never be presented as equivalent.
+  rate-limited — so they are completed-but-not-recall-verified. Each is counted
+  once, in the correct column. The two figures must never be presented as
+  equivalent.
 - **The ledger holds historical failed writes.** It records **33 failed live
   writes**: **22** are `remember job timed out after 60000ms`, and **11** are
   `429` rate limits. These are write-level failures from earlier invocations.
@@ -675,7 +676,7 @@ not rewriting it, and I am not hiding it. Three distinctions matter:
   observed it.
 
 None of this changes the headline the brief cares about: the requirement is ten
-genuine, completed Mainnet memories, and the instance has 88 completed and 87
+genuine, completed Mainnet memories, and the instance has 180 completed and 177
 recall-verified, all written through the real SDK against Mainnet.
 
 ## What I measured
@@ -703,9 +704,9 @@ The suites behind those figures, as last run:
 | --- | --- | --- |
 | Type check | `npm run typecheck` | clean |
 | Lint | `npm run lint` | clean |
-| Unit + integration (hermetic) | `npm test` | 315 passed, 21 skipped |
-| Live smoke (real relayer + gateway) | `npm run test:live` | 11 passed |
-| Browser (simulated backend) | `npm run test:e2e` | 13 passed |
+| Unit + integration (hermetic) | `npm test` | 620 passed, 12 skipped |
+| Live smoke (real relayer + gateway) | `npm run test:live` | not re-run this mission (needs live credentials) |
+| Browser (simulated backend) | `npm run test:e2e` | 16 passed |
 
 The unit suite is hermetic — it makes no network calls — which is why it is
 distinct from the live smoke suite. The browser suite runs against a simulated
@@ -778,13 +779,13 @@ conflating them would be dishonest in one direction or the other:
 A single counter cannot be honest about both "what did this process do" and
 "what is actually on chain". So there are two.
 
-As of this submission, the operator's own instance reports **88 completed
-Mainnet writes and 87 recall-verified writes**, with zero simulated writes in
+As of this submission, the operator's own instance reports **180 completed
+Mainnet writes and 177 recall-verified writes**, with zero simulated writes in
 that total — read straight from `GET /api/overview` on the running application,
 not asserted from memory. The two numbers are deliberately different and are
-never presented as equivalent: one write reached a blob id and was recorded as
-completed, but its follow-up recall query was itself rate-limited by the
-relayer, so it is completed-but-not-recall-verified. That is more than eight
+never presented as equivalent: three writes reached a blob id and were recorded
+as completed, but their follow-up recall query was itself rate-limited by the
+relayer, so it is completed-but-not-recall-verified. That is more than seventeen
 times the required ten completed writes. The number is reproducible by anyone
 who configures their own credentials and runs the scenarios; it is not a claim
 about a hosted service, because there is no hosted service.

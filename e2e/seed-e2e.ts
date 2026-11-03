@@ -20,6 +20,18 @@ import { resolveAuditStore } from "../src/lib/db/store-factory";
 import { resolveMemoryAdapter } from "../src/lib/adapters/memory-factory";
 import { InMemoryWorkflowStateStore } from "../src/lib/adapters/workflow-state";
 import { runAllScenarios } from "../src/lib/demos/runner";
+import { submitIncident } from "../src/lib/service";
+
+// Two submissions with the same failure pattern. They exercise the real
+// submission pipeline, so the learning view renders genuine retrieval and
+// provenance links (the record-id links that carry SC 2.5.8 target-size
+// concerns) rather than an empty state the accessibility sweep cannot see.
+const MATCHING_INCIDENTS = [
+  "2026-03-01T10:00:00Z settlement-worker POST /v1/settle the agent reported " +
+    "success for the settlement, but no transaction verification record was captured",
+  "2026-03-02T09:00:00Z settlement-worker POST /v1/settle the agent reported " +
+    "success for the settlement operation; no transaction verification record was captured",
+];
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -42,8 +54,13 @@ async function main(): Promise<void> {
   await store.saveScenarioRun(`e2e-seed-${Date.now()}`, result.ranAt, result);
   await store.close();
 
+  for (const text of MATCHING_INCIDENTS) {
+    await submitIncident({ text });
+  }
+
   console.log(
-    `E2E seed: ran ${result.scenarios.length} controlled scenario(s) against the ` +
+    `E2E seed: ran ${result.scenarios.length} controlled scenario(s) and ` +
+      `${MATCHING_INCIDENTS.length} matching submission(s) against the ` +
       `simulated backend into ${config.dbPath}.`,
   );
 }

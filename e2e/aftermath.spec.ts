@@ -272,6 +272,16 @@ test("no serious or critical accessibility violation on any public route", async
   );
   for (const path of ["/", "/records", "/learning", "/lab", "/incidents", "/safeguards", "/memory", "/evaluation", "/admin"]) {
     await page.goto(path);
+    // The learning view's record-id links only render when retrieval and
+    // influence exist, so assert the populated state before sweeping. Otherwise
+    // the sweep would pass over an empty page and miss the SC 2.5.8 target-size
+    // defect those small links carry.
+    if (path === "/learning") {
+      await expect(
+        page.locator('a[href^="/records/"]').first(),
+        "the learning view must render record links for the sweep to be meaningful",
+      ).toBeVisible();
+    }
     await page.addScriptTag({ content: axeSource });
     const results = await page.evaluate(async () => {
       const axe = (window as unknown as { axe: { run: (c: Document, o: unknown) => Promise<{ violations: Array<{ id: string; impact: string | null; nodes: unknown[] }> }> } }).axe;
@@ -287,4 +297,29 @@ test("no serious or critical accessibility violation on any public route", async
       `accessibility violations on ${path}`,
     ).toEqual([]);
   }
+});
+
+test("standalone links meet the 24px target size (SC 2.5.8)", async ({ page }) => {
+  // axe's target-size rule uses a spacing heuristic, so it can pass a small
+  // standalone link that happens to sit near a large one. The learning view's
+  // record-id links are each their own target inside a list, so they must clear
+  // 24x24 on their own. This measures them directly instead of trusting the
+  // heuristic.
+  await page.goto("/learning");
+  // Only the list-item links are standalone targets; the record link inside the
+  // retrieval card sits inline in a sentence and is exempt under SC 2.5.8.
+  const links = page.locator("li a[href^='/records/']");
+  await expect(links.first()).toBeVisible();
+  const boxes = await links.evaluateAll((els) =>
+    els.map((el) => {
+      const r = el.getBoundingClientRect();
+      return { w: r.width, h: r.height, text: (el.textContent ?? "").trim().slice(0, 12) };
+    }),
+  );
+  expect(boxes.length).toBeGreaterThan(0);
+  const tooSmall = boxes.filter((b) => b.w < 24 || b.h < 24);
+  expect(
+    tooSmall,
+    `standalone record links below 24x24: ${JSON.stringify(tooSmall)}`,
+  ).toEqual([]);
 });
