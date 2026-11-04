@@ -1,0 +1,200 @@
+{
+  "generatedAt": "2026-11-04T09:35:00Z",
+  "mission": "Total Recall official submission finalization",
+  "destination": "https://recall-tatum-walrus.vercel.app/",
+  "deadlineUtc": "2026-11-10T17:00:00Z",
+  "track": "02 - Smart Agents for Real Life",
+  "formInspection": {
+    "method": "live browser (Chrome via Playwright), modal opened by clicking 'Submit Project'",
+    "sections": 4,
+    "userControls": 20,
+    "onlyMaxLength": {
+      "field": "heardFromSource",
+      "maxLength": 200
+    },
+    "urlTypedFields": [
+      "demoVideoUrl",
+      "repoUrl"
+    ],
+    "fields": [
+      {
+        "n": 1,
+        "name": "email",
+        "type": "email",
+        "required": true
+      },
+      {
+        "n": 2,
+        "name": "discordId",
+        "type": "text",
+        "required": true
+      },
+      {
+        "n": 3,
+        "name": "linkedinUrl",
+        "type": "text",
+        "required": true
+      },
+      {
+        "n": 4,
+        "name": "telegramId",
+        "type": "text",
+        "required": false
+      },
+      {
+        "n": 5,
+        "name": "howHeard",
+        "type": "select-one",
+        "required": true
+      },
+      {
+        "n": 6,
+        "name": "heardFromSource",
+        "type": "text",
+        "required": false,
+        "maxLength": 200
+      },
+      {
+        "n": 7,
+        "name": "firstWeb3Project",
+        "type": "select-one",
+        "required": true
+      },
+      {
+        "n": 8,
+        "name": "tatumAccountId",
+        "type": "text",
+        "required": true
+      },
+      {
+        "n": 9,
+        "name": "suiAddress",
+        "type": "text",
+        "required": true
+      },
+      {
+        "n": 10,
+        "name": "accountId",
+        "type": "text",
+        "required": true
+      },
+      {
+        "n": 11,
+        "name": "memwalAgentId",
+        "type": "text",
+        "required": true
+      },
+      {
+        "n": 12,
+        "name": "description",
+        "type": "textarea",
+        "required": true
+      },
+      {
+        "n": 13,
+        "name": "demoVideoUrl",
+        "type": "url",
+        "required": true
+      },
+      {
+        "n": 14,
+        "name": "repoUrl",
+        "type": "url",
+        "required": true
+      },
+      {
+        "n": 15,
+        "name": "additionalDocs",
+        "type": "text",
+        "required": false
+      },
+      {
+        "n": 16,
+        "name": "walrusExperience",
+        "type": "textarea",
+        "required": true
+      },
+      {
+        "n": 17,
+        "name": "tatumAiBuilderExperience",
+        "type": "textarea",
+        "required": true
+      },
+      {
+        "n": 18,
+        "name": "walrusFriction",
+        "type": "textarea",
+        "required": false
+      },
+      {
+        "n": 19,
+        "name": "socialPosts",
+        "type": "textarea",
+        "required": false
+      },
+      {
+        "n": 20,
+        "name": "acceptTerms",
+        "type": "checkbox",
+        "required": true
+      }
+    ]
+  },
+  "independentSuiDigestCheck": {
+    "note": "no app code, no API key; run against Tatum public GraphQL gateway AND Sui public fullnode",
+    "endpoints": [
+      "https://sui-mainnet.gateway.tatum.io/graphql",
+      "https://graphql.mainnet.sui.io/graphql"
+    ],
+    "results": [
+      {
+        "digest": "GHAuBeydSov1zyT6sUKS2cFxWtNWkeamtKANsHwZJHve",
+        "status": "SUCCESS",
+        "aftermathDecision": "ALLOW"
+      },
+      {
+        "digest": "A9iiTMAxi5BY2uwxu4HnuonfF6A4hhGbaCK8HfTFK26x",
+        "status": "FAILURE",
+        "aftermathDecision": "BLOCK"
+      },
+      {
+        "digest": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
+        "status": "null",
+        "aftermathDecision": "REQUIRE_VERIFICATION"
+      }
+    ],
+    "agreement": "3/3 across both endpoints"
+  },
+  "production": {
+    "url": "https://aftermath-7tij.vercel.app",
+    "deploymentId": "dpl_6VHGZpcPwoL6j5MQaBTZVCoQMjEM",
+    "commit": "7f2e7a5388",
+    "counts": {
+      "completedLiveWrites": 196,
+      "recallVerifiedWrites": 193,
+      "simulatedWrites": 0,
+      "namespaceMemoryCount": 351
+    },
+    "publicSubmissionAvailable": true,
+    "verifyProd": "28/28"
+  },
+  "demo": {
+    "file": "artifacts/aftermath-final-demo.mp4",
+    "durationSeconds": 142.32,
+    "resolution": "1280x800",
+    "video": "avc1 (H.264)",
+    "audio": "mp4a (AAC)",
+    "sha256Prefix": "bd46de63",
+    "published": false
+  },
+  "blog": {
+    "medium": "https://medium.com/@jonathanebi05/aftermath-every-failure-should-leave-a-safeguard-25446fdbcd71",
+    "mediumEvidence": "present in public RSS feed https://medium.com/feed/@jonathanebi05",
+    "githubPagesMirror": "https://itzebe.github.io/aftermath/ (HTTP 200)"
+  },
+  "honesty": {
+    "demonstratedRepeatPreventions": 0,
+    "note": "unchanged; no new evidence supports a different value",
+    "nothingPublishedOrSubmitted": true
+  }
+}

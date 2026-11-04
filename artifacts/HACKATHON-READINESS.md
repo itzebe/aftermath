@@ -1,99 +1,112 @@
 # AFTERMATH — hackathon readiness (Total Recall)
 
 **Event:** Walrus × Tatum: **Total Recall**, 20 Oct – 10 Nov 2026 (submit by
-10 Nov, 17:00 UTC). **Track:** 02 — **Smart Agents for Real Life**.
-**Verified:** 2026-11-04 against production
-<https://aftermath-7tij.vercel.app/>.
+10 Nov 2026, 17:00 UTC). **Track:** 02 — **Smart Agents for Real Life**.
+**Verified:** 2026-11-04 against production <https://aftermath-7tij.vercel.app/>
+and the official form <https://recall-tatum-walrus.vercel.app/>.
 
-Every status below is `PASS`, `FAIL`, `BLOCKED`, or `NOT TESTED`, and every value
-has a source. Nothing here is a projection.
+Status legend: **VERIFIED** · **PREPARED** · **USER INPUT REQUIRED** ·
+**BLOCKED** · **NOT APPLICABLE**. Every value names its source. Nothing here is a
+projection.
 
 ---
 
-## 1. Submission requirements (official)
+## 1. Official submission requirements
 
-| # | Requirement | Status | Evidence |
-| --- | --- | --- | --- |
-| 1 | Walrus Memory integrated and writing on Mainnet | **PASS** | Real SDK writes to `https://relayer.memory.walrus.xyz`, namespace `aftermath`. `GET /api/overview` → `memoryStatus.state = MAINNET_AUTH_CONFIRMED`, `isLive: true`, `network: mainnet`. Each write awaited to a blob id and confirmed by a recall query. |
-| 2 | Tatum RPC used for on-chain data where relevant | **PASS** | `sui.rpc.v2.LedgerService/GetTransaction` on Tatum Sui Mainnet gRPC, GraphQL fallback. Proven load-bearing: the same class of submission → `ALLOW` / `BLOCK` / `REQUIRE_VERIFICATION` strictly by Tatum's answer (`artifacts/evidence/2026-11-03-tatum-integration.json`). |
-| 3 | At least 10 memories stored on Mainnet | **PASS** | **196** completed, **193** recall-verified live writes (`simulatedWrites: 0`); `mainnetRequirement` = `{required: 10, completedLive: 196, recallVerified: 193, remaining: 0, satisfied: true}`. |
-| 4 | Published blog post (what it does, how it uses Tatum + Walrus, how it learned) | **PASS** | Medium article live (HTTP 200, `artifacts/…`; see Final links) and GitHub Pages mirror (HTTP 200). Source `docs/BLOG.md`. |
-| 5 | Working demo and public repo | **PASS** | Production app HTTP 200; public repo HTTP 200; local demo `artifacts/aftermath-final-demo.mp4` (142.3 s). |
-| 6 | Optional: build with Tatum AI Builder (ai.tatum.io) — $500 bonus | **NOT PURSUED** | AFTERMATH uses Tatum RPC/Data APIs directly. The dedicated AI-Builder award is out of scope and is not claimed. |
+Source: Event Rules <https://thewalrussessions.wal.app/tatum-total-recall>
+("Submission Requirements") and the event page
+<https://tatum.io/hackathon/total-recall>.
 
-## 2. Judging criteria (official)
+| # | Requirement (official) | Status | Evidence | Remaining action |
+| --- | --- | --- | --- | --- |
+| 1 | Walrus Memory integrated and writing on **Mainnet** | **VERIFIED** | Real SDK writes to `https://relayer.memory.walrus.xyz`, namespace `aftermath`; `GET /api/config` → `memory.backend=memwal-mainnet`, `isLive:true`. | none |
+| 2 | Tatum RPC used for on-chain data where relevant | **VERIFIED** | `sui.rpc.v2.LedgerService/GetTransaction` on Tatum Sui Mainnet gRPC (GraphQL fallback). Load-bearing: same claim over three real digests → ALLOW/BLOCK/REQUIRE_VERIFICATION. Re-confirmed 3/3 this mission against Tatum **and** a public Sui fullnode. | none |
+| 3 | At least **10 memories** stored on Mainnet | **VERIFIED** | **196** completed / **193** recall-verified live writes, `simulatedWrites: 0`; `mainnetRequirement = {required:10, remaining:0, satisfied:true}`. | none |
+| 4 | Published **blog post** (what it does, how it uses Tatum + Walrus, how it learned) | **VERIFIED** | Medium article present in the author's public RSS feed; GitHub Pages mirror HTTP 200. | optional: update the article's stale instance count (see §5) |
+| 5 | Working **demo** and public **repo** | **VERIFIED** | Production HTTP 200; repo HTTP 200; demo `artifacts/aftermath-final-demo.mp4` (142.32 s) + published `demo-v2` (2:36). | choose a demo URL for field 13 (Step 4 of checklist) |
+| 6 | Optional: build with Tatum AI Builder (ai.tatum.io) — $500 bonus | **NOT APPLICABLE** | Built directly on Tatum RPC/Data APIs; AI Builder not used. The form asks to say so briefly (field 17). | none (honest answer prepared) |
+
+## 2. Official judging criteria
+
+Source: Event Rules, "Judgment of Submissions".
 
 | Criterion | Weight | How AFTERMATH answers it | Evidence |
 | --- | --- | --- | --- |
-| Walrus and Tatum integration | 30% | Walrus Memory is the substrate of the loop (write → recall → applied → behaviour change), not a bolt-on; Tatum is the authoritative verifier and is proven to *decide* the verdict. | `/api/overview`, `/api/learning`, `TATUM-INTEGRATION-ARCHITECTURE.md` |
-| Technical quality | 30% | Type-checked, lint-clean, hermetic unit suite, hermetic E2E, 28/28 production checks; strict data handling, redaction, idempotency, shared rate limiting, fail-closed guards. | §4 verification gates below |
-| Creativity | 20% | The contribution is *proven* by a two-arm counterfactual over the decision engine, and the system reports its own null results (0 repeat preventions) rather than inflating them. | `/learning` behaviour change; `FINAL-REPORT.md` §K |
-| Presentation | 20% | Judge quick-start, narrated demo (2:22), architecture, Devpost copy, live figures on every page. | `JUDGE-QUICK-START.md`, `artifacts/aftermath-final-demo.mp4` |
-| Bonus: share on X / LinkedIn | — | Not performed by this mission. Owner action. | — |
+| Walrus and Tatum integration | 30% | Walrus Memory is the substrate of the loop (write → recall → applied → behaviour change); Tatum is the authoritative verifier and is proven to *decide* the verdict. | `/api/overview`, `/api/learning`, `TOTAL-RECALL-EVIDENCE.md` |
+| Technical quality | 30% | Type-checked, lint-clean, hermetic unit + E2E suites, 28/28 production checks; redaction, idempotency, shared rate limiting, fail-closed guards. | §4 gates |
+| Creativity | 20% | Contribution *proven* by a two-arm counterfactual over the decision engine; the system reports its own null results (0 repeat preventions). | `/learning` behaviour change; `TOTAL-RECALL-EVIDENCE.md` |
+| Presentation | 20% | Narrated demo (2:22), architecture doc, blog post, live figures on every page. | `artifacts/aftermath-final-demo.mp4`, `docs/BLOG.md` |
+| Bonus: share on X / LinkedIn | — | **USER INPUT REQUIRED** — owner action; tags optional. | — |
 
-## 3. Special prizes
+## 3. Official form fields (20 controls)
 
-| Prize | Applies? | Why |
+Source: live form inspected 2026-11-04. Full copy in
+[`TOTAL-RECALL-FORM-ANSWERS.md`](TOTAL-RECALL-FORM-ANSWERS.md).
+
+| Field | Status | Remaining action |
 | --- | --- | --- |
-| Best Walrus Memory Prize ($500) — deepest learning loop, memories that visibly change the product | **Targeted** | The loop is closed and demonstrated by a counterfactual; memory changes `requiredChecks` and, where applicable, the verdict. Provenance shows the contribution and the cases where it changed nothing. |
-| Best Tatum AI Builder App Prize ($500) | **Not pursued** | Built with Tatum RPC/Data APIs, not the AI Builder. Not claimed. |
+| 1 Email | **USER INPUT REQUIRED** | supply |
+| 2 Discord handle | **USER INPUT REQUIRED** | supply |
+| 3 LinkedIn | **USER INPUT REQUIRED** | supply |
+| 4 Telegram ID (optional) | **USER INPUT REQUIRED** | supply or leave blank |
+| 5 How did you hear about this event? | **USER INPUT REQUIRED** | choose truthfully |
+| 6 Community/account (optional, ≤200) | **PREPARED** | optional |
+| 7 First Web3 project? | **USER INPUT REQUIRED** | Yes/No |
+| 8 Tatum ID | **USER INPUT REQUIRED** | dashboard.tatum.io |
+| 9 SUI address | **USER INPUT REQUIRED** | supply |
+| 10 Account ID (SUI) | **USER INPUT REQUIRED** | `MEMWAL_ACCOUNT_ID` |
+| 11 MEMWAL_AGENT_ID | **USER INPUT REQUIRED** | delegate public key |
+| 12 Project description | **PREPARED** | paste |
+| 13 Demo video URL | **PREPARED** | choose hosted URL (Step 4) |
+| 14 GitHub repo | **PREPARED** | paste |
+| 15 Additional documentation | **PREPARED** | paste (optional) |
+| 16 Walrus experience | **PREPARED** | paste |
+| 17 Tatum AI Builder experience | **PREPARED** | paste (says "did not use") |
+| 18 Walrus friction (optional) | **PREPARED** | paste or leave blank |
+| 19 Social post links (optional) | **USER INPUT REQUIRED** | post + paste (bonus) |
+| 20 Agreement checkbox | **PREPARED** | review terms, then tick |
 
 ## 4. Verification gates (fresh, 2026-11-04)
 
 | Gate | Result | Notes |
 | --- | --- | --- |
-| `tsc --noEmit` | **PASS** | exit 0 |
-| `eslint src tests scripts e2e` | **PASS** | exit 0 |
-| `next build` | **PASS** | production build succeeds |
-| `vitest run` (local PostgreSQL 17 reachable) | **PASS** | **631 passed, 12 skipped** (the 12 are the opt-in live-smoke suite) |
-| `playwright test` | **PASS** | 18 passed, 0 failed |
-| `npm run verify:prod` | **PASS** | **28/28** anonymously (no admin token needed) |
-| Anonymous submission (live) | **PASS** | real `BLOCK` record from a real failed Sui digest through Tatum; see §5 |
-| Cross-instance rate limit | **PASS** (operator env) | shared PostgreSQL counter; 4/4 |
-| Redaction | **PASS** | secrets masked in `/api/config` and evidence; digest preserved |
-| Duplicate / idempotency | **PASS** | resubmission of the sample returns the existing record id; no extra Mainnet write |
+| `npx tsc --noEmit` | **PASS** | exit 0 |
+| `npm run lint` | **PASS** | exit 0 |
+| `npm run build` | **PASS** | production build succeeds |
+| `npm test` (vitest) | **PASS** | **631 passed, 12 skipped** (skips = opt-in live-smoke) |
+| `npm run test:e2e` (playwright) | **PASS** | **19 passed, 0 failed** |
+| `npm run verify:prod` | **PASS** | **28/28** anonymously (no admin token) |
+| Anonymous submission (live) | **PASS** | real record through Tatum; idempotent (no new write) |
+| Cross-instance rate limit | **PASS** | first 429 at request 4; `retry-after` + JSON hint |
+| Redaction | **PASS** | secrets masked in `/api/config`; digests preserved |
+| Duplicate / idempotency | **PASS** | resubmission returns existing record; no extra Mainnet write |
+| Live axe sweep, 8 public routes | **PASS** | 0 violations |
+| Mobile overflow, 8 public routes | **PASS** | 0 px |
+| Production deployment identity | **VERIFIED** | `dpl_6VHGZpcPwoL6j5MQaBTZVCoQMjEM`, READY, commit `7f2e7a5388` |
 
-## 5. Live public user journey (anonymous, 2026-11-04)
-
-Performed with no account, no invitation, and no admin token:
-
-| Step | Result |
-| --- | --- |
-| Discovery — homepage explains what/why | **PASS** |
-| Access — home, `/incidents`, `/records`, `/safeguards`, `/learning`, `/memory`, `/lab` | **PASS** |
-| Submission — anonymous POST accepted | **PASS** (`recordId 76272b29-b49d-ca39-f174-44ffab4143a8`) |
-| Investigation — grounded in the submitted digest | **PASS** |
-| Learning — authoritative lookup folded in | **PASS** (`authoritativeLookup.verified: true`, `status: VERIFIED_FAILURE`) |
-| Persistence — incident written to Walrus Mainnet | **PASS** (`state: completed`, `backend: memwal-mainnet`, `provenance: live`) |
-| Recall — prior safeguards retrieved | **PASS** (50 applicable retrievals; the front-door samples reproduce the counterfactual) |
-| Behaviour change — visible, honest | **PASS** (`changed: false` — the safeguard was redundant against the legacy lessons; reported, not hidden) |
-| Transparency — provenance and contribution visible | **PASS** |
-
-Raw evidence: `artifacts/evidence/2026-11-04-public-journey.json` and
-`artifacts/evidence/2026-11-04-counterfactual.json`.
-
-## 6. Honest limitations
+## 5. Honest limitations
 
 - **0 demonstrated repeat preventions.** The instance has not independently shown
-  a memory preventing a *second* real recurrence. The learning loop's contribution
-  is shown as a counterfactual and as added verification requirements, not as a
-  claimed repeat prevention.
-- **Unit suite needs a database.** The Postgres-gated suites skip where no Postgres
-  is reachable; they are reported as skipped.
-- **`verify:prod` recall check is now public.** It falls back to the public
-  learning surface when no admin token is present, so all 28 checks pass
-  anonymously.
-- **Duplicate Vercel project.** `aftermath` (`aftermath-theta.vercel.app`) still
-  exists and deploys from the same repo on a simulated backend. Left in place per
-  instruction; see `FINAL-REPORT.md` §K and
-  `artifacts/evidence/2026-11-04-duplicate-vercel-project.md`.
+  a memory preventing a *second* real recurrence. The loop's contribution is shown
+  as a counterfactual and as added verification requirements (6 investigations
+  influenced, 6 verification requirements strengthened), not as a claimed repeat
+  prevention.
+- **Medium article instance count is stale** (says 51; current is 196). The
+  article is otherwise accurate; a dated edit or note is optional.
+- **Unit suite needs a database.** Postgres-gated suites skip where no Postgres is
+  reachable and are reported as skipped, never as passing.
+- **Duplicate Vercel project** `aftermath` (`aftermath-theta.vercel.app`) still
+  exists (same repo, simulated backend). Not deleted per mission rules.
+- **Not full WCAG 2.2 AA conformance** — the axe sweep is evidence, not a
+  conformance claim.
 
-## 7. Links
+## 6. Links
 
 | Artifact | URL | Verified |
 | --- | --- | --- |
 | Production | <https://aftermath-7tij.vercel.app/> | HTTP 200 |
 | Repository | <https://github.com/itzebe/aftermath> | HTTP 200 |
-| Medium article | <https://medium.com/@jonathanebi05/aftermath-every-failure-should-leave-a-safeguard-25446fdbcd71> | HTTP 403 to automated clients (Medium bot protection); renders for humans |
+| Medium article | <https://medium.com/@jonathanebi05/aftermath-every-failure-should-leave-a-safeguard-25446fdbcd71> | in public RSS feed (URL 403s to bots only) |
 | GitHub Pages mirror | <https://itzebe.github.io/aftermath/> | HTTP 200 |
-| Demo video | `artifacts/aftermath-final-demo.mp4` (2:22 / 142.3 s) | container-verified |
+| Demo (published) | <https://github.com/itzebe/aftermath/releases/tag/demo-v2> | HTTP 200 |
+| Demo (final cut) | `artifacts/aftermath-final-demo.mp4` (2:22) | container-verified |

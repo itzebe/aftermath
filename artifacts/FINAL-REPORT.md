@@ -574,21 +574,68 @@ Confirmed explicitly:
 
 ## N. Submission-finalization status (2026-11-04)
 
+### N.1 Destination and official requirements (re-verified this mission)
+
+- **Destination (only):** <https://recall-tatum-walrus.vercel.app/>. Devpost is
+  **not** a destination for this hackathon; `DEVPOST-SUBMISSION.md` is retained
+  for background only and is not submitted.
+- **Event:** Total Recall — Tatum × Walrus Memory, 20 Oct – 10 Nov 2026.
+- **Deadline:** **10 Nov 2026, 17:00 UTC** (Event Rules, "Key Information and
+  Dates"). Results announced 17 Nov 2026.
+- **Submission requirements (Event Rules):** Walrus Memory on Mainnet; Tatum RPC
+  where relevant; **≥10 memories** on Mainnet; published blog post; working demo
+  and public repo; optional Tatum AI Builder ($500 bonus).
+- **Judging:** Walrus+Tatum integration 30%, technical quality 30%, creativity
+  20%, presentation 20%; optional social-post bonus.
+
+### N.2 Track selected
+
+**Track 02 — Smart Agents for Real Life.** AFTERMATH is an agent-facing
+verification and incident-learning system: an agent reports an outcome, AFTERMATH
+verifies it against the Sui ledger through Tatum, distils a safeguard, persists it
+to Walrus Memory, and recalls it to strengthen later verification. The other
+tracks (Markets & Sports Prediction; Consumer Finance Apps) are consumer
+prediction and money apps and do not match the product's purpose.
+
+### N.3 Form inspection
+
+Inspected live in a browser on 2026-11-04: **four sections, 20 controls**. The
+exact DOM schema (field `name`, type, required, `maxLength`) is recorded in
+`TOTAL-RECALL-FORM-ANSWERS.md`. Only one field has a limit
+(`heardFromSource`, 200 chars). Fields 13 and 14 are `type=url`.
+
+### N.4 Independent re-verification this mission
+
+- **Sui digests (3/3):** `A9ii…K26x` → FAILURE, `GHAu…JHve` → SUCCESS,
+  `9WzD…AWWM` → not found. Confirmed through **both** Tatum's Sui Mainnet
+  GraphQL gateway and a public Sui Mainnet fullnode.
+- **Production:** `GET /api/overview` → 196 completed / 193 recall-verified live
+  writes, 0 simulated, namespace `aftermath`, 351 memories in the namespace.
+- **`verify:prod`:** 28/28 anonymously.
+- **Demo:** `artifacts/aftermath-final-demo.mp4` = 142.32 s, 1280×800, H.264/AAC,
+  sha256 `bd46de63…`.
+- **Blog:** the Medium article is present in the author's public RSS feed; the
+  GitHub Pages mirror returns HTTP 200.
+
+### N.5 Deliverables
+
 | Deliverable | Path | State |
 | --- | --- | --- |
+| Official form, field by field (+ verified DOM schema) | `artifacts/TOTAL-RECALL-FORM-ANSWERS.md` | Ready |
 | Polished submission copy | `artifacts/TOTAL-RECALL-SUBMISSION.md` | Ready |
-| Official form, field by field | `artifacts/TOTAL-RECALL-FORM-ANSWERS.md` | Ready (20 controls; owner-only fields flagged) |
 | Claim-to-evidence index | `artifacts/TOTAL-RECALL-EVIDENCE.md` | Ready |
+| Requirement matrix | `artifacts/HACKATHON-READINESS.md` | Ready |
+| Submission checklist (paste-ready) | `artifacts/TOTAL-RECALL-FINAL-CHECKLIST.md` | Ready |
 | Live evidence snapshot | `artifacts/evidence/2026-11-04-*.json` | Refreshed from production |
-| Devpost copy (legacy) | `artifacts/DEVPOST-SUBMISSION.md` | Present |
+| Devpost copy (background only, not submitted) | `artifacts/DEVPOST-SUBMISSION.md` | Present |
 | Final report (this file) | `artifacts/FINAL-REPORT.md` | Updated |
 
-### Remaining actions (owner only)
+### N.6 Remaining actions (owner only)
 
 1. **Upload the demo video** and paste a public URL into form field 13. The final
    cut `artifacts/aftermath-final-demo.mp4` (2:22) is not hosted; the published
-   `demo-v2` (2:36) is a valid fallback. Uploading is an owner action because the
-   mission forbids publishing it.
+   `demo-v2` (2:36) is a valid, paste-ready fallback. Uploading is an owner action
+   because the mission forbids publishing it.
 2. **Supply the owner-held identity fields** (form fields 1–5, 7–11): email,
    Discord, LinkedIn, Telegram, how-heard, first-Web3, Tatum ID, SUI address,
    Account ID (SUI), `MEMWAL_AGENT_ID`. None of these are in the repository.
@@ -601,6 +648,13 @@ Confirmed explicitly:
    (`aftermath-theta.vercel.app`) is a redundant public URL on the same repo.
    Not deleted per mission rules; see the cleanup recommendation in
    `artifacts/evidence/2026-11-04-duplicate-vercel-project.md`.
+
+### N.7 Final verdict
+
+**READY AFTER USER INPUT.** Every technical and evidence requirement is met and
+verified; the only gaps are owner-held personal identifiers (fields 1–5, 7–11),
+the choice/upload of the demo-video URL (field 13), and the optional social post
+(field 19). No application code change was required for this mission.
 
 ### Verification gates run this mission
 
@@ -622,4 +676,5 @@ Confirmed explicitly:
 | Anonymous submission (valid body) | **PASS** — HTTP 200, no new Mainnet write |
 | Rate limit | **PASS** — first 429 at request 4; `retry-after` + JSON retry hint |
 | Input validation | **PASS** — empty body 400, oversize body 413 |
-| Production deployment identity | **PASS** — `dpl_cUKufrKdvnga8B1P1heatzbbcVPf`, READY, `2159d5d220` |
+| Production deployment identity | **PASS** — `dpl_6VHGZpcPwoL6j5MQaBTZVCoQMjEM`, READY, commit `7f2e7a5388` |
+| Official form inspection (live) | **PASS** — 4 sections, 20 controls, DOM schema captured |
