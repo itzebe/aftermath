@@ -75,14 +75,15 @@ Raw JSON: `artifacts/evidence/2026-11-04-overview.json`,
 
 ## 4. Independent cross-check (no app code, no API key)
 
-Tatum's **public** Sui Mainnet GraphQL gateway answers unauthenticated. Run from
-a shell with no credentials and no application code:
+Tatum's **public** Sui Mainnet GraphQL gateway answers unauthenticated, and so
+does the Sui Foundation's public fullnode. Re-run this mission (2026-11-04) from a
+shell with no credentials and no application code, against **both** endpoints:
 
-| Sui Mainnet digest | `transactionEffects.status` | AFTERMATH verdict → decision |
+| Sui Mainnet digest | `transactionEffects.status` (Tatum gateway **and** public fullnode) | AFTERMATH verdict → decision |
 | --- | --- | --- |
 | `GHAuBeydSov1zyT6sUKS2cFxWtNWkeamtKANsHwZJHve` | `SUCCESS` | `VERIFIED_SUCCESS` → **ALLOW** |
 | `A9iiTMAxi5BY2uwxu4HnuonfF6A4hhGbaCK8HfTFK26x` | `FAILURE` | `VERIFIED_FAILURE` → **BLOCK** |
-| `9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM` | `null` | `UNKNOWN` → **REQUIRE_VERIFICATION** |
+| `9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM` | `null` (not found) | `UNKNOWN` → **REQUIRE_VERIFICATION** |
 
 Chain identifier `4btiuiMPvEENsttpZC7CZ53DruC3MAgfznDbASZ7DR6S` confirms Mainnet.
 
@@ -94,7 +95,7 @@ Evidence: `artifacts/evidence/2026-11-03-tatum-live-evidence.json`,
 | Claim | Evidence |
 | --- | --- |
 | Production serves the reviewed application | deployment READY; alias `aftermath-7tij.vercel.app` → newest production deployment |
-| Deployment status | `dpl_cUKufrKdvnga8B1P1heatzbbcVPf` (commit `2159d5d220`, READY, target production) |
+| Deployment status | `dpl_6VHGZpcPwoL6j5MQaBTZVCoQMjEM` (commit `7f2e7a5388`, READY, target production) |
 | Durable index | `GET /api/config` → `persistence.backend = postgres`, `durable: true` (Neon) |
 | Anonymous submission reaches the pipeline | `artifacts/evidence/2026-11-04-public-journey.json`, `2026-11-03-public-journey-submit.json` |
 

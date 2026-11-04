@@ -1,17 +1,57 @@
 # Total Recall — official form answers
 
 **Form:** <https://recall-tatum-walrus.vercel.app/> (opens as a modal; click
-**Submit Project**). Inspected field by field on 2026-11-04.
+**Submit Project**). Inspected field by field in a real browser on 2026-11-04.
 **Project:** AFTERMATH — Every Failure Should Leave a Safeguard.
 **Track:** 02 — Smart Agents for Real Life.
 
-The form has **four sections** and **20 controls**. The order below matches the
-form exactly. Fields marked **`USER INPUT REQUIRED`** can only be supplied by the
-account owner — do not invent them. Every other field is ready to paste.
+The form has **four sections** and **20 user-facing controls**. The order below
+matches the form exactly. Fields marked **`USER INPUT REQUIRED`** can only be
+supplied by the account owner — do not invent them. Every other field is ready to
+paste.
 
-Only one field has a character limit: *"Which community or account did you hear
-about us through?"* is capped at **200 characters**. All other text fields are
-unbounded.
+## Verified DOM schema (from the live form, 2026-11-04)
+
+Captured directly from the rendered form (`input`/`textarea`/`select` attributes),
+not inferred:
+
+| # | `name` | type | required | maxLength |
+| --- | --- | --- | --- | --- |
+| 1 | `email` | email | **yes** | — |
+| 2 | `discordId` | text | **yes** | — |
+| 3 | `linkedinUrl` | text | **yes** | — |
+| 4 | `telegramId` | text | no | — |
+| 5 | `howHeard` | select-one | **yes** | — |
+| 6 | `heardFromSource` | text | no | **200** |
+| 7 | `firstWeb3Project` | select-one | **yes** | — |
+| 8 | `tatumAccountId` | text | **yes** | — |
+| 9 | `suiAddress` | text | **yes** | — |
+| 10 | `accountId` | text | **yes** | — |
+| 11 | `memwalAgentId` | text | **yes** | — |
+| 12 | `description` | textarea | **yes** | — |
+| 13 | `demoVideoUrl` | **url** | **yes** | — |
+| 14 | `repoUrl` | **url** | **yes** | — |
+| 15 | `additionalDocs` | text | no | — |
+| 16 | `walrusExperience` | textarea | **yes** | — |
+| 17 | `tatumAiBuilderExperience` | textarea | **yes** | — |
+| 18 | `walrusFriction` | textarea | no | — |
+| 19 | `socialPosts` | textarea | no | — |
+| 20 | `acceptTerms` | checkbox | **yes** | — |
+
+Notes from the live inspection:
+
+- The **only** character limit on the whole form is field 6 (`maxLength=200`).
+  Every other field is unbounded.
+- Fields 13 and 14 are **`type="url"`**, so the browser rejects a value that is
+  not a valid absolute URL. Field 13's placeholder is *"YouTube or other link"* —
+  the demo video must be a **public URL**, not a file.
+- Field 12 (Project description) is a `<textarea>`; the placeholder is
+  *"What it does, how it uses Tatum + Walrus Memory…"*.
+- Field 17 explicitly says *"If you did not use AI Builder, say so briefly"* — a
+  short honest answer is correct and expected.
+- The site header also carries an **unrelated** "Describe what you want to build"
+  AI-Builder prompt box (`name="prompt"`, id `ai-builder-prompt`); it is **not**
+  part of the submission form and must not be filled in.
 
 ---
 
@@ -109,18 +149,19 @@ Type: text, required, placeholder "Public key from Delegate keys".
 
 ### 13. Short demo video (2 to 3 min) * — see note
 
-Type: text, required, placeholder "YouTube or other link". **Requires a public
-URL.**
+Type: **`url`** (required), placeholder "YouTube or other link". **Requires a
+public URL** — the browser rejects a non-URL value.
 > **Two ready options:**
-> - **Published (use this if you want zero extra work):**
+> - **Published, paste-ready now (zero extra work):**
 >   `https://github.com/itzebe/aftermath/releases/tag/demo-v2` — 2:36,
->   narrated, captioned, 1920×1080. Asset verified downloadable.
+>   narrated, captioned, 1920×1080. Asset verified downloadable (HTTP 200).
 > - **Final cut (recommended if you upload it):**
->   `artifacts/aftermath-final-demo.mp4` — 2:22, narrated, captioned,
->   1280×800, freshly recorded against current production. Upload to
->   YouTube (unlisted is fine) and paste the link.
+>   `artifacts/aftermath-final-demo.mp4` — 2:22 (142.32 s), narrated,
+>   captioned, 1280×800, H.264/AAC, sha256 `bd46de63…`. Upload to YouTube
+>   (unlisted is fine) and paste the link.
 >
-> See "Remaining actions" in `FINAL-REPORT.md` — uploading is an owner action.
+> Either satisfies the "2 to 3 min" requirement. See "Remaining actions" in
+> `FINAL-REPORT.md` — uploading is an owner action.
 
 ### 14. GitHub repo * — ready to paste
 

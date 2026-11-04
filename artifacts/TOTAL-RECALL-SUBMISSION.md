@@ -41,6 +41,17 @@ An incident report is incomplete if its findings cannot influence future
 verification. Recording a failure is the easy part; the hard part is making the
 recording matter to the next decision.
 
+## Inspiration
+
+The pattern repeats across operations: a production incident is investigated,
+written up, closed — and then happens again months later because the write-up
+never touched the next decision. The same shape appears in AI agents: an agent
+reports "done", the claim is accepted, and nothing checks it against an
+authoritative record. AFTERMATH started from a single question — *what if the
+lesson of a verified failure automatically strengthened how the next claim is
+checked?* — and from the discipline that answer demands: memory may raise
+suspicion, but only evidence may conclude.
+
 ## The solution
 
 AFTERMATH connects authoritative transaction evidence from **Tatum** with
