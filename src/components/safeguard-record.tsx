@@ -8,7 +8,7 @@ import type {
   SafeguardRecord,
   VerificationState,
 } from "@/lib/schemas";
-import { Pill, type Tone } from "@/components/ui";
+import { DecisionPill, Pill, type Tone } from "@/components/ui";
 
 /**
  * The Safeguard Record, rendered as one connected argument.
@@ -580,7 +580,9 @@ export function SafeguardRecordView({ record }: { record: SafeguardRecord }) {
             <span>extraction {investigation.extractionMethod}</span>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="label">Decision</span>
+          <DecisionPill decision={record.decision.decision} />
           <Pill tone={record.provenance === "live" ? "ok" : "warn"}>
             {record.provenance === "live" ? "memory live" : "memory simulated"}
           </Pill>
@@ -712,7 +714,8 @@ export function SafeguardRecordView({ record }: { record: SafeguardRecord }) {
             title="Safeguard"
             tone={recommendation.action === "BLOCK" ? "bad" : "warn"}
             state={
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="label">safeguard</span>
                 <Pill tone={recommendation.action === "BLOCK" ? "bad" : "warn"}>
                   {recommendation.action.replace(/_/g, " ")}
                 </Pill>

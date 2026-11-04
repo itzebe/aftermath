@@ -2,37 +2,49 @@
  {
   "id": "problem",
   "start": 0,
-  "end": 14.774,
-  "duration": 14.774
+  "end": 21.571,
+  "duration": 21.571
  },
  {
-  "id": "investigate",
-  "start": 14.775,
-  "end": 39.518,
-  "duration": 24.743
+  "id": "counterfactual",
+  "start": 21.572,
+  "end": 41.066,
+  "duration": 19.494
  },
  {
-  "id": "record",
-  "start": 39.519,
-  "end": 57.905,
-  "duration": 18.386
+  "id": "failed",
+  "start": 41.067,
+  "end": 57.26,
+  "duration": 16.193
  },
  {
-  "id": "walrus",
-  "start": 57.905,
-  "end": 75.587,
-  "duration": 17.682
+  "id": "succeeded",
+  "start": 57.261,
+  "end": 69.968,
+  "duration": 12.707
  },
  {
-  "id": "recall",
-  "start": 75.587,
-  "end": 104.834,
-  "duration": 29.247
+  "id": "unknown",
+  "start": 69.968,
+  "end": 83.692,
+  "duration": 13.724
+ },
+ {
+  "id": "persist",
+  "start": 83.692,
+  "end": 97.37,
+  "duration": 13.678
+ },
+ {
+  "id": "learning",
+  "start": 97.37,
+  "end": 122.382,
+  "duration": 25.012
  },
  {
   "id": "close",
-  "start": 104.834,
-  "end": 113.857,
-  "duration": 9.023
+  "start": 122.383,
+  "end": 136.231,
+  "duration": 13.848
  }
 ]

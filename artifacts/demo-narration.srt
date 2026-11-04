@@ -1,92 +1,116 @@
 1
-00:00:00,450 --> 00:00:03,422
-An investigation can find out why something failed.
+00:00:00,450 --> 00:00:02,103
+Every agent reports success.
 
 2
-00:00:03,422 --> 00:00:06,511
-But what happens when the same mistake happens again?
+00:00:02,103 --> 00:00:03,579
+Not every agent is right.
 
 3
-00:00:06,511 --> 00:00:13,155
-Most incident reports are read once, then filed away, and the lesson stays trapped inside the report it came from.
+00:00:03,579 --> 00:00:10,427
+An investigation can find out why something failed, but the lesson usually stays trapped in the report it came from.
 
 4
-00:00:13,155 --> 00:00:15,195
-AFTERMATH exists to close that gap.
+00:00:10,427 --> 00:00:21,998
+AFTERMATH is failure prevention that remembers: it turns incident evidence into a safeguard, verifies it, and preserves it on Walrus Memory so the next similar failure is recognised, not repeated.
 
 5
-00:00:15,225 --> 00:00:22,377
-This is the real, deployed product, and it is public: a visitor submits failure material with no account and no approval.
+00:00:22,022 --> 00:00:27,670
+This is the real, deployed product, and it is public: no account, no invitation, no approval.
 
 6
-00:00:22,377 --> 00:00:24,209
-I will use the built-in sample.
+00:00:27,670 --> 00:00:35,139
+The three samples make exactly one claim, that the transaction completed successfully, over three real Sui Mainnet digests.
 
 7
-00:00:24,209 --> 00:00:32,306
-A checkout service returned a 503, the charge status came back unknown, and an agent still reported the charge as completed successfully.
+00:00:35,139 --> 00:00:36,596
+Only the digest differs.
 
 8
-00:00:32,306 --> 00:00:39,931
-AFTERMATH parses the material strictly as data, never executes it, and grounds every fact in a verbatim span from the submission.
+00:00:36,596 --> 00:00:41,515
+So only one thing can change the verdict: what the Sui ledger says through Tatum.
 
 9
-00:00:39,969 --> 00:00:47,355
-The result is a Safeguard Record: evidence with its verbatim spans, a hypothesis with a confidence, and one proposed safeguard.
+00:00:41,517 --> 00:00:43,367
+First, the agent claims success.
 
 10
-00:00:47,355 --> 00:00:49,566
-Notice the evidence status is Unknown.
+00:00:43,367 --> 00:00:48,803
+AFTERMATH reads the digest on Sui Mainnet through Tatum, and Tatum reports a verified failure.
 
 11
-00:00:49,566 --> 00:00:55,614
-The material names no authoritative source, so AFTERMATH refuses to decide whether the charge succeeded.
+00:00:48,803 --> 00:00:50,596
+The success claim cannot stand.
 
 12
-00:00:55,614 --> 00:00:58,348
-That refusal is the product working, not a gap.
+00:00:50,596 --> 00:00:56,378
+The decision is block, and the evidence is grounded in the ledger rather than the agent's narration.
 
 13
-00:00:58,355 --> 00:01:05,401
-Verified safeguards are written to Walrus Memory on Mainnet, and a write counts as verified only when a recall query returns it.
+00:00:57,711 --> 00:01:00,809
+The same claim again, but this digest did succeed.
 
 14
-00:01:05,401 --> 00:01:16,025
-This ledger reads live from the relayer: one hundred eighty completed writes, one hundred seventy-seven recall-verified, zero simulated, and three hundred thirty-five memories in the namespace.
+00:01:00,809 --> 00:01:03,907
+Tatum confirms it, and AFTERMATH allows the claim.
 
 15
-00:01:16,037 --> 00:01:17,822
-Here is the moment that matters.
+00:01:03,907 --> 00:01:06,633
+Same words, same pipeline, opposite outcome.
 
 16
-00:01:17,822 --> 00:01:23,008
-A later investigation reports a build passing in continuous integration with no log attached.
+00:01:06,633 --> 00:01:10,412
+The verdict follows the authoritative source, not the report.
 
 17
-00:01:23,008 --> 00:01:31,317
-AFTERMATH recalls an applicable safeguard, then runs the decision engine twice over identical evidence: once with the memory held out, once enforced.
+00:01:10,418 --> 00:01:14,378
+A digest the node holds no record of is neither success nor failure.
 
 18
-00:01:31,317 --> 00:01:33,213
-The only difference is the memory.
+00:01:14,378 --> 00:01:15,950
+AFTERMATH refuses to guess.
 
 19
-00:01:33,213 --> 00:01:39,794
-The verdict is unchanged, but the memory adds two required verification checks the engine would not otherwise require.
+00:01:15,950 --> 00:01:21,715
+It returns require verification and states the uncertainty plainly, instead of inventing an answer.
 
 20
-00:01:39,794 --> 00:01:45,259
-Provenance shows the chain from that incident, to this Walrus blob, to these later investigations.
+00:01:24,142 --> 00:01:27,464
+Verified safeguards are written to Walrus Memory on Mainnet.
 
 21
-00:01:45,284 --> 00:01:48,361
-AFTERMATH does not merely remember that something happened.
+00:01:27,464 --> 00:01:36,379
+This ledger reads live from the relayer, and a write counts as stored only when a blob id comes back, and as recall-verified only when a recall query returns it.
 
 22
-00:01:48,361 --> 00:01:52,271
-It makes the next investigation check what the last one taught us to check.
+00:01:36,379 --> 00:01:37,819
+Nothing here is simulated.
 
 23
-00:01:52,271 --> 00:01:54,305
+00:01:37,820 --> 00:01:39,563
+Here is the moment that matters.
+
+24
+00:01:39,563 --> 00:01:49,098
+A safeguard learned from an unsupported completion claim was written to Walrus Memory, then recalled in four later investigations, where it added required verification checks.
+
+25
+00:01:49,098 --> 00:01:56,944
+The before and after are recorded honestly: the checks were strengthened, and AFTERMATH does not overclaim a verdict change that did not happen.
+
+26
+00:01:56,944 --> 00:02:02,828
+Provenance shows the chain from the incident, to the Walrus blob, to the later investigations it influenced.
+
+27
+00:02:02,833 --> 00:02:07,420
+AFTERMATH stays honest about what it knows, what it remembers, and what it changed.
+
+28
+00:02:07,420 --> 00:02:14,494
+It does not merely remember that something happened; it makes the next investigation check what the last one taught us to check.
+
+29
+00:02:14,494 --> 00:02:16,649
 Every failure should leave a safeguard.
 

@@ -86,7 +86,7 @@ async function showNode(index) {
 /** Submit the named sample on a fresh page and wait for the record. */
 async function investigate(sampleLabel) {
   await page.goto(BASE, { waitUntil: "domcontentloaded", timeout: 60000 });
-  await page.waitForTimeout(1200);
+  await page.waitForTimeout(900);
   await page.evaluate(() => {
     const e = document.querySelector("#investigate");
     if (e) e.scrollIntoView({ block: "start" });
@@ -97,7 +97,7 @@ async function investigate(sampleLabel) {
   await page.waitForTimeout(350);
   await page.getByRole("button", { name: "Investigate incident" }).click({ timeout: 15000 });
   await page.getByText("Investigation complete").first().waitFor({ timeout: 90000 });
-  await page.waitForTimeout(900);
+  await page.waitForTimeout(600);
 }
 
 t0 = Date.now();
@@ -114,27 +114,27 @@ await scene("counterfactual", async () => {
     if (e) e.scrollIntoView({ block: "start" });
     window.scrollBy(0, -90);
   });
-  await page.waitForTimeout(1200);
+  await page.waitForTimeout(700);
 }, dur("counterfactual"));
 
 await scene("failed", async () => {
   await investigate("Sui transaction: failed");
   await showNode(3);          // 04 Safeguard — BLOCK
-  await page.waitForTimeout(3600);
+  await page.waitForTimeout(1500);
   await showNode(1);          // 02 Evidence — VERIFIED_FAILURE
 }, dur("failed"));
 
 await scene("succeeded", async () => {
   await investigate("Sui transaction: succeeded");
   await showNode(3);          // 04 Safeguard — ALLOW
-  await page.waitForTimeout(3200);
+  await page.waitForTimeout(1500);
   await showNode(1);          // 02 Evidence — VERIFIED_SUCCESS
 }, dur("succeeded"));
 
 await scene("unknown", async () => {
   await investigate("Sui transaction: unknown");
   await showNode(3);          // 04 Safeguard — REQUIRE VERIFICATION
-  await page.waitForTimeout(3000);
+  await page.waitForTimeout(1500);
   await showNode(1);          // 02 Evidence — the honest unknown
 }, dur("unknown"));
 
