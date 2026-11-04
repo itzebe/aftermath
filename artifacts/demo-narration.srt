@@ -15,102 +15,102 @@ An investigation can find out why something failed, but the lesson usually stays
 AFTERMATH is failure prevention that remembers: it turns incident evidence into a safeguard, verifies it, and preserves it on Walrus Memory so the next similar failure is recognised, not repeated.
 
 5
-00:00:22,022 --> 00:00:27,670
+00:00:22,025 --> 00:00:27,673
 This is the real, deployed product, and it is public: no account, no invitation, no approval.
 
 6
-00:00:27,670 --> 00:00:35,139
+00:00:27,673 --> 00:00:35,142
 The three samples make exactly one claim, that the transaction completed successfully, over three real Sui Mainnet digests.
 
 7
-00:00:35,139 --> 00:00:36,596
+00:00:35,142 --> 00:00:36,599
 Only the digest differs.
 
 8
-00:00:36,596 --> 00:00:41,515
+00:00:36,599 --> 00:00:41,518
 So only one thing can change the verdict: what the Sui ledger says through Tatum.
 
 9
-00:00:41,517 --> 00:00:43,367
+00:00:41,523 --> 00:00:43,373
 First, the agent claims success.
 
 10
-00:00:43,367 --> 00:00:48,803
+00:00:43,373 --> 00:00:48,809
 AFTERMATH reads the digest on Sui Mainnet through Tatum, and Tatum reports a verified failure.
 
 11
-00:00:48,803 --> 00:00:50,596
+00:00:48,809 --> 00:00:50,602
 The success claim cannot stand.
 
 12
-00:00:50,596 --> 00:00:56,378
+00:00:50,602 --> 00:00:56,384
 The decision is block, and the evidence is grounded in the ledger rather than the agent's narration.
 
 13
-00:00:57,711 --> 00:01:00,809
+00:01:01,493 --> 00:01:04,591
 The same claim again, but this digest did succeed.
 
 14
-00:01:00,809 --> 00:01:03,907
+00:01:04,591 --> 00:01:07,689
 Tatum confirms it, and AFTERMATH allows the claim.
 
 15
-00:01:03,907 --> 00:01:06,633
+00:01:07,689 --> 00:01:10,415
 Same words, same pipeline, opposite outcome.
 
 16
-00:01:06,633 --> 00:01:10,412
+00:01:10,415 --> 00:01:14,194
 The verdict follows the authoritative source, not the report.
 
 17
-00:01:10,418 --> 00:01:14,378
+00:01:18,319 --> 00:01:22,279
 A digest the node holds no record of is neither success nor failure.
 
 18
-00:01:14,378 --> 00:01:15,950
+00:01:22,279 --> 00:01:23,851
 AFTERMATH refuses to guess.
 
 19
-00:01:15,950 --> 00:01:21,715
+00:01:23,851 --> 00:01:29,616
 It returns require verification and states the uncertainty plainly, instead of inventing an answer.
 
 20
-00:01:24,142 --> 00:01:27,464
+00:01:32,102 --> 00:01:35,424
 Verified safeguards are written to Walrus Memory on Mainnet.
 
 21
-00:01:27,464 --> 00:01:36,379
+00:01:35,424 --> 00:01:44,339
 This ledger reads live from the relayer, and a write counts as stored only when a blob id comes back, and as recall-verified only when a recall query returns it.
 
 22
-00:01:36,379 --> 00:01:37,819
+00:01:44,339 --> 00:01:45,779
 Nothing here is simulated.
 
 23
-00:01:37,820 --> 00:01:39,563
+00:01:45,780 --> 00:01:47,523
 Here is the moment that matters.
 
 24
-00:01:39,563 --> 00:01:49,098
+00:01:47,523 --> 00:01:57,058
 A safeguard learned from an unsupported completion claim was written to Walrus Memory, then recalled in four later investigations, where it added required verification checks.
 
 25
-00:01:49,098 --> 00:01:56,944
+00:01:57,058 --> 00:02:04,904
 The before and after are recorded honestly: the checks were strengthened, and AFTERMATH does not overclaim a verdict change that did not happen.
 
 26
-00:01:56,944 --> 00:02:02,828
+00:02:04,904 --> 00:02:10,788
 Provenance shows the chain from the incident, to the Walrus blob, to the later investigations it influenced.
 
 27
-00:02:02,833 --> 00:02:07,420
+00:02:10,791 --> 00:02:15,378
 AFTERMATH stays honest about what it knows, what it remembers, and what it changed.
 
 28
-00:02:07,420 --> 00:02:14,494
+00:02:15,378 --> 00:02:22,452
 It does not merely remember that something happened; it makes the next investigation check what the last one taught us to check.
 
 29
-00:02:14,494 --> 00:02:16,649
+00:02:22,452 --> 00:02:24,607
 Every failure should leave a safeguard.
 

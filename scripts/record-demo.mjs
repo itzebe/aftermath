@@ -74,6 +74,15 @@ async function scene(id, fn, minSeconds) {
   console.log(`${id}: ${(now() - start).toFixed(1)}s (narration ${(minSeconds ?? 0).toFixed(1)}s)`);
 }
 
+/** Scroll the record header — where the decision is shown — to the top. */
+async function showRecordTop() {
+  await page.evaluate(() => {
+    const a = document.querySelector("article");
+    if (a) a.scrollIntoView({ block: "start" });
+    window.scrollBy(0, -120);
+  });
+}
+
 /** Scroll a spine node (evidence/safeguard/verification/memory) to the top. */
 async function showNode(index) {
   await page.evaluate((i) => {
@@ -119,22 +128,22 @@ await scene("counterfactual", async () => {
 
 await scene("failed", async () => {
   await investigate("Sui transaction: failed");
-  await showNode(3);          // 04 Safeguard — BLOCK
-  await page.waitForTimeout(1500);
+  await showRecordTop();      // header — DECISION BLOCK
+  await page.waitForTimeout(3200);
   await showNode(1);          // 02 Evidence — VERIFIED_FAILURE
 }, dur("failed"));
 
 await scene("succeeded", async () => {
   await investigate("Sui transaction: succeeded");
-  await showNode(3);          // 04 Safeguard — ALLOW
-  await page.waitForTimeout(1500);
+  await showRecordTop();      // header — DECISION ALLOW
+  await page.waitForTimeout(3200);
   await showNode(1);          // 02 Evidence — VERIFIED_SUCCESS
 }, dur("succeeded"));
 
 await scene("unknown", async () => {
   await investigate("Sui transaction: unknown");
-  await showNode(3);          // 04 Safeguard — REQUIRE VERIFICATION
-  await page.waitForTimeout(1500);
+  await showRecordTop();      // header — DECISION REQUIRE VERIFICATION
+  await page.waitForTimeout(3200);
   await showNode(1);          // 02 Evidence — the honest unknown
 }, dur("unknown"));
 
