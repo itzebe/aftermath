@@ -43,13 +43,15 @@ the static page is built and deployed.
 
 ## Demo video
 
-A 2:12 walkthrough recorded from the live production deployment (captioned,
-1920×1080): the incident-first workflow, a real Safeguard Record with its
-evidence and additive AI reading, the Walrus Memory ledger, and the evaluation
-lab's learning loop.
+A 2:36 narrated walkthrough recorded from the live production deployment
+(captioned, 1920×1080): the incident-first workflow, a real Safeguard Record with
+its evidence and additive AI reading, the Walrus Memory ledger, and the
+evaluation lab's learning loop.
 
-**[Watch the demo](https://github.com/itzebe/aftermath/releases/tag/demo-v1)** —
-direct file: <https://github.com/itzebe/aftermath/releases/download/demo-v1/aftermath-hackathon-demo.mp4>.
+**[Watch the demo](https://github.com/itzebe/aftermath/releases/tag/demo-v2)** —
+direct file: <https://github.com/itzebe/aftermath/releases/download/demo-v2/aftermath-demo-v2.mp4>.
+A 2:22 final cut recorded against the current production is in
+`artifacts/aftermath-final-demo.mp4` (captioned; not yet uploaded).
 Storyboard, narration, and captions: [`docs/DEMO.md`](docs/DEMO.md),
 [`docs/DEMO-narration.md`](docs/DEMO-narration.md), [`docs/DEMO.srt`](docs/DEMO.srt).
 

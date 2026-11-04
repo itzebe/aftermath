@@ -1,0 +1,103 @@
+{
+    "artifact": "Total Recall submission finalization \u2014 verification snapshot",
+    "capturedAt": "2026-11-04T08:48:38Z",
+    "mission": "AFTERMATH \u2014 Total Recall official submission finalization",
+    "production": {
+        "url": "https://aftermath-7tij.vercel.app",
+        "alias": "aftermath-7tij.vercel.app",
+        "project": "aftermath-7tij (prj_GWK9nkfkYHm269zFh7zLCjpEYiO5)",
+        "branch": "master",
+        "verifiedHeadCommit": "8e2dfc0eb649ccd8b68d1975a0f207040e41fcd5",
+        "appCommitVerifiedEndToEnd": "8d499fb06a24cb30dc2524b5920df4085ee26905",
+        "productionDeployment": "dpl_2TGyN2JTKe6u3hQm2dMrjrhYyd75",
+        "deploymentReadyState": "READY",
+        "target": "production"
+    },
+    "liveCounts": {
+        "incidents": 29,
+        "verifiedFailures": 6,
+        "activeRules": 3,
+        "unresolved": 20,
+        "completedLiveWrites": 196,
+        "recallVerifiedWrites": 193,
+        "simulatedWrites": 0,
+        "totalWrites": 229,
+        "records": 23
+    },
+    "walrusMemory": {
+        "state": "MAINNET_AUTH_CONFIRMED",
+        "authenticated": true,
+        "namespace": "aftermath",
+        "namespaceMemoryCount": 351,
+        "relayer": "https://relayer.memory.walrus.xyz",
+        "network": "mainnet"
+    },
+    "tatum": {
+        "grpcUrl": "https://sui-mainnet-grpc.gateway.tatum.io",
+        "graphqlUrl": "https://sui-mainnet.gateway.tatum.io/graphql",
+        "healthy": true,
+        "chainIdentifier": "4btiuiMPvEENsttpZC7CZ53DruC3MAgfznDbASZ7DR6S"
+    },
+    "persistence": {
+        "backend": "postgres",
+        "durable": true
+    },
+    "publicSubmission": {
+        "available": true,
+        "anonymousSubmitWithValidBody": 200,
+        "anonymousSubmitEmptyBody": 400,
+        "anonymousSubmitOversizeBody": 413,
+        "rateLimit": {
+            "cap": "5/minute/client",
+            "observedFirst429AtRequest": 4,
+            "retryAfterHeader": true,
+            "retryAfterSeconds": 32,
+            "xRateLimitDegraded": false
+        },
+        "idempotency": "resubmitting the existing sample returns record d820a66b... with no new Mainnet write (counts unchanged at 196/193)"
+    },
+    "independentTatumCrossCheck": [
+        {
+            "digest": "GHAuBeydSov1zyT6sUKS2cFxWtNWkeamtKANsHwZJHve",
+            "transactionEffects.status": "SUCCESS",
+            "appVerdict": "VERIFIED_SUCCESS -> ALLOW"
+        },
+        {
+            "digest": "A9iiTMAxi5BY2uwxu4HnuonfF6A4hhGbaCK8HfTFK26x",
+            "transactionEffects.status": "FAILURE",
+            "appVerdict": "VERIFIED_FAILURE -> BLOCK"
+        },
+        {
+            "digest": "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM",
+            "transactionEffects.status": null,
+            "appVerdict": "UNKNOWN -> REQUIRE_VERIFICATION"
+        }
+    ],
+    "verificationGates": {
+        "npx tsc --noEmit": "PASS",
+        "npm run lint": "PASS",
+        "npm run build": "PASS",
+        "npm test (AFTERMATH_TEST_DATABASE_URL set)": "PASS 631 passed, 12 skipped",
+        "npm run test:e2e": "PASS 18 passed, 0 failed",
+        "npm run verify:prod": "PASS 28/28 anonymously"
+    },
+    "mediumPublication": {
+        "url": "https://medium.com/@jonathanebi05/aftermath-every-failure-should-leave-a-safeguard-25446fdbcd71",
+        "status": "published and public (present in author RSS feed https://medium.com/feed/@jonathanebi05); article URL returns 403 to automated clients (bot protection)",
+        "githubPagesMirror": "https://itzebe.github.io/aftermath/ HTTP 200"
+    },
+    "demoVideo": {
+        "finalCut": "artifacts/aftermath-final-demo.mp4",
+        "durationSeconds": 142.32,
+        "resolution": "1280x800",
+        "videoCodec": "h264 High yuv420p 25fps",
+        "audioCodec": "aac LC 44100Hz stereo",
+        "sha256": "bd46de635ce2cd5eda0eef0c9cde8042571d8708f0442aac8e1c81ccc019a5b1",
+        "publishedFallback": "https://github.com/itzebe/aftermath/releases/tag/demo-v2 (156.60s, 1920x1080)"
+    },
+    "honestyNotes": [
+        "demonstratedRepeatPreventions = 0; unchanged",
+        "6 investigations influenced added verification checks; no verdict was flipped by memory",
+        "no new Mainnet write was created by this mission"
+    ]
+}

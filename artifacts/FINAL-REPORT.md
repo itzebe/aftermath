@@ -4,6 +4,19 @@
 **Production project:** `aftermath-7tij` — <https://aftermath-7tij.vercel.app/>
 **Repository:** <https://github.com/itzebe/aftermath> (branch `master`)
 
+> **Submission-finalization addendum (2026-11-04).** This mission added the
+> polished submission package and re-verified every claim against live sources:
+> [`TOTAL-RECALL-SUBMISSION.md`](TOTAL-RECALL-SUBMISSION.md) (polished copy),
+> [`TOTAL-RECALL-FORM-ANSWERS.md`](TOTAL-RECALL-FORM-ANSWERS.md) (field-by-field
+> form copy, inspected against the live form), and
+> [`TOTAL-RECALL-EVIDENCE.md`](TOTAL-RECALL-EVIDENCE.md) (claim-to-evidence
+> index). Two findings changed this report: (1) the **Medium article is confirmed
+> published** — it appears in the author's public RSS feed, so the earlier "not
+> re-verified" limitation is resolved; (2) the three-digest Tatum counterfactual
+> was **independently re-confirmed** from the shell against Tatum's public Sui
+> Mainnet GraphQL gateway. No application code changed. No new Mainnet write was
+> made. Nothing was published or submitted.
+
 ---
 
 ## A. Verified repository and deployment baseline
@@ -434,9 +447,16 @@ final links.
    administrator-only, so the recall check now falls back to the public learning
    surface when no admin token is present. All 28 checks pass with no credential
    (fixed this mission; previously 27/28 without the token).
-3. **Medium article not re-verified.** Medium blocks this environment's IP
-   (HTTP 403). The URL is provided by the operator; it is neither confirmed nor
-   contradicted here.
+3. **Medium article — now confirmed published (resolved 2026-11-04).** Medium
+   blocks this environment's IP (HTTP 403 to automated clients), but the article
+   appears in the author's **public RSS feed**
+   (`https://medium.com/feed/@jonathanebi05`), title "AFTERMATH — Every failure
+   should leave a safeguard". That confirms it is live and public; the 403 is
+   bot protection, not unpublished. The GitHub Pages mirror
+   (<https://itzebe.github.io/aftermath/>) also returns HTTP 200. **One residual
+   item:** the article body states an earlier operator-instance count (51
+   completed writes); the current figure is 196. Editing the Medium post is an
+   owner action — see "Remaining actions".
 4. **Zero demonstrated repeat preventions.** Reported as zero rather than
    dramatised. The two "repeat" scenarios in the evaluation lab demonstrate
    prevention inside the controlled harness; no independently observed
@@ -528,3 +548,51 @@ Confirmed explicitly:
 - **Nothing was published or submitted without authorization** — true. Nothing
   was posted to Devpost; the demo video was not uploaded or published. The
   Devpost copy is a local draft awaiting the operator's explicit go-ahead.
+
+---
+
+## N. Submission-finalization status (2026-11-04)
+
+| Deliverable | Path | State |
+| --- | --- | --- |
+| Polished submission copy | `artifacts/TOTAL-RECALL-SUBMISSION.md` | Ready |
+| Official form, field by field | `artifacts/TOTAL-RECALL-FORM-ANSWERS.md` | Ready (20 controls; owner-only fields flagged) |
+| Claim-to-evidence index | `artifacts/TOTAL-RECALL-EVIDENCE.md` | Ready |
+| Live evidence snapshot | `artifacts/evidence/2026-11-04-*.json` | Refreshed from production |
+| Devpost copy (legacy) | `artifacts/DEVPOST-SUBMISSION.md` | Present |
+| Final report (this file) | `artifacts/FINAL-REPORT.md` | Updated |
+
+### Remaining actions (owner only)
+
+1. **Upload the demo video** and paste a public URL into form field 13. The final
+   cut `artifacts/aftermath-final-demo.mp4` (2:22) is not hosted; the published
+   `demo-v2` (2:36) is a valid fallback. Uploading is an owner action because the
+   mission forbids publishing it.
+2. **Supply the owner-held identity fields** (form fields 1–5, 7–11): email,
+   Discord, LinkedIn, Telegram, how-heard, first-Web3, Tatum ID, SUI address,
+   Account ID (SUI), `MEMWAL_AGENT_ID`. None of these are in the repository.
+3. **Optional Medium edit**: update the article's operator-instance count from 51
+   to the current 196 (and the recall-verified figure to 193), or add a dated
+   note. The article is otherwise accurate.
+4. **Optional social post** (form field 19) for the explicitly scored bonus:
+   share on X or LinkedIn, tagging `@Tatum_io` and `@WalrusFoundation`.
+5. **Optional duplicate-project cleanup**: `aftermath`
+   (`aftermath-theta.vercel.app`) is a redundant public URL on the same repo.
+   Not deleted per mission rules; see the cleanup recommendation in
+   `artifacts/evidence/2026-11-04-duplicate-vercel-project.md`.
+
+### Verification gates run this mission
+
+| Gate | Result |
+| --- | --- |
+| `npx tsc --noEmit` | **PASS** |
+| `npm run lint` | **PASS** |
+| `npm run build` | **PASS** |
+| `npm test` (vitest) | **PASS** — 631 passed, 12 skipped |
+| `npm run test:e2e` (playwright) | **PASS** — 18 passed, 0 failed |
+| `npm run verify:prod` | **PASS** — 28/28 anonymously |
+| Live production endpoints | **PASS** — all public routes HTTP 200 |
+| Admin endpoints (no token) | **PASS** — 401 (protected) |
+| Independent Tatum cross-check | **PASS** — 3/3 digests match |
+| Medium publication | **PASS** — present in public RSS feed |
+| Demo container integrity | **PASS** — 2:22, H.264/AAC, sha256 `bd46de63…` |
