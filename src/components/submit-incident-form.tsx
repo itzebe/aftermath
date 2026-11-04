@@ -167,10 +167,8 @@ export function SubmitIncidentForm({
                     className="link-quiet mono inline-flex min-h-6 items-center text-[0.75rem]"
                     onClick={() => {
                       setText(s.text);
-                      if (s.service !== undefined) setService(s.service);
-                      if (s.expectedBehavior !== undefined) {
-                        setExpected(s.expectedBehavior);
-                      }
+                      setService(s.service ?? "");
+                      setExpected(s.expectedBehavior ?? "");
                       if (s.service !== undefined || s.expectedBehavior !== undefined) {
                         setAdvanced(true);
                       }

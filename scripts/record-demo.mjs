@@ -7,6 +7,11 @@
  * synthesized audio track lines up; scene boundaries are written to
  * artifacts/demo-audio/scene-log.json for the audio builder.
  *
+ * The centrepiece is the Tatum counterfactual: one claim over three real Sui
+ * Mainnet digests, yielding ALLOW, BLOCK and REQUIRE_VERIFICATION. Every
+ * digest is a genuine Mainnet transaction and each sample reproduces a record
+ * that already exists, so the run spends no new Mainnet writes.
+ *
  *   node scripts/record-demo.mjs
  */
 import { chromium } from "playwright";
@@ -31,7 +36,7 @@ p{margin:24px 0 0;font-size:20px;color:#b6c0cf;max-width:940px;line-height:1.55}
 </style></head><body><div class="wrap">
 <div class="k">Total Recall &middot; Tatum &times; Walrus</div>
 <h1>AFTERMATH</h1>
-<div class="q">An investigation can find out why something failed. But what happens when the same mistake happens again?</div>
+<div class="q">Every agent reports success. Not every agent is right.</div>
 <p>Every failure should leave a safeguard.</p>
 <div class="t">Recorded live from aftermath-7tij.vercel.app</div>
 </div></body></html>`;
@@ -50,8 +55,8 @@ p{margin:22px 0 0;font-size:20px;color:#b6c0cf;max-width:900px;line-height:1.55}
 
 const browser = await chromium.launch();
 const ctx = await browser.newContext({
-  viewport: { width: 1280, height: 800 },
-  recordVideo: { dir: OUT, size: { width: 1280, height: 800 } },
+  viewport: { width: 1600, height: 1000 },
+  recordVideo: { dir: OUT, size: { width: 1600, height: 1000 } },
   deviceScaleFactor: 1,
 });
 const page = await ctx.newPage();
@@ -69,51 +74,89 @@ async function scene(id, fn, minSeconds) {
   console.log(`${id}: ${(now() - start).toFixed(1)}s (narration ${(minSeconds ?? 0).toFixed(1)}s)`);
 }
 
+/** Scroll a spine node (evidence/safeguard/verification/memory) to the top. */
+async function showNode(index) {
+  await page.evaluate((i) => {
+    const n = document.querySelectorAll("li.spine-node")[i];
+    if (n) n.scrollIntoView({ block: "start" });
+    window.scrollBy(0, -140);
+  }, index);
+}
+
+/** Submit the named sample on a fresh page and wait for the record. */
+async function investigate(sampleLabel) {
+  await page.goto(BASE, { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForTimeout(1200);
+  await page.evaluate(() => {
+    const e = document.querySelector("#investigate");
+    if (e) e.scrollIntoView({ block: "start" });
+    window.scrollBy(0, -90);
+  });
+  await page.waitForTimeout(500);
+  await page.getByRole("button", { name: sampleLabel }).click({ timeout: 15000 });
+  await page.waitForTimeout(350);
+  await page.getByRole("button", { name: "Investigate incident" }).click({ timeout: 15000 });
+  await page.getByText("Investigation complete").first().waitFor({ timeout: 90000 });
+  await page.waitForTimeout(900);
+}
+
 t0 = Date.now();
 
 await scene("problem", async () => {
   await page.goto("data:text/html;charset=utf-8," + encodeURIComponent(TITLE_HTML), { waitUntil: "load" });
 }, dur("problem"));
 
-await scene("investigate", async () => {
+await scene("counterfactual", async () => {
   await page.goto(BASE, { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForTimeout(1400);
+  await page.evaluate(() => {
+    const e = document.querySelector("#investigate");
+    if (e) e.scrollIntoView({ block: "start" });
+    window.scrollBy(0, -90);
+  });
   await page.waitForTimeout(1200);
-  await page.evaluate(() => window.scrollTo(0, 880));
-  await page.waitForTimeout(900);
-  await page.getByRole("button", { name: "Use a sample incident" }).click({ timeout: 15000 });
-  await page.waitForTimeout(900);
-  await page.getByRole("button", { name: "Investigate incident" }).click({ timeout: 15000 });
-  await page.getByText("Investigation complete").first().waitFor({ timeout: 90000 });
-  await page.waitForTimeout(800);
-}, dur("investigate"));
+}, dur("counterfactual"));
 
-await scene("record", async () => {
-  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight * 0.30));
-  await page.waitForTimeout(5200);
-  await page.evaluate(() => window.scrollBy(0, 760));
-  await page.waitForTimeout(5600);
-  await page.evaluate(() => window.scrollBy(0, 760));
-}, dur("record"));
+await scene("failed", async () => {
+  await investigate("Sui transaction: failed");
+  await showNode(3);          // 04 Safeguard — BLOCK
+  await page.waitForTimeout(3600);
+  await showNode(1);          // 02 Evidence — VERIFIED_FAILURE
+}, dur("failed"));
 
-await scene("walrus", async () => {
-  await page.getByRole("button", { name: "System" }).first().click({ timeout: 15000 });
-  await page.waitForTimeout(700);
-  await page.getByRole("link", { name: "Memory Ledger" }).first().click({ timeout: 15000 });
+await scene("succeeded", async () => {
+  await investigate("Sui transaction: succeeded");
+  await showNode(3);          // 04 Safeguard — ALLOW
   await page.waitForTimeout(3200);
-  await page.evaluate(() => window.scrollBy(0, 460));
-}, dur("walrus"));
+  await showNode(1);          // 02 Evidence — VERIFIED_SUCCESS
+}, dur("succeeded"));
 
-await scene("recall", async () => {
-  await page.getByRole("button", { name: "System" }).first().click({ timeout: 15000 }).catch(() => {});
-  await page.waitForTimeout(600);
-  await page.getByRole("link", { name: "Learning Loop" }).first().click({ timeout: 15000 });
-  await page.waitForTimeout(1800);
-  await page.evaluate(() => { const e = document.querySelector("#behaviour"); if (e) e.scrollIntoView(); });
-  await page.waitForTimeout(11000);
-  await page.evaluate(() => window.scrollBy(0, 700));
-  await page.waitForTimeout(7000);
-  await page.evaluate(() => { const e = document.querySelector("#provenance"); if (e) e.scrollIntoView(); });
-}, dur("recall"));
+await scene("unknown", async () => {
+  await investigate("Sui transaction: unknown");
+  await showNode(3);          // 04 Safeguard — REQUIRE VERIFICATION
+  await page.waitForTimeout(3000);
+  await showNode(1);          // 02 Evidence — the honest unknown
+}, dur("unknown"));
+
+await scene("persist", async () => {
+  await page.goto(BASE + "/memory", { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForTimeout(3200);
+  await page.evaluate(() => window.scrollBy(0, 380));
+}, dur("persist"));
+
+await scene("learning", async () => {
+  await page.goto(BASE + "/learning", { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.waitForTimeout(2800);
+  await page.evaluate(() => {
+    const e = document.querySelector("#behaviour");
+    if (e) e.scrollIntoView();
+  });
+  await page.waitForTimeout(Math.max(1500, dur("learning") * 1000 - 9000));
+  await page.evaluate(() => {
+    const e = document.querySelector("#provenance");
+    if (e) e.scrollIntoView();
+  });
+}, dur("learning"));
 
 await scene("close", async () => {
   await page.goto("data:text/html;charset=utf-8," + encodeURIComponent(END_HTML), { waitUntil: "load" });

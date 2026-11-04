@@ -56,7 +56,6 @@ export const SUBMISSION_SAMPLES: SubmissionSample[] = [
   {
     label: "Sui transaction: unknown",
     text: SUI_UNKNOWN_SAMPLE,
-    service: "settlement-agent",
   },
   { label: "Use a sample incident", text: INCIDENT_SAMPLE },
 ];
