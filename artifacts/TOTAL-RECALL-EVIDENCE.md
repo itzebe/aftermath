@@ -38,7 +38,7 @@ Legend: **VERIFIED** = independently re-checked in this mission;
 | Lint | `npm run lint` | PASS (exit 0) |
 | Build | `npm run build` | PASS |
 | Unit + integration | `npm test` | **631 passed, 12 skipped** (skips = opt-in live-smoke; never counted as passes) |
-| Browser / E2E | `npm run test:e2e` | **18 passed, 0 failed** |
+| Browser / E2E | `npm run test:e2e` | **19 passed, 0 failed** |
 | Production checks | `npm run verify:prod` | **28/28 anonymously** |
 
 Targeted suites backing the Tatum/Walrus claims:
@@ -94,7 +94,7 @@ Evidence: `artifacts/evidence/2026-11-03-tatum-live-evidence.json`,
 | Claim | Evidence |
 | --- | --- |
 | Production serves the reviewed application | deployment READY; alias `aftermath-7tij.vercel.app` → newest production deployment |
-| Deployment status | `dpl_2TGyN2JTKe6u3hQm2dMrjrhYyd75` (commit `8e2dfc0`, READY, target production) |
+| Deployment status | `dpl_cUKufrKdvnga8B1P1heatzbbcVPf` (commit `2159d5d220`, READY, target production) |
 | Durable index | `GET /api/config` → `persistence.backend = postgres`, `durable: true` (Neon) |
 | Anonymous submission reaches the pipeline | `artifacts/evidence/2026-11-04-public-journey.json`, `2026-11-03-public-journey-submit.json` |
 

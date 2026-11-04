@@ -10,12 +10,18 @@
 > [`TOTAL-RECALL-FORM-ANSWERS.md`](TOTAL-RECALL-FORM-ANSWERS.md) (field-by-field
 > form copy, inspected against the live form), and
 > [`TOTAL-RECALL-EVIDENCE.md`](TOTAL-RECALL-EVIDENCE.md) (claim-to-evidence
-> index). Two findings changed this report: (1) the **Medium article is confirmed
-> published** — it appears in the author's public RSS feed, so the earlier "not
-> re-verified" limitation is resolved; (2) the three-digest Tatum counterfactual
-> was **independently re-confirmed** from the shell against Tatum's public Sui
-> Mainnet GraphQL gateway. No application code changed. No new Mainnet write was
-> made. Nothing was published or submitted.
+> index). Findings that changed this report: (1) the **Medium article is
+> confirmed published** — it appears in the author's public RSS feed, so the
+> earlier "not re-verified" limitation is resolved; (2) the three-digest Tatum
+> counterfactual was **independently re-confirmed** from the shell against
+> Tatum's public Sui Mainnet GraphQL gateway; (3) a real **mobile defect** was
+> found and fixed — the incident decision trace overflowed a 390px viewport by
+> 51px on an unbreakable memory id (PR #30). The fix is merged and deployed:
+> production now serves **`2159d5d220`** (`dpl_cUKufrKdvnga8B1P1heatzbbcVPf`,
+> READY). Re-verified on the live deployment: 0px overflow and 0 blocking axe
+> violations on all eight public routes, `verify:prod` 28/28 anonymously,
+> anonymous submission HTTP 200 with no new Mainnet write. No new Mainnet write
+> was made by this mission. Nothing was published or submitted.
 
 ---
 
@@ -32,20 +38,20 @@
 | Tatum-mission change | PR #24 → merge `b8ce867982a527d54f7bd89e13690eb7f087ba59` (`feat(tatum): make the on-chain evidence path discoverable` — labelled Sui/incident samples on the public front door and operator console; shared `src/lib/samples.ts`; DOM + E2E regression tests) |
 | Earlier doc/audit merges | PR #25 `f6d3c11771`, #26 `510b471e2e`, #27 `9f8dd843c5`, #28 `354d6ed60f`, #29 `f186b65bfb` |
 | This mission's application changes | PR-less direct commits `7d0daff` (`feat(record): surface the engine decision beside the safeguard`), `911fa18` (`test(verify): fall back to public recall evidence when no admin token`), `8d499fb` (`fix(record): label memory from the actual writes, not just the lesson`) |
-| Latest verified `master` | `8d499fb06a24cb30dc2524b5920df4085ee26905` (this mission) |
+| Submission-finalization fix | PR #30 → squash merge `2159d5d220fb8236cbca713906480a49976f8bf4` (`fix(incidents): stop the decision trace overflowing on mobile` — `min-w-0 break-words` on the trace flex child; new mobile-overflow E2E guard) |
+| Latest verified `master` | `2159d5d220fb8236cbca713906480a49976f8bf4` |
 | Prior baseline reviewed | `182bef4c` (PR #17) |
 | Vercel project | `aftermath-7tij` — `prj_GWK9nkfkYHm269zFh7zLCjpEYiO5` |
-| Production deployment (application) | `dpl_HcpyrnPF7P8L4QbjyzpKamxcvPyw`, READY, application commit `8d499fb06a`, target `production` |
+| Production deployment (application) | `dpl_cUKufrKdvnga8B1P1heatzbbcVPf`, READY, application commit `2159d5d220`, target `production` |
 | Production alias | `aftermath-7tij.vercel.app` → the newest READY production deployment on `master` (documentation-only commits advance the SHA without changing application behaviour) |
 
 
 Confirmed by the Vercel API and by the deployed app, not assumed. The
-application commit verified end to end **this mission** is `8d499fb06a`.
-Documentation-only commits made after the verification advance the deployment
-SHA (e.g. `0ff55a9`) without changing application-runtime behaviour; the
-application baseline stays `8d499fb06a`. It
-carries three focused changes on top of the previous verified baseline
-`b8ce867` (PR #24):
+application commit verified end to end **this mission** is `2159d5d220`
+(PR #30). The earlier baseline `8d499fb06a` is superseded; documentation-only
+commits advance the deployment SHA without changing application-runtime
+behaviour. The verified baseline carries three focused changes on top of the
+previous verified baseline `b8ce867` (PR #24):
 
 1. `7d0daff` — surface the engine **decision** (ALLOW / BLOCK /
    REQUIRE_VERIFICATION) beside the safeguard in the record header; previously
@@ -57,10 +63,13 @@ carries three focused changes on top of the previous verified baseline
    the lesson alone, so a successful investigation with nothing to learn no
    longer reads as if nothing was persisted.
 
-All three were verified end to end this mission (typecheck, lint, build, 18 E2E,
+All three were verified end to end this mission (typecheck, lint, build, E2E,
 631 vitest, 28/28 production checks, and a live anonymous journey). The
 SC 2.5.8 target-size fix from the earlier baseline remains confirmed live: the
 `/learning` record links measure 93×24 px on production (they were 63×14 px).
+The submission-finalization fix (`2159d5d220`) adds `min-w-0 break-words` to the
+incident decision-trace flex child and a mobile-overflow E2E guard; verified
+live at 0px overflow on all eight public routes.
 
 ---
 
@@ -111,8 +120,13 @@ token, and the fail-closed defaults. No new dependency.
   `dpl_HcpyrnPF7P8L4QbjyzpKamxcvPyw` (READY). Documentation-sync commits made
   after the verification (e.g. `0ff55a9`) are deployed to the same project and
   advance the alias, but they change only `artifacts/` and `docs/` — no
-  application-runtime code. The application baseline verified end to end is
-  `8d499fb06a`, and it is the code the alias serves.
+  application-runtime code.
+- **Superseding deployment (2026-11-04, this mission).** PR #30
+  (squash commit `2159d5d220fb8236cbca713906480a49976f8bf4`) fixed a mobile
+  overflow in the incident decision trace and merged to `master`. Production
+  built and served it as `dpl_cUKufrKdvnga8B1P1heatzbbcVPf` (READY, commit
+  `2159d5d220`). This is now the application baseline the alias serves; the
+  regression and accessibility checks below were re-run against it and pass.
 - No deploy from a feature branch; no stale-code merge.
 
 ---
@@ -179,7 +193,7 @@ pass without any credential.
 | `eslint src tests scripts e2e` | pass (exit 0) |
 | `next build` | pass |
 | `vitest run` (local PostgreSQL 17 reachable) | **631 passed, 12 skipped** (the 12 skips are the opt-in live-smoke suite) |
-| `playwright test` | **18 passed, 0 failed** (17 before this mission; +1 for the Sui-sample E2E) |
+| `playwright test` | **19 passed, 0 failed** (18 before this mission; +1 mobile-overflow guard) |
 | `verify:prod` | **28/28** anonymously (confirmed again 2026-11-04 for this mission) |
 
 **Environment note (this mission).** This mission provisioned a local PostgreSQL
@@ -188,11 +202,9 @@ and `AFTERMATH_TEST_DATABASE_URL`, so the DB-gated suites ran rather than skippe
 **631 passed, 12 skipped**. The only skips are the opt-in live-smoke suite
 (`AFTERMATH_LIVE_SMOKE=1`). Without a database the same command reports **603
 passed, 40 skipped**, and the DB-gated suites are reported as **skipped**, never as
-passing. The operator's own environment (with `AFTERMATH_TEST_DATABASE_URL` set)
-reports **620 passed, 12 skipped**; that number is not reproduced here and is not
-claimed.
+passing.
 
-The 12 skipped unit tests in the operator's environment are the live-smoke suite
+The 12 skipped unit tests are the live-smoke suite
 (`tests/live-smoke.test.ts`), skipped because `AFTERMATH_LIVE_SMOKE` and the live
 credentials are not exported there. They are reported as **skipped**, never as
 passing.
@@ -215,7 +227,7 @@ environment. Two defects:
    before the file is opened (deleting under a running server would leave it on
    the old inode).
 
-Verified: three consecutive `npm run test:e2e` runs each report **18 passed, 0
+Verified: three consecutive `npm run test:e2e` runs each report **19 passed, 0
 failed**, with the ambient `DATABASE_URL` present. No assertion was deleted or
 relaxed.
 
@@ -242,16 +254,25 @@ run and pass.
 
 Verified on the **production build**, not only in source:
 
-- **axe** over seven public routes (`/`, `/records`, `/learning`, `/incidents`,
-  `/safeguards`, `/memory`, `/evaluation`), driven live as an anonymous visitor
-  on **desktop (1440×900)** and **mobile (Pixel 7)** on 2026-11-04: **0 violations
-  of any impact — 0 serious, 0 critical — on every route, both viewports**.
+- **axe** over eight public routes (`/`, `/records`, `/learning`, `/lab`,
+  `/incidents`, `/safeguards`, `/memory`, `/evaluation`), driven live as an
+  anonymous visitor on **desktop (1440×900)** and **mobile (Pixel 7 / iPhone 13)**
+  on 2026-11-04: **0 violations of any impact — 0 serious, 0 critical — on every
+  route, both viewports**, and again after the `2159d5d220` deploy.
   The E2E suite enforces this gate: `playwright test` →
   *"no serious or critical accessibility violation on any public route"* passes.
 - **Console/page errors:** none on any route.
 - **Mobile (390×844, touch):** the primary nav collapses to the disclosure menu,
   the menu holds the same destinations, and the sample submission completes with
   the Safeguard Record rendered — no page errors.
+- **Horizontal overflow (mobile, found and fixed this mission).** Sweeping the
+  eight public routes at 390×844 found a genuine defect: `/incidents` scrolled
+  **51 px** past the viewport. The cause was a decision-trace detail embedding an
+  unbreakable memory id (`safeguard-finance-unsupported_completion_claim@v1`)
+  inside a flex row whose text child had no `min-w-0`, so it refused to shrink.
+  Fixed in `src/app/incidents/page.tsx` with `min-w-0 break-words` (PR #30,
+  deployed as `2159d5d220`). Re-measured live on production after deploy:
+  **0 px on all eight routes**. A new E2E test asserts this at 390 px.
 - **Target size (WCAG 2.2 SC 2.5.8):** one genuine defect found and fixed in the
   Mission 9 cycle. The learning view's record-id links render as their own
   list-item targets (63×14 px on production), below the 24×24 px minimum. axe's
@@ -492,12 +513,12 @@ final links.
 
 The product is deployed at `aftermath-7tij.vercel.app` on the live production
 deployment whose application commit is `8d499fb06a`, whose
-application behaviour was verified this mission (typecheck, lint, build, 18 E2E,
+application behaviour was verified this mission (typecheck, lint, build, 19 E2E,
 28/28 production checks, and a live anonymous journey), publicly usable, and
 verified end to end this mission: an anonymous visitor can submit a genuine
 incident, receive a real Safeguard Record, see a safeguard persisted to Walrus
 Memory Mainnet, and see the recalled memory change the decision from `UNKNOWN` to
-`REQUIRE_VERIFICATION`. All verification gates pass (typecheck, lint, build, 18 E2E,
+`REQUIRE_VERIFICATION`. All verification gates pass (typecheck, lint, build, 19 E2E,
 28/28 production checks), and no anonymous path exists beyond
 the single rate-limited, fail-closed submission route.
 
@@ -589,10 +610,16 @@ Confirmed explicitly:
 | `npm run lint` | **PASS** |
 | `npm run build` | **PASS** |
 | `npm test` (vitest) | **PASS** — 631 passed, 12 skipped |
-| `npm run test:e2e` (playwright) | **PASS** — 18 passed, 0 failed |
+| `npm run test:e2e` (playwright) | **PASS** — 19 passed, 0 failed |
 | `npm run verify:prod` | **PASS** — 28/28 anonymously |
 | Live production endpoints | **PASS** — all public routes HTTP 200 |
 | Admin endpoints (no token) | **PASS** — 401 (protected) |
 | Independent Tatum cross-check | **PASS** — 3/3 digests match |
 | Medium publication | **PASS** — present in public RSS feed |
 | Demo container integrity | **PASS** — 2:22, H.264/AAC, sha256 `bd46de63…` |
+| Live axe sweep, 8 public routes | **PASS** — 0 violations |
+| Mobile overflow, 8 public routes | **PASS** — 0 px after the `2159d5d220` deploy |
+| Anonymous submission (valid body) | **PASS** — HTTP 200, no new Mainnet write |
+| Rate limit | **PASS** — first 429 at request 4; `retry-after` + JSON retry hint |
+| Input validation | **PASS** — empty body 400, oversize body 413 |
+| Production deployment identity | **PASS** — `dpl_cUKufrKdvnga8B1P1heatzbbcVPf`, READY, `2159d5d220` |
