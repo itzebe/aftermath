@@ -34,7 +34,7 @@ describe("public investigation workspace", () => {
     // The Tatum-backed finance path must be discoverable from the front door,
     // not only by a visitor who already knows to paste a Sui digest.
     const suiButton = screen.getByRole("button", {
-      name: /Use a Sui transaction sample/i,
+      name: /Sui transaction: failed/i,
     });
     fireEvent.click(suiButton);
 
@@ -65,12 +65,31 @@ describe("public investigation workspace", () => {
     });
   });
 
+  it("offers the three-outcome counterfactual: succeeded, failed, unknown", async () => {
+    mockConfig({ publicSubmission: { available: true, reason: "ok" } });
+    render(<PublicInvestigation />);
+
+    const textarea = (await screen.findByLabelText(
+      /Incident material/i,
+    )) as HTMLTextAreaElement;
+
+    const cases: [RegExp, RegExp][] = [
+      [/Sui transaction: succeeded/i, /GHAuBeydSov1zyT6sUKS2cFxWtNWkeamtKANsHwZJHve/],
+      [/Sui transaction: failed/i, /A9iiTMAxi5BY2uwxu4HnuonfF6A4hhGbaCK8HfTFK26x/],
+      [/Sui transaction: unknown/i, /9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM/],
+    ];
+    for (const [button, digest] of cases) {
+      fireEvent.click(screen.getByRole("button", { name: button }));
+      await waitFor(() => expect(textarea.value).toMatch(digest));
+    }
+  });
+
   it("states the honest reason and offers no form when submission is disabled", async () => {
     mockConfig({ publicSubmission: { available: false, reason: "disabled for now" } });
     render(<PublicInvestigation />);
 
     await screen.findByText(/Public submission is not enabled/i);
     expect(screen.queryByLabelText(/Incident material/i)).toBeNull();
-    expect(screen.queryByRole("button", { name: /Use a Sui transaction sample/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Sui transaction: failed/i })).toBeNull();
   });
 });
