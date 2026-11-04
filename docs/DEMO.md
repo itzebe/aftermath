@@ -3,7 +3,7 @@
 Recording status: **recorded.** Two narrated videos exist:
 
 1. The **final presentation demo** (this mission): `artifacts/aftermath-final-demo.mp4`
-   — 2:01 (121.4 s), 1280×800, H.264 + AAC, burned-in captions, narrated with the
+   — 2:22 (142.3 s), 1280×800, H.264 + AAC, burned-in captions, narrated with the
    local Piper voice (`en_US-lessac-medium`). Captured live from
    <https://aftermath-7tij.vercel.app/> as an anonymous visitor. Kept locally
    (git-ignored); not published. Script and accuracy notes:
@@ -119,8 +119,8 @@ retrying (attempt 2/3)...
 - **Action:** read the headline counters, then run a recall query on the page.
 - **Observe:** **Completed Mainnet writes** and **Recall-verified** writes are
   kept separate, alongside **Memories in namespace** (the authoritative relayer
-  count). Read live (2026-11-03), the instance shows 191 completed, 188
-  recall-verified, and 346 memories in the namespace. The two write counters
+  count). Read live (2026-11-04), the instance shows 196 completed, 193
+  recall-verified, and 351 memories in the namespace. The two write counters
   differ because a write can complete while its follow-up recall is itself
   rate-limited. The recall query returns real blobs (ids, similarity distances).
 - **Claim it supports:** the Walrus integration is real Mainnet persistence —

@@ -1,50 +1,50 @@
 [
  {
   "id": "problem",
-  "start": 0,
-  "end": 21.574,
-  "duration": 21.574
+  "start": 0.001,
+  "end": 21.204,
+  "duration": 21.203
  },
  {
   "id": "counterfactual",
-  "start": 21.575,
-  "end": 41.072,
-  "duration": 19.497
+  "start": 21.204,
+  "end": 40.838,
+  "duration": 19.634
  },
  {
   "id": "failed",
-  "start": 41.073,
-  "end": 61.043,
-  "duration": 19.97
+  "start": 40.839,
+  "end": 60.993,
+  "duration": 20.154
  },
  {
   "id": "succeeded",
-  "start": 61.043,
-  "end": 77.869,
-  "duration": 16.826
+  "start": 60.993,
+  "end": 73.312,
+  "duration": 12.319
  },
  {
   "id": "unknown",
-  "start": 77.869,
-  "end": 91.652,
-  "duration": 13.783
+  "start": 73.313,
+  "end": 89.316,
+  "duration": 16.003
  },
  {
   "id": "persist",
-  "start": 91.652,
-  "end": 105.33,
-  "duration": 13.678
+  "start": 89.316,
+  "end": 103.126,
+  "duration": 13.81
  },
  {
   "id": "learning",
-  "start": 105.33,
-  "end": 130.341,
-  "duration": 25.011
+  "start": 103.126,
+  "end": 128.543,
+  "duration": 25.417
  },
  {
   "id": "close",
-  "start": 130.341,
-  "end": 144.189,
-  "duration": 13.848
+  "start": 128.544,
+  "end": 142.543,
+  "duration": 13.999
  }
 ]

@@ -1,0 +1,28 @@
+{
+  "verifiedAt": "2026-11-04",
+  "target": "https://aftermath-7tij.vercel.app",
+  "deployedCommit": "8d499fb06a24cb30dc2524b5920df4085ee26905",
+  "method": "clean browser session (no cookies, no admin token), Playwright Chromium",
+  "routes": [
+    { "path": "/", "status": 200 },
+    { "path": "/incidents", "status": 200 },
+    { "path": "/safeguards", "status": 200 },
+    { "path": "/learning", "status": 200 },
+    { "path": "/memory", "status": 200 },
+    { "path": "/records", "status": 200 },
+    { "path": "/evaluation", "status": 200 },
+    { "path": "/lab", "status": 200 },
+    { "path": "/admin", "status": 200, "note": "operator console; sign-in page, no credential supplied" }
+  ],
+  "anonymousSubmission": {
+    "sample": "Sui transaction: unknown",
+    "completed": true,
+    "recordHeader": "DECISION REQUIRE VERIFICATION memory live finance",
+    "note": "no account, invitation, or administrator action"
+  },
+  "counterfactualFromPublicSamples": [
+    { "sample": "Sui transaction: failed", "decision": "BLOCK", "memoryLabel": "memory live" },
+    { "sample": "Sui transaction: succeeded", "decision": "ALLOW", "memoryLabel": "incident live · no lesson" },
+    { "sample": "Sui transaction: unknown", "decision": "REQUIRE_VERIFICATION", "memoryLabel": "memory live" }
+  ]
+}

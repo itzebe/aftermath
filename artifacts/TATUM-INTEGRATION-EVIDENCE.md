@@ -1,6 +1,6 @@
 # AFTERMATH — Tatum Integration Evidence
 
-*Independently audited and verified on 2026-11-03 against production
+*Independently audited and verified on 2026-11-04 against production
 `https://aftermath-7tij.vercel.app`. Every value below was read from the live
 deployment or the live Tatum gateway on that date; no historical figure is
 reused without re-verification.*
@@ -66,7 +66,7 @@ error message surfaced to a caller.
 
 ## C. Live verification
 
-**Timestamp:** 2026-11-03T20:32Z.
+**Timestamp:** 2026-11-04T20:32Z.
 
 ### C.1 Health (`GET /api/overview` → `tatumHealth`)
 

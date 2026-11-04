@@ -1,7 +1,7 @@
 # AFTERMATH — Every Failure Should Leave a Safeguard
 
 *Devpost submission copy. Paste-ready. Every figure below was read live from the
-production deployment on 2026-11-03; where a capability depends on a credential
+production deployment on 2026-11-04; where a capability depends on a credential
 or is covered only by tests, it says so.*
 
 ---
@@ -298,8 +298,8 @@ same way twice.
 The safeguard is written to Walrus Memory Mainnet and counted as verified only
 when a recall query returns it. Recall is what makes the behaviour change
 possible: without a working recall path there is no second arm in the
-comparison. As of 2026-11-03 the instance reports **191 completed** and **188
-recall-verified** Mainnet writes, `simulatedWrites: 0`, with **346** memories in
+comparison. As of 2026-11-04 the instance reports **196 completed** and **193
+recall-verified** Mainnet writes, `simulatedWrites: 0`, with **351** memories in
 the namespace.
 
 **Deepest learning loop.** The brief asks for the deepest loop, and that is the
@@ -311,19 +311,19 @@ The change is demonstrated by a real counterfactual over the decision engine (th
 same engine, twice, with only the memory varying), and the provenance shows the
 memory's contribution — including the cases where it changed nothing.
 
-*Honest scoping.* The instance currently shows **5** persisted, recall-verified
-safeguards, **36** memories applied, **4** investigations influenced, and **4**
+*Honest scoping.* The instance currently shows **4** persisted, recall-verified
+safeguards, **47** memories applied, **6** investigations influenced, and **6**
 requirements strengthened. It shows **0** demonstrated repeat preventions. We
 report those numbers as they are.
 
-**Tatum is load-bearing, and provable.** Four submissions of the same class — an
-agent claiming a Sui transaction succeeded — were run through the anonymous
-public endpoint with only the digest varying. Tatum's answer decided the outcome:
-a confirmed success → **ALLOW**, a confirmed failure → **BLOCK**, an unknown
-digest → **REQUIRE_VERIFICATION**, a malformed digest → **REQUIRE_VERIFICATION**.
-The digests and record ids are in
-`artifacts/evidence/2026-11-03-tatum-integration.json`; the failure digest was
-cross-checked independently against Tatum's public GraphQL endpoint.
+**Tatum is load-bearing, and provable.** Three submissions of the same class — an
+agent claiming a Sui transaction succeeded — are offered as one-click samples on
+the public front door, with only the digest varying. Tatum's answer decides the
+outcome: a confirmed success → **ALLOW**, a confirmed failure → **BLOCK**, an
+unknown digest → **REQUIRE_VERIFICATION**. Each sample reproduces a real recorded
+investigation byte-for-byte (idempotently, spending no new Mainnet write), so a
+judge sees the counterfactual without spending anything. The digests, decisions,
+and record ids are in `artifacts/evidence/2026-11-04-counterfactual.json`.
 
 ---
 
@@ -332,11 +332,11 @@ cross-checked independently against Tatum's public GraphQL endpoint.
 Everything a judge can check independently, without trusting this document:
 
 - **Production application** — <https://aftermath-7tij.vercel.app/> (verified 200),
-  live and public, serving application commit `3fca1b98`.
+  live and public, serving application commit `8d499fb06a`.
 - **`GET /api/config`** — reports `publicSubmission.available: true` with the exact
   reason, and fails closed otherwise.
-- **`GET /api/overview`** — reports the live Walrus namespace count (**346**),
-  completed (**191**) and recall-verified (**188**) writes, simulated writes
+- **`GET /api/overview`** — reports the live Walrus namespace count (**351**),
+  completed (**196**) and recall-verified (**193**) writes, simulated writes
   (**0**), Tatum Sui Mainnet health, and the persistence backend — all read from
   the real services, not asserted.
 - **`GET /api/learning`** — returns the impact counters, the behaviour-change
@@ -344,10 +344,11 @@ Everything a judge can check independently, without trusting this document:
 - **Source and tests** — <https://github.com/itzebe/aftermath>; the evidence
   artifacts live under `artifacts/` (architecture, final report, evidence JSON,
   screenshots, demo script).
-- **Production verification** — `npm run verify:prod` → **28/28** with the operator
-  token for the recall-query check (27/28 without it, reported explicitly).
+- **Production verification** — `npm run verify:prod` → **28/28** anonymously
+  (the recall check falls back to the public learning surface when no admin
+  token is present).
 - **Demo video** — `artifacts/aftermath-final-demo.mp4`, recorded live from the
-  production deployment.
+  production deployment (2:22, narrated + captioned).
 
 ---
 
@@ -358,12 +359,12 @@ Everything a judge can check independently, without trusting this document:
 **What to inspect, and where:**
 
 1. **The front door (`/`).** The investigation form is public — no credential.
-   Click **Use a Sui transaction sample** and submit; AFTERMATH verifies the
-   named digest read-only against Sui Mainnet through Tatum and folds the
-   authoritative result into the record. (The sample is a real failed
-   transaction, so an agent's success claim is blocked.) **Use a sample
-   incident** exercises the no-source path instead. Either way you get a genuine
-   Safeguard Record.
+   Three labelled samples — **Sui transaction: succeeded / failed / unknown** —
+   each reproduce a real recorded investigation byte-for-byte. Submitting all
+   three shows one identical success claim resolved three ways: **ALLOW**, **BLOCK**,
+   **REQUIRE_VERIFICATION**, decided solely by what Sui Mainnet reports through
+   Tatum. **Use a sample incident** exercises the no-source path instead. Either
+   way you get a genuine Safeguard Record.
 2. **Safeguard Records (`/records`).** Every investigation, newest first. Each
    record states honestly how far its safeguard is verified (simulated, live, or
    recall-verified).
@@ -394,9 +395,10 @@ admin token; it is not needed for any of the steps above.
   general-purpose platforms.
 - The evaluation metrics describe the controlled scenarios, not production
   reliability.
-- The standalone `npm run verify:prod` passes **28/28** with the operator token
-  set. Without it, the recall-query check is reported as a failure with an
-  explicit reason rather than silently skipped.
+- The standalone `npm run verify:prod` passes **28/28** anonymously. The direct
+  recall endpoint is administrator-only, so the recall check falls back to the
+  public learning surface when no admin token is present, and never silently
+  skips.
 
 ---
 
@@ -406,7 +408,7 @@ admin token; it is not needed for any of the steps above.
 | --- | --- | --- |
 | Production application | <https://aftermath-7tij.vercel.app/> | verified 200 |
 | Public repository | <https://github.com/itzebe/aftermath> | verified 200 |
-| Final demo (this submission) | `artifacts/aftermath-final-demo.mp4` | 2:01, narrated + captioned, not published |
+| Final demo (this submission) | `artifacts/aftermath-final-demo.mp4` | 2:22, narrated + captioned, not published |
 | Narrated demo video (v2) | <https://github.com/itzebe/aftermath/releases/tag/demo-v2> | verified (2:36) |
 | Silent captioned demo (Mission 9) | `artifacts/mission9/aftermath-demo-m9.mp4` | verified (2:24), not published |
 | Rendered blog | <https://itzebe.github.io/aftermath/> | verified 200 |

@@ -1,10 +1,10 @@
 # AFTERMATH — final demo script
 
 **Video:** `artifacts/aftermath-final-demo.mp4`
-**Duration:** 2:01 (121.4 s)
+**Duration:** 2:22 (142.3 s)
 **Format:** 1280×800, H.264 (yuv420p), 25 fps, AAC stereo narration, burned-in captions
-**Recorded:** 2026-11-03, from the live production deployment
-<https://aftermath-7tij.vercel.app/> (application commit `3fca1b98`), as an
+**Recorded:** 2026-11-04, from the live production deployment
+<https://aftermath-7tij.vercel.app/> (application commit `8d499fb06a`), as an
 anonymous visitor — no admin token, no seed data.
 **Narration:** synthesized locally with the Piper neural voice
 (`en_US-lessac-medium`); the same text is the burned-in caption track and the
@@ -12,116 +12,141 @@ sidecar `artifacts/demo-narration.srt`.
 **Reproduce:** `python3 scripts/demo-tts.py --voice <model.onnx>` →
 `node scripts/record-demo.mjs` → `python3 scripts/build-demo.py`.
 
-> **Live figures have advanced since recording.** The numbers spoken in Scenes 4
-> and 5 (completed 180, recall-verified 177, namespace 335) are the values read
-> live at recording time on 2026-11-03 and are what the video shows on screen.
-> They are kept here because they must match the recording. The current live
-> figures — verified independently the same day — are **191 completed**, **188
-> recall-verified**, **0 simulated**, **346** memories in the namespace, **5**
-> persisted recall-verified safeguards, **36** memories applied, **4**
-> investigations influenced, **4** requirements strengthened, **0** demonstrated
-> repeat preventions. See `artifacts/evidence/2026-11-03-tatum-integration.json`
+> **Figures.** The narration is deliberately count-free, so the video cannot
+> drift from the ledger. The counts a judge should read are the live ones:
+> **196 completed**, **193 recall-verified**, **0 simulated**, **351** memories in
+> the namespace, **4** persisted recall-verified safeguards, **47** memories
+> applied, **6** investigations influenced, **6** requirements strengthened,
+> **0** demonstrated repeat preventions. See `artifacts/evidence/2026-11-04-*.json`
 > and `GET /api/overview`.
 
 ---
 
-## Scene 1 — The problem (0:00–0:15)
+## Scene 1 — The problem (0:00–0:21)
 
 **On screen:** title card — "An investigation can find out why something failed.
 But what happens when the same mistake happens again?"
 
 **Narration:**
-> An investigation can find out why something failed. But what happens when the
-> same mistake happens again? Most incident reports are read once, then filed
-> away, and the lesson stays trapped inside the report it came from. AFTERMATH
-> exists to close that gap.
+> Every agent reports success. Not every agent is right. An investigation can
+> find out why something failed, but the lesson usually stays trapped in the
+> report it came from. AFTERMATH is failure prevention that remembers: it turns
+> incident evidence into a safeguard, verifies it, and preserves it on Walrus
+> Memory so the next similar failure is recognised, not repeated.
 
 ---
 
-## Scene 2 — Investigate (0:15–0:40)
+## Scene 2 — The counterfactual (0:21–0:41)
 
 **On screen:** the live product at `aftermath-7tij.vercel.app`. The public
-investigation form; **Use a sample incident**; **Investigate incident**; the
-result renders.
+investigation form with three labelled samples: **Sui transaction: succeeded**,
+**Sui transaction: failed**, **Sui transaction: unknown**.
 
 **Narration:**
-> This is the real, deployed product, and it is public: a visitor submits
-> failure material with no account and no approval. I will use the built-in
-> sample. A checkout service returned a 503, the charge status came back
-> unknown, and an agent still reported the charge as completed successfully.
-> AFTERMATH parses the material strictly as data, never executes it, and grounds
-> every fact in a verbatim span from the submission.
+> This is the real, deployed product, and it is public: no account, no
+> invitation, no approval. The three samples make exactly one claim, that the
+> transaction completed successfully, over three real Sui Mainnet digests. Only
+> the digest differs. So only one thing can change the verdict: what the Sui
+> ledger says through Tatum.
 
-**Why this is honest:** the sample incident is the application's own built-in
-sample (`src/components/public-investigation.tsx`, `SAMPLE`). The submission is
-idempotent — it returns the existing record `3d8a0234…` — so recording causes no
-new Mainnet write.
+**Why this is honest:** each sample reproduces a real recorded investigation
+idempotently (`src/lib/samples.ts`), so recording causes no new Mainnet write.
+The samples are the counterfactual: one claim, three digests.
 
 ---
 
-## Scene 3 — The safeguard (0:40–0:58)
+## Scene 3 — A verified failure is blocked (0:41–1:01)
 
-**On screen:** the Safeguard Record, scrolled through evidence, hypothesis, and
-the proposed safeguard.
+**On screen:** submitting **Sui transaction: failed**; the Safeguard Record
+renders with its header (decision `BLOCK`, memory state) and its evidence.
 
 **Narration:**
-> The result is a Safeguard Record: evidence with its verbatim spans, a
-> hypothesis with a confidence, and one proposed safeguard. Notice the evidence
-> status is Unknown. The material names no authoritative source, so AFTERMATH
-> refuses to decide whether the charge succeeded. That refusal is the product
-> working, not a gap.
+> First, the agent claims success. AFTERMATH reads the digest on Sui Mainnet
+> through Tatum, and Tatum reports a verified failure. The success claim cannot
+> stand. The decision is block, and the evidence is grounded in the ledger
+> rather than the agent's narration.
 
-**Why this is honest:** the record shows `AUTHORITATIVE LOOKUP — not attempted`
-and the evidence status `Unknown`. The narration does not claim a verified
-failure for this incident.
+**Why this is honest:** the record header shows `BLOCK`; the authoritative lookup
+shows `VERIFIED_FAILURE` from Tatum Sui Mainnet gRPC.
 
 ---
 
-## Scene 4 — Persist to Walrus Memory (0:58–1:16)
+## Scene 4 — The same claim is allowed (1:01–1:13)
+
+**On screen:** submitting **Sui transaction: succeeded**; the record shows
+`ALLOW`.
+
+**Narration:**
+> The same claim again, but this digest did succeed. Tatum confirms it, and
+> AFTERMATH allows the claim. Same words, same pipeline, opposite outcome. The
+> verdict follows the authoritative source, not the report.
+
+**Why this is honest:** the record header shows `ALLOW` and the lookup shows
+`VERIFIED_SUCCESS`. The header also states the memory honestly — this
+investigation wrote its incident to Mainnet but had nothing to learn, so it shows
+*incident live · no lesson* rather than overstating a persisted safeguard.
+
+---
+
+## Scene 5 — An unknown digest is not guessed (1:13–1:29)
+
+**On screen:** submitting **Sui transaction: unknown**; the record shows
+`REQUIRE_VERIFICATION`.
+
+**Narration:**
+> A digest the node holds no record of is neither success nor failure. AFTERMATH
+> refuses to guess. It returns require verification and states the uncertainty
+> plainly, instead of inventing an answer.
+
+**Why this is honest:** the lookup status is `UNKNOWN`, never upgraded to success
+or failure.
+
+---
+
+## Scene 6 — Persist to Walrus Memory (1:29–1:43)
 
 **On screen:** the Memory Ledger (`/memory`).
 
 **Narration:**
-> Verified safeguards are written to Walrus Memory on Mainnet, and a write
-> counts as verified only when a recall query returns it. This ledger reads live
-> from the relayer: one hundred eighty completed writes, one hundred
-> seventy-seven recall-verified, zero simulated, and three hundred thirty-five
-> memories in the namespace.
+> Verified safeguards are written to Walrus Memory on Mainnet. This ledger reads
+> live from the relayer, and a write counts as stored only when a blob id comes
+> back, and as recall-verified only when a recall query returns it. Nothing here
+> is simulated.
 
 **Why this is honest:** the figures are read live from `GET /api/overview` at
-recording time and are also visible on screen (completed 180, recall-verified
-177, simulated 0, namespace 335). "Completed" and "recall-verified" are stated as
-different numbers.
+recording time. "Completed" and "recall-verified" are stated as different
+numbers, and `simulatedWrites` is zero.
 
 ---
 
-## Scene 5 — Recall changes a later decision (1:16–1:45)
+## Scene 7 — Recall changes a later decision (1:43–2:08)
 
 **On screen:** the Learning Loop (`/learning`), Section C **Behaviour change**,
 then Section E **Memory provenance**.
 
 **Narration:**
-> Here is the moment that matters. A later investigation reports a build passing
-> in continuous integration with no log attached. AFTERMATH recalls an applicable
-> safeguard, then runs the decision engine twice over identical evidence: once
-> with the memory held out, once enforced. The only difference is the memory. The
-> verdict is unchanged, but the memory adds two required verification checks the
-> engine would not otherwise require. Provenance shows the chain from that
-> incident, to this Walrus blob, to these later investigations.
+> Here is the moment that matters. A safeguard learned from an unsupported
+> completion claim was written to Walrus Memory, then recalled in later
+> investigations, where it added required verification checks. The before and
+> after are recorded honestly: the checks were strengthened, and AFTERMATH does
+> not overclaim a verdict change that did not happen. Provenance shows the chain
+> from the incident, to the Walrus blob, to the later investigations it
+> influenced.
 
 **Why this is honest:** the on-screen card states the verdict is unchanged
-(`REQUIRE_VERIFICATION` in both arms) and that the safeguard adds 2 required
+(`REQUIRE_VERIFICATION` in both arms) and that the safeguard adds required
 verification checks. The narration says exactly that. It does not claim a verdict
 change or a prevented repeat failure.
 
 ---
 
-## Scene 6 — Close (1:45–2:01)
+## Scene 8 — Close (2:08–2:22)
 
 **On screen:** end card.
 
 **Narration:**
-> AFTERMATH does not merely remember that something happened. It makes the next
+> AFTERMATH stays honest about what it knows, what it remembers, and what it
+> changed. It does not merely remember that something happened; it makes the next
 > investigation check what the last one taught us to check. Every failure should
 > leave a safeguard.
 
@@ -130,14 +155,15 @@ change or a prevented repeat failure.
 ## Accuracy notes
 
 - Every figure shown is read live at recording time; none is asserted.
-- The sample submission is idempotent (returns record `3d8a0234…`); no new
-  Mainnet write is caused by recording.
+- The narration contains no numeric counts, so it cannot drift from the ledger.
+- Each sample submission is idempotent; no new Mainnet write is caused by
+  recording (verified: 196 writes before and after).
 - The narration describes the behaviour-change card exactly as the UI states it:
-  the verdict is unchanged and the memory adds two required checks.
+  the verdict is unchanged and the memory adds required checks.
 - Zero demonstrated repeat preventions is the current figure and is not
   contradicted anywhere in the video.
 - No API key, token, private key, or personal information appears in any frame,
   caption, or metadata. The Memory Ledger shows only a masked account id
   ("(66 chars, hidden)") as the live product itself renders it.
-- "Completed" writes (180) and "recall-verified" writes (177) are presented as
-  distinct numbers, as the product presents them.
+- "Completed" and "recall-verified" writes are presented as distinct numbers, as
+  the product presents them.

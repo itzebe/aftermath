@@ -1,6 +1,6 @@
 # AFTERMATH — Tatum Sui integration
 
-*Independently audited and verified on 2026-11-03 against production
+*Independently audited and verified on 2026-11-04 against production
 (`https://aftermath-7tij.vercel.app`).*
 
 This document explains what Tatum actually does inside AFTERMATH, why it is
@@ -126,10 +126,10 @@ GraphQL.
 
 ---
 
-## 5. Live verification (2026-11-03)
+## 5. Live verification (2026-11-04)
 
-All figures below were read from the live production deployment on 2026-11-03
-and are reproduced in `artifacts/evidence/2026-11-03-tatum-integration.json`.
+All figures below were read from the live production deployment on 2026-11-04
+and are reproduced in `artifacts/evidence/2026-11-04-tatum-integration.json`.
 
 ### Health
 

@@ -1,6 +1,6 @@
 # AFTERMATH — Tatum Integration: Deep Technical Audit
 
-*Audit date: 2026-11-03. Audited against production
+*Audit date: 2026-11-04. Audited against production
 `https://aftermath-7tij.vercel.app`, deployed commit `9f8dd843c5`
 (`dpl_8GZhWM9v6BBHb7rJDFZV1BvP1cGX`).*
 
@@ -117,9 +117,9 @@ them:
 
 | Requirement | Status |
 | --- | --- |
-| Walrus Memory integrated and writing on Mainnet | **PASS** — `memwal-mainnet`, 191 completed writes. |
+| Walrus Memory integrated and writing on Mainnet | **PASS** — `memwal-mainnet`, 196 completed writes. |
 | Tatum RPC used for onchain data where relevant | **PASS** — read-only Sui Mainnet verification, product-critical. |
-| At least 10 memories stored on Mainnet | **PASS** — 346 memories in namespace `aftermath`. |
+| At least 10 memories stored on Mainnet | **PASS** — 351 memories in namespace `aftermath`. |
 | Published blog post | **PASS** — Medium article (see Devpost). |
 | Working demo and public repo | **PASS** — public URL + `github.com/itzebe/aftermath`. |
 

@@ -13,15 +13,19 @@ administrator. Open one tab and follow along.
    is the product itself: an investigation form. The page states what AFTERMATH
    does and why persistent memory matters.
 
-2. **Submit an incident — the on-chain path.** Click **Use a Sui transaction
-   sample**, then **Investigate incident**. The sample names a real Sui Mainnet
-   transaction that **failed**, while the agent claims it succeeded. AFTERMATH
-   verifies the digest read-only through **Tatum** (Sui Mainnet gRPC, GraphQL
-   fallback) and blocks the claim: the decision is **BLOCK**, and the record shows
-   the authoritative lookup, its source, and the digest reference. This is the
-   whole point of the product — the verdict follows the ledger, not the claim.
+2. **Submit an incident — the three-outcome counterfactual.** Click each of the
+   three labelled samples in turn and press **Investigate incident**:
+   **Sui transaction: failed** → decision **BLOCK**; **Sui transaction:
+   succeeded** → decision **ALLOW**; **Sui transaction: unknown** → decision
+   **REQUIRE_VERIFICATION**. All three samples make the *same* claim — that the
+   transaction completed successfully — over three real Sui Mainnet digests. Only
+   the digest differs, so only the ledger decides. AFTERMATH verifies each digest
+   read-only through **Tatum** (Sui Mainnet gRPC, GraphQL fallback) and the record
+   shows the authoritative lookup, its source, and the digest reference. This is
+   the whole point of the product — the verdict follows the ledger, not the claim.
    (Click **Use a sample incident** instead to see the no-source path, where the
-   evidence status is honestly `Unknown`.) No credential is requested either way.
+   evidence status is honestly `Unknown`.) No credential is requested either way,
+   and each sample is idempotent (no new Mainnet write).
 
 3. **Read the record top to bottom.** Notice:
    - **Evidence** — every fact carries a verbatim span copied out of the
@@ -58,10 +62,10 @@ administrator. Open one tab and follow along.
 
 ## What you should see, and what is honest
 
-- **Live figures (2026-11-03):** 346 memories in the Walrus namespace; 191
-  completed writes; 188 recall-verified; 0 simulated; 6 verified safeguards; 5
-  persisted and recall-verified; 36 memories applied; 4 investigations
-  influenced; 4 requirements strengthened; **0 demonstrated repeat preventions**.
+- **Live figures (2026-11-04):** 351 memories in the Walrus namespace; 196
+  completed writes; 193 recall-verified; 0 simulated; 6 verified safeguards; 4
+  persisted and recall-verified; 47 memories applied; 6 investigations
+  influenced; 6 requirements strengthened; **0 demonstrated repeat preventions**.
   Read them yourself at `/api/overview` and `/api/learning`.
 - **Tatum is load-bearing.** The same class of submission — an agent claiming a
   Sui transaction succeeded — resolves to `ALLOW` when Tatum confirms success,
@@ -83,9 +87,8 @@ The **operator console** at `/admin` requires the operator's admin token. It
 exposes operational controls, not the product. Reading every public page and
 submitting an incident from the home page need no credential.
 
-`npm run verify:prod` passes **28/28** with the operator token set (for the
-recall-query check); without it, that check is reported as an explicit failure
-(27/28), never silently skipped.
+`npm run verify:prod` passes **28/28** anonymously — the recall check falls back
+to the public learning surface when no admin token is present.
 
 ---
 
@@ -95,7 +98,7 @@ recall-query check); without it, that check is reported as an explicit failure
 | --- | --- |
 | Production application | <https://aftermath-7tij.vercel.app/> |
 | Source repository | <https://github.com/itzebe/aftermath> |
-| Demo video (local) | `artifacts/aftermath-final-demo.mp4` (2:01) |
+| Demo video (local) | `artifacts/aftermath-final-demo.mp4` (2:22) |
 | Narrated walkthrough (v2) | <https://github.com/itzebe/aftermath/releases/tag/demo-v2> |
 | Rendered article | <https://itzebe.github.io/aftermath/> |
 | Devpost copy | `artifacts/DEVPOST-SUBMISSION.md` |

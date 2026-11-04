@@ -2,49 +2,49 @@
  {
   "id": "problem",
   "title": "The problem",
-  "seconds": 21.548,
+  "seconds": 21.177,
   "narration": "Every agent reports success. Not every agent is right. An investigation can find out why something failed, but the lesson usually stays trapped in the report it came from. AFTERMATH is failure prevention that remembers: it turns incident evidence into a safeguard, verifies it, and preserves it on Walrus Memory so the next similar failure is recognised, not repeated."
  },
  {
   "id": "counterfactual",
   "title": "One claim, three ledgers",
-  "seconds": 19.493,
+  "seconds": 19.632,
   "narration": "This is the real, deployed product, and it is public: no account, no invitation, no approval. The three samples make exactly one claim, that the transaction completed successfully, over three real Sui Mainnet digests. Only the digest differs. So only one thing can change the verdict: what the Sui ledger says through Tatum."
  },
  {
   "id": "failed",
   "title": "Verified failure, blocked",
-  "seconds": 14.861,
+  "seconds": 14.768,
   "narration": "First, the agent claims success. AFTERMATH reads the digest on Sui Mainnet through Tatum, and Tatum reports a verified failure. The success claim cannot stand. The decision is block, and the evidence is grounded in the ledger rather than the agent's narration."
  },
  {
   "id": "succeeded",
   "title": "Verified success, allowed",
-  "seconds": 12.701,
+  "seconds": 12.318,
   "narration": "The same claim again, but this digest did succeed. Tatum confirms it, and AFTERMATH allows the claim. Same words, same pipeline, opposite outcome. The verdict follows the authoritative source, not the report."
  },
  {
   "id": "unknown",
   "title": "Unknown stays unknown",
-  "seconds": 11.297,
+  "seconds": 11.262,
   "narration": "A digest the node holds no record of is neither success nor failure. AFTERMATH refuses to guess. It returns require verification and states the uncertainty plainly, instead of inventing an answer."
  },
  {
   "id": "persist",
   "title": "Persist to Walrus Memory Mainnet",
-  "seconds": 13.677,
+  "seconds": 13.804,
   "narration": "Verified safeguards are written to Walrus Memory on Mainnet. This ledger reads live from the relayer, and a write counts as stored only when a blob id comes back, and as recall-verified only when a recall query returns it. Nothing here is simulated."
  },
  {
   "id": "learning",
   "title": "Recall changes a later decision",
-  "seconds": 25.008,
-  "narration": "Here is the moment that matters. A safeguard learned from an unsupported completion claim was written to Walrus Memory, then recalled in four later investigations, where it added required verification checks. The before and after are recorded honestly: the checks were strengthened, and AFTERMATH does not overclaim a verdict change that did not happen. Provenance shows the chain from the incident, to the Walrus blob, to the later investigations it influenced."
+  "seconds": 25.403,
+  "narration": "Here is the moment that matters. A safeguard learned from an unsupported completion claim was written to Walrus Memory, then recalled in later investigations, where it added required verification checks. The before and after are recorded honestly: the checks were strengthened, and AFTERMATH does not overclaim a verdict change that did not happen. Provenance shows the chain from the incident, to the Walrus blob, to the later investigations it influenced."
  },
  {
   "id": "close",
   "title": "Close",
-  "seconds": 13.816,
+  "seconds": 13.978,
   "narration": "AFTERMATH stays honest about what it knows, what it remembers, and what it changed. It does not merely remember that something happened; it makes the next investigation check what the last one taught us to check. Every failure should leave a safeguard."
  }
 ]
