@@ -1,0 +1,57 @@
+{
+ "generatedAt": "2026-11-04T06:00:34.418180+00:00",
+ "description": "One identical success claim over three real Sui Mainnet digests; only the digest differs.",
+ "counterfactual": [
+  {
+   "label": "failed",
+   "recordId": "d820a66b-828c-3798-07ba-b53a0d7ea896",
+   "decision": "BLOCK",
+   "provenance": "live",
+   "actionType": "verify_reported_transaction_outcome",
+   "authoritativeLookup": {
+    "detail": "Authoritative execution status from the Sui gRPC gateway reports failure. The transaction did not succeed.",
+    "source": "Tatum Sui Mainnet gRPC (primary; fallback: Tatum Sui Mainnet GraphQL)",
+    "status": "VERIFIED_FAILURE",
+    "verified": true,
+    "attempted": true,
+    "evidenceReference": "sui:tx:A9iiTMAxi5BY2uwxu4HnuonfF6A4hhGbaCK8HfTFK26x"
+   },
+   "diagnosisPattern": "missing_prerequisite",
+   "safeguardAction": "REQUIRE_VERIFICATION"
+  },
+  {
+   "label": "succeeded",
+   "recordId": "8f12d8ec-28b9-1816-ef5d-e3cf57d019c3",
+   "decision": "ALLOW",
+   "provenance": "simulated",
+   "actionType": "verify_reported_transaction_outcome",
+   "authoritativeLookup": {
+    "detail": "Authoritative execution status from the Sui gRPC gateway reports success. A success claim is permitted.",
+    "source": "Tatum Sui Mainnet gRPC (primary; fallback: Tatum Sui Mainnet GraphQL)",
+    "status": "VERIFIED_SUCCESS",
+    "verified": true,
+    "attempted": true,
+    "evidenceReference": "sui:tx:GHAuBeydSov1zyT6sUKS2cFxWtNWkeamtKANsHwZJHve"
+   },
+   "diagnosisPattern": "incorrect_execution_state_assumption",
+   "safeguardAction": "REQUIRE_VERIFICATION"
+  },
+  {
+   "label": "unknown",
+   "recordId": "13912043-1b24-6640-99a6-f8a7556a8986",
+   "decision": "REQUIRE_VERIFICATION",
+   "provenance": "live",
+   "actionType": "verify_reported_transaction_outcome",
+   "authoritativeLookup": {
+    "detail": "The node holds no transaction for this digest. It may not exist, or may have been pruned. Success is not established.",
+    "source": "Tatum Sui Mainnet gRPC (primary; fallback: Tatum Sui Mainnet GraphQL)",
+    "status": "UNKNOWN",
+    "verified": false,
+    "attempted": true,
+    "evidenceReference": "sui:tx:9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM"
+   },
+   "diagnosisPattern": "unsupported_completion_claim",
+   "safeguardAction": "BLOCK"
+  }
+ ]
+}

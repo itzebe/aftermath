@@ -563,6 +563,21 @@ function LearningNode({ record }: { record: SafeguardRecord }) {
 
 export function SafeguardRecordView({ record }: { record: SafeguardRecord }) {
   const { investigation, recommendation, verification, memory } = record;
+  const { provenance } = record;
+  // A record is `simulated` when no corrective lesson was written (there was
+  // nothing to learn), but its incident may still be a live Mainnet write. Show
+  // what was actually persisted so the pill does not understate the memory.
+  const liveWrites = [
+    memory.incident?.state === "completed" && memory.incident.provenance === "live",
+    memory.lesson?.state === "completed" && memory.lesson.provenance === "live",
+  ].filter(Boolean).length;
+  const memoryLabel =
+    provenance === "live"
+      ? "memory live"
+      : liveWrites > 0
+        ? "incident live · no lesson"
+        : "memory simulated";
+  const memoryTone = provenance === "live" ? "ok" : liveWrites > 0 ? "info" : "warn";
   const c = investigation.categories;
 
   return (
@@ -583,9 +598,7 @@ export function SafeguardRecordView({ record }: { record: SafeguardRecord }) {
         <div className="flex flex-wrap items-center gap-2">
           <span className="label">Decision</span>
           <DecisionPill decision={record.decision.decision} />
-          <Pill tone={record.provenance === "live" ? "ok" : "warn"}>
-            {record.provenance === "live" ? "memory live" : "memory simulated"}
-          </Pill>
+          <Pill tone={memoryTone}>{memoryLabel}</Pill>
           <Pill tone="neutral">{investigation.domain}</Pill>
         </div>
       </header>
