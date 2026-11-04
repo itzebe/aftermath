@@ -6,6 +6,7 @@ import type { SafeguardRecord } from "@/lib/schemas";
 import { SafeguardRecordView } from "@/components/safeguard-record";
 import { Notice } from "@/components/ui";
 import { adminHeaders } from "@/lib/admin-token";
+import type { SubmissionSample } from "@/lib/samples";
 
 /**
  * The incident submission form.
@@ -54,14 +55,14 @@ export function SubmitIncidentForm({
    * incident example exercises the no-source path. When omitted, `sample` is
    * offered under the legacy single-button label.
    */
-  samples?: { label: string; text: string }[];
+  samples?: SubmissionSample[];
   /**
    * When true the form is used by an anonymous visitor: no admin token is
    * attached, and failure copy addresses a visitor rather than an operator.
    */
   anonymous?: boolean;
 }) {
-  const exampleSamples =
+  const exampleSamples: SubmissionSample[] =
     samples ?? (sample ? [{ label: "Use a sample incident", text: sample }] : []);
   const [text, setText] = useState("");
   const [service, setService] = useState("");
@@ -164,7 +165,16 @@ export function SubmitIncidentForm({
                     key={s.label}
                     type="button"
                     className="link-quiet mono inline-flex min-h-6 items-center text-[0.75rem]"
-                    onClick={() => setText(s.text)}
+                    onClick={() => {
+                      setText(s.text);
+                      if (s.service !== undefined) setService(s.service);
+                      if (s.expectedBehavior !== undefined) {
+                        setExpected(s.expectedBehavior);
+                      }
+                      if (s.service !== undefined || s.expectedBehavior !== undefined) {
+                        setAdvanced(true);
+                      }
+                    }}
                   >
                     {s.label}
                   </button>

@@ -84,6 +84,28 @@ describe("public investigation workspace", () => {
     }
   });
 
+  it("applies a sample's context fields so the sample reproduces a record", async () => {
+    mockConfig({ publicSubmission: { available: true, reason: "ok" } });
+    render(<PublicInvestigation />);
+
+    await screen.findByLabelText(/Incident material/i);
+    fireEvent.click(
+      screen.getByRole("button", { name: /Sui transaction: failed/i }),
+    );
+
+    // The context fields are revealed and filled, so a submission is
+    // byte-identical to the recorded investigation and upserts rather than
+    // spending a new Mainnet write.
+    await waitFor(() => {
+      expect((screen.getByLabelText(/Service/i) as HTMLInputElement).value).toBe(
+        "settlement-agent",
+      );
+    });
+    expect(
+      (screen.getByLabelText(/Expected behaviour/i) as HTMLInputElement).value,
+    ).toBe("Settlement transaction executes successfully");
+  });
+
   it("states the honest reason and offers no form when submission is disabled", async () => {
     mockConfig({ publicSubmission: { available: false, reason: "disabled for now" } });
     render(<PublicInvestigation />);
