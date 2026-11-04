@@ -123,7 +123,7 @@ test("the Sui transaction sample loads a real digest into the operator form", as
   // operator-gated rather than availability-gated), so it is the stable surface
   // to assert the sample on regardless of the deployment's memory backend.
   await signInAsOperator(page);
-  await page.getByRole("button", { name: /Use a Sui transaction sample/i }).click();
+  await page.getByRole("button", { name: /Sui transaction: failed/i }).click();
   const material = page.getByLabel(/Incident material/i);
   await expect(material).toHaveValue(/A9iiTMAxi5BY2uwxu4HnuonfF6A4hhGbaCK8HfTFK26x/);
 });

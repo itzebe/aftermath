@@ -21,6 +21,20 @@ export const SUI_TRANSACTION_SAMPLE = `2026-11-03T09:00:00Z INFO settlement-agen
 Sui transaction A9iiTMAxi5BY2uwxu4HnuonfF6A4hhGbaCK8HfTFK26x reported completed successfully.
 Confirm the on-chain outcome before the result is accepted.`;
 
+/**
+ * The same claim — "the transaction completed successfully" — over three real
+ * Sui Mainnet digests. Only the digest differs, and therefore only Tatum's
+ * answer differs, so the three outcomes demonstrate that the verdict follows
+ * the ledger rather than the agent's claim.
+ */
+export const SUI_SUCCESS_SAMPLE = `2026-11-03T09:00:00Z INFO settlement-agent
+Sui transaction GHAuBeydSov1zyT6sUKS2cFxWtNWkeamtKANsHwZJHve reported completed successfully.
+Confirm the on-chain outcome before the result is accepted.`;
+
+export const SUI_UNKNOWN_SAMPLE = `2026-11-03T09:00:00Z INFO settlement-agent
+Sui transaction 9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM reported completed successfully.
+Confirm the on-chain outcome before the result is accepted.`;
+
 export const INCIDENT_SAMPLE = `2026-03-01T10:00:00Z ERROR checkout-service
 POST /v1/charge returned 503 Service Unavailable
 retrying (attempt 2/3)...
@@ -28,6 +42,8 @@ retrying (attempt 2/3)...
 2026-03-01T10:00:08Z INFO agent "the charge completed successfully"`;
 
 export const SUBMISSION_SAMPLES: { label: string; text: string }[] = [
-  { label: "Use a Sui transaction sample", text: SUI_TRANSACTION_SAMPLE },
+  { label: "Sui transaction: succeeded", text: SUI_SUCCESS_SAMPLE },
+  { label: "Sui transaction: failed", text: SUI_TRANSACTION_SAMPLE },
+  { label: "Sui transaction: unknown", text: SUI_UNKNOWN_SAMPLE },
   { label: "Use a sample incident", text: INCIDENT_SAMPLE },
 ];
