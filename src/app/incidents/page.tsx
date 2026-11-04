@@ -386,7 +386,7 @@ function IncidentDetail({
                 <span className="mono shrink-0 text-[0.6875rem] uppercase tracking-[0.08em] text-paper-500">
                   {t.step.replace(/_/g, " ")}
                 </span>
-                <span className="text-[0.8125rem] leading-relaxed text-paper-300">
+                <span className="min-w-0 break-words text-[0.8125rem] leading-relaxed text-paper-300">
                   {t.detail}
                 </span>
               </li>

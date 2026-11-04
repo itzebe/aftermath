@@ -178,7 +178,7 @@ a dependency being briefly unavailable is never mistaken for a verified failure.
   stand, **100%** repeat-prevention, **0%** false-block, **100%**
   memory-retrieval relevance. These describe the controlled scenarios, not
   production reliability.
-- Checks: `typecheck` clean, `lint` clean, unit suite **620 passed / 12 skipped**, `verify:prod` **28/28 passed** (with `AFTERMATH_ADMIN_TOKEN` set; without it the recall-query check is reported as a failure, 27/28), live `verify:ai` **`ran=true`**.
+- Checks: `typecheck` clean, `lint` clean, unit suite **631 passed / 12 skipped** (with `AFTERMATH_TEST_DATABASE_URL` set; 603/40 without a database), `verify:prod` **28/28 passed anonymously** (the recall check falls back to the public learning surface; no admin token needed), live `verify:ai` **`ran=true`**.
 
 **Demo URL:** <https://aftermath-7tij.vercel.app/>
 **Repository:** <https://github.com/itzebe/aftermath>
@@ -208,7 +208,7 @@ the account owner and must not be guessed.
 | Demo URL | <https://aftermath-7tij.vercel.app/> |
 | Repository URL | <https://github.com/itzebe/aftermath> |
 | Blog URL | <https://itzebe.github.io/aftermath/> (also on Medium) |
-| Demo video URL | <https://github.com/itzebe/aftermath/releases/tag/demo-v1> (2:12) — direct file: <https://github.com/itzebe/aftermath/releases/download/demo-v1/aftermath-hackathon-demo.mp4> |
+| Demo video URL | <https://github.com/itzebe/aftermath/releases/tag/demo-v2> (2:36) — direct file: <https://github.com/itzebe/aftermath/releases/download/demo-v2/aftermath-demo-v2.mp4>. Final cut `artifacts/aftermath-final-demo.mp4` (2:22) awaits upload |
 | Tatum dashboard account ID | *owner* |
 | `MEMWAL_AGENT_ID` (Walrus Memory delegate public key) | *owner* |
 
@@ -227,16 +227,21 @@ the account owner and must not be guessed.
 - Deadline 10 Nov 2026, 17:00 UTC; three tracks; $4,500 pool; submissions
   solicited via a **Submit Project** form.
 
-**Uncertain** (verify on the form / in the event Discord before relying on it):
+**Resolved (form inspected 2026-11-04):** the submission form at
+<https://recall-tatum-walrus.vercel.app/> is public — it opens as a modal from
+**Submit Project** and can be read without logging in. It has **four sections
+and 20 controls**. A **demo video (2–3 min) is a required field** (section 03,
+placeholder "YouTube or other link"), and the form states that
+**`MEMWAL_AGENT_ID` is the Public key under Delegate keys** on
+`memory.walrus.xyz/dashboard` and that **Account ID (SUI)** is received after
+creating the first delegate key. See
+[`../artifacts/TOTAL-RECALL-FORM-ANSWERS.md`](../artifacts/TOTAL-RECALL-FORM-ANSWERS.md)
+for the full field-by-field copy.
 
-- Whether a **demo video** is a hard requirement or merely encouraged. The
-  public page lists "working demo" without a video; the submission form is
-  behind a login and could not be inspected without submitting. A video is
-  prepared regardless ([`DEMO.md`](DEMO.md)) as it strengthens the 20%
-  presentation score.
-- The exact **form fields** and whether `MEMWAL_AGENT_ID` is the delegate public
-  key verbatim. The form is authenticated and was not filled in.
-- Whether the wallet/account used must be shared as part of the submission.
+**Still owner-supplied:** the Tatum dashboard account ID, the SUI address, the
+Account ID (SUI), and the delegate public key are held by the account owner and
+are not in the repository. The remaining unknown is whether the wallet/account
+used must be shared as part of the submission.
 
 ## Mainnet memory requirement — verification
 
@@ -270,7 +275,7 @@ completed but whose follow-up recall was rate-limited is not silently promoted �
 **the 196 completed writes are not all recall-verified.**
 
 The standalone check `npm run verify:prod` includes the memory checks and passes
-**28/28** with `AFTERMATH_ADMIN_TOKEN` set. Without the token, the recall-query check requires it and is reported as a failure with an explicit reason rather than silently skipped (27/28). `verify:ai` is read-only.
+**28/28** anonymously. When no admin token is present the recall check falls back to the public learning surface, so every check still runs and passes without a credential. `verify:ai` is read-only.
 
 ## Learning integrity — a failure in our own metrics, corrected
 

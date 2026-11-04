@@ -336,3 +336,31 @@ test("standalone links meet the 24px target size (SC 2.5.8)", async ({ page }) =
     `standalone record links below 24x24: ${JSON.stringify(tooSmall)}`,
   ).toEqual([]);
 });
+
+test("no public route overflows horizontally on a narrow mobile viewport", async ({
+  page,
+}) => {
+  // A decision-trace detail can embed an unbreakable memory id
+  // (`safeguard-…@v1`), which pushed the incident explorer 51px past the
+  // viewport on a 390px phone. The fix is `min-w-0 break-words` on the flex
+  // child; this guards it and the rest of the surface together.
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const path of [
+    "/",
+    "/records",
+    "/learning",
+    "/lab",
+    "/incidents",
+    "/safeguards",
+    "/memory",
+    "/evaluation",
+  ]) {
+    await page.goto(path);
+    const overflow = await page.evaluate(
+      () =>
+        document.documentElement.scrollWidth -
+        document.documentElement.clientWidth,
+    );
+    expect(overflow, `horizontal overflow on ${path}`).toBeLessThanOrEqual(1);
+  }
+});
