@@ -22,11 +22,15 @@
 | Latest verified `master` | `8d499fb06a24cb30dc2524b5920df4085ee26905` (this mission) |
 | Prior baseline reviewed | `182bef4c` (PR #17) |
 | Vercel project | `aftermath-7tij` — `prj_GWK9nkfkYHm269zFh7zLCjpEYiO5` |
-| Production deployment | `dpl_HcpyrnPF7P8L4QbjyzpKamxcvPyw`, READY, commit `8d499fb06a`, target `production` |
-| Production alias | `aftermath-7tij.vercel.app` → the production deployment |
+| Production deployment (application) | `dpl_HcpyrnPF7P8L4QbjyzpKamxcvPyw`, READY, application commit `8d499fb06a`, target `production` |
+| Production alias | `aftermath-7tij.vercel.app` → the newest READY production deployment on `master` (documentation-only commits advance the SHA without changing application behaviour) |
+
 
 Confirmed by the Vercel API and by the deployed app, not assumed. The
-application commit verified end to end **this mission** is `8d499fb06a`. It
+application commit verified end to end **this mission** is `8d499fb06a`.
+Documentation-only commits made after the verification advance the deployment
+SHA (e.g. `0ff55a9`) without changing application-runtime behaviour; the
+application baseline stays `8d499fb06a`. It
 carries three focused changes on top of the previous verified baseline
 `b8ce867` (PR #24):
 
@@ -90,10 +94,12 @@ token, and the fail-closed defaults. No new dependency.
 - **HEAD verified:** `8d499fb06a24cb30dc2524b5920df4085ee26905` (three direct
   commits on `master`: `7d0daff`, `911fa18`, `8d499fb`).
 - `origin/master` contains the commits; `master` is the production branch.
-- Production deployment `dpl_HcpyrnPF7P8L4QbjyzpKamxcvPyw` reached READY on
-  `8d499fb06a`, and the production alias `aftermath-7tij.vercel.app` resolves to
-  it (confirmed by the Vercel API: newest production deployment carries commit
-  `8d499fb06a24cb30dc2524b5920df4085ee26905`).
+- The application change `8d499fb06a` was verified on deployment
+  `dpl_HcpyrnPF7P8L4QbjyzpKamxcvPyw` (READY). Documentation-sync commits made
+  after the verification (e.g. `0ff55a9`) are deployed to the same project and
+  advance the alias, but they change only `artifacts/` and `docs/` — no
+  application-runtime code. The application baseline verified end to end is
+  `8d499fb06a`, and it is the code the alias serves.
 - No deploy from a feature branch; no stale-code merge.
 
 ---
@@ -465,7 +471,7 @@ final links.
 # READY FOR PUBLIC USE AND JUDGING
 
 The product is deployed at `aftermath-7tij.vercel.app` on the live production
-deployment `dpl_HcpyrnPF7P8L4QbjyzpKamxcvPyw` (commit `8d499fb06a`), whose
+deployment whose application commit is `8d499fb06a`, whose
 application behaviour was verified this mission (typecheck, lint, build, 18 E2E,
 28/28 production checks, and a live anonymous journey), publicly usable, and
 verified end to end this mission: an anonymous visitor can submit a genuine
@@ -509,8 +515,8 @@ Confirmed explicitly:
   frontend code, error messages, evidence files, the video, or this report.
 - **The correct production project is deployed** — true. `aftermath-7tij`
   (`prj_GWK9nkfkYHm269zFh7zLCjpEYiO5`) serves the alias
-  `aftermath-7tij.vercel.app` from the live production deployment
-  `dpl_HcpyrnPF7P8L4QbjyzpKamxcvPyw` (commit `8d499fb06a`, READY, target production),
+  `aftermath-7tij.vercel.app` from the live production deployment whose
+  application commit is `8d499fb06a` (READY, target production),
   whose application behaviour was verified this mission. The duplicate
   `aftermath` project was classified and left untouched.
 - **The demo is genuine** — true. Captured live from production as an anonymous
