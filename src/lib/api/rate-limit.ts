@@ -82,17 +82,47 @@ export class DbRateLimitStore implements RateLimitStore {
   constructor(private readonly db: Db) {}
 
   /**
+   * Is the counter table already present?
+   *
+   * A missing table is a *stable* condition (Postgres error `42P01`, SQLite
+   * `no such table`); every other failure — a network error, an auth error, a
+   * pool timeout — means the database itself is unreachable and must be
+   * rethrown so the caller degrades.
+   */
+  private async tableExists(): Promise<boolean> {
+    try {
+      await this.db.query(`SELECT 1 FROM rate_limit_counters LIMIT 1`);
+      return true;
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      if (code === "42P01" || /no such table/i.test(String(err))) return false;
+      throw err;
+    }
+  }
+
+  /**
    * Create the counter table on first use.
    *
    * The limiter may run before any other durable store has migrated, so it owns
    * its table rather than depending on call order. The migration is held under
    * the same cross-instance advisory lock as the other migrators, so two
    * instances starting together cannot collide on the catalog.
+   *
+   * The existence check comes *first*, and the lock is taken only when the table
+   * is actually missing. `CREATE TABLE IF NOT EXISTS` is cheap when the table
+   * already exists, but reaching it still means acquiring the cross-instance
+   * advisory lock, and a cold instance that waits on a lock another session
+   * holds would otherwise stall its first rate-limit hit until the store timeout
+   * and silently degrade to the in-process cap — a hit that never reaches the
+   * shared counter, which defeats the cross-instance limit exactly when several
+   * instances start together (a burst, i.e. when the limit matters most).
+   * Reading first means the steady state takes no lock at all.
    */
   private ensureReady(): Promise<void> {
     if (!this.ready) {
-      this.ready = this.db
-        .lockMigration(async () => {
+      this.ready = (async () => {
+        if (await this.tableExists()) return;
+        await this.db.lockMigration(async () => {
           await this.db.query(
             `CREATE TABLE IF NOT EXISTS rate_limit_counters (
                bucket_key TEXT PRIMARY KEY,
@@ -107,13 +137,13 @@ export class DbRateLimitStore implements RateLimitStore {
             `CREATE INDEX IF NOT EXISTS rate_limit_counters_window_start
                ON rate_limit_counters (window_start)`,
           );
-        })
-        .catch((err) => {
-          // Do not cache a failed migration: a later request retries once the
-          // database is reachable again.
-          this.ready = null;
-          throw err;
         });
+      })().catch((err) => {
+        // Do not cache a failed migration: a later request retries once the
+        // database is reachable again.
+        this.ready = null;
+        throw err;
+      });
     }
     return this.ready;
   }

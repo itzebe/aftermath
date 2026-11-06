@@ -59,3 +59,45 @@ jobs:
 
       - name: End-to-end tests
         run: npm run test:e2e
+
+  # The PostgreSQL-gated integration suites are skipped when no test database is
+  # configured, so without this job the durable paths production actually runs —
+  # the atomic rate-limit increment, cross-instance counters, cross-process
+  # durability, and the aggregate counts — would never be exercised in CI. The
+  # service container is a throwaway database owned by the runner; no secret and
+  # no external service are involved.
+  postgres:
+    name: PostgreSQL integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: aftermath
+          POSTGRES_PASSWORD: aftermath
+          POSTGRES_DB: aftermath_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aftermath -d aftermath_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      AFTERMATH_TEST_DATABASE_URL: postgres://aftermath:aftermath@127.0.0.1:5432/aftermath_test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Unit and integration tests (PostgreSQL)
+        run: npm test
