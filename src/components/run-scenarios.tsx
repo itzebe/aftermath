@@ -28,6 +28,14 @@ interface BatchResult {
 
 const MAX_CONSECUTIVE_ERRORS = 3;
 /**
+ * How many consecutive batches may be refused by the write-path rate limiter
+ * before the client stops. A `429` is the server's own admission control asking
+ * the caller to wait a stated interval, not a failure, so the loop honours the
+ * interval and retries rather than aborting; the cap only bounds a pathological
+ * loop that never gets through.
+ */
+const MAX_CONSECUTIVE_RATE_LIMITS = 10;
+/**
  * How many consecutive batches may make zero progress while deferred before the
  * client stops. A transient dependency condition is worth waiting out, but an
  * indefinite wait should end with an honest message, not an endless spinner.
@@ -69,6 +77,7 @@ export function RunScenariosButton() {
     cancelled.current = false;
     let consecutiveErrors = 0;
     let consecutiveStalls = 0;
+    let consecutiveRateLimits = 0;
     let lastDone = -1;
     try {
       // Only the first call may request a restart; every later call continues
@@ -85,11 +94,37 @@ export function RunScenariosButton() {
           });
           body = await res.json();
           if (!res.ok) {
+            // The write-path rate limiter refused this batch. It is the
+            // server's own admission control, not a failure: it states the
+            // interval to wait, so wait it out and continue the same job
+            // instead of aborting a long, resumable run after a few tries.
+            if (res.status === 429) {
+              consecutiveRateLimits += 1;
+              if (consecutiveRateLimits > MAX_CONSECUTIVE_RATE_LIMITS) {
+                throw new Error(
+                  "The server kept rate-limiting this run; try again in a minute.",
+                );
+              }
+              const waitMs = Math.max(
+                1000,
+                ((body as unknown as { retryAfterSeconds?: number })
+                  ?.retryAfterSeconds ?? 30) * 1000,
+              );
+              setNote(
+                `Waiting ${Math.ceil(waitMs / 1000)}s for the server's rate limit before continuing…`,
+              );
+              const deadline = Date.now() + waitMs;
+              while (Date.now() < deadline && !cancelled.current) {
+                await new Promise((r) => setTimeout(r, Math.min(1000, deadline - Date.now())));
+              }
+              continue;
+            }
             throw new Error(
               (body as unknown as { error?: string })?.error ?? `HTTP ${res.status}`,
             );
           }
           consecutiveErrors = 0;
+          consecutiveRateLimits = 0;
         } catch (err) {
           consecutiveErrors += 1;
           if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) throw err;

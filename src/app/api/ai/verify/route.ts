@@ -3,6 +3,7 @@ import { IncidentSubmissionSchema } from "@/lib/schemas";
 import { loadConfig } from "@/lib/config";
 import { runAiVerification } from "@/lib/engines/ai-verify";
 import { guardVerifyRequest, verifyLimiter } from "@/lib/api/verify-guard";
+import { readJsonWithinLimit } from "@/lib/api/body-limit";
 import { classifyTransient } from "@/lib/util/transient";
 
 export const runtime = "nodejs";
@@ -31,12 +32,9 @@ export async function POST(request: Request) {
   const guard = guardVerifyRequest(request, config, verifyLimiter(config));
   if (!guard.ok) return guard.response;
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
-  }
+  const read = await readJsonWithinLimit(request, config.bodyLimitBytes);
+  if (!read.ok) return read.response;
+  const body = read.value;
 
   const parsed = IncidentSubmissionSchema.safeParse(body);
   if (!parsed.success) {
