@@ -451,4 +451,59 @@ maybePg("DbRateLimitStore over PostgreSQL", () => {
     await store.sweep(now - 10 * 60_000);
     expect(await store.hit(key, windowStart)).toBe(1);
   });
+
+  it("does not take the migration lock once the table exists (no cold-start degradation)", async () => {
+    // Reproduces the cross-instance flake: a cold instance used to acquire the
+    // cross-instance advisory lock on *every* first hit, even though the table
+    // already existed. When another session held that lock, the hit blocked
+    // until `storeTimeoutMs` and degraded to the in-process cap, so it never
+    // reached the shared counter — defeating the cross-instance limit exactly
+    // when instances start together (a burst).
+    let lockCalls = 0;
+    const counting: import("@/lib/db/sql").Db = {
+      query: (sql, params) => db.query(sql, params),
+      lockMigration: (fn) => {
+        lockCalls += 1;
+        return db.lockMigration(fn);
+      },
+    };
+    // The table exists by now (earlier tests created it), so the first hit must
+    // not need the lock at all.
+    const store = new DbRateLimitStore(counting);
+    const key = uniqueKey();
+    const windowStart = Math.floor(Date.now() / 60_000) * 60_000;
+    expect(await store.hit(key, windowStart)).toBe(1);
+    expect(await store.hit(key, windowStart)).toBe(2);
+    expect(lockCalls).toBe(0);
+  });
+
+  it("a cold store charges the shared counter while another session holds the migration lock", async () => {
+    // The end-to-end form of the flake, with the real advisory lock: while a
+    // separate session holds it, a cold store's first hit must still record in
+    // the shared counter and must not degrade. Under the old always-lock
+    // behaviour this hit blocked until `storeTimeoutMs` and reported
+    // `degraded: true`, so it never reached the shared counter.
+    const { Pool } = await import("pg");
+    const { MIGRATION_LOCK_KEY } = await import("@/lib/db/sql");
+    const holder = new Pool({ connectionString: pgUrl });
+    const session = await holder.connect();
+    try {
+      await session.query(`SELECT pg_advisory_lock($1)`, [MIGRATION_LOCK_KEY]);
+      const store = new DbRateLimitStore(db);
+      const key = uniqueKey();
+      const policy = { maxRequests: 3, windowMs: 10 * 60_000 };
+      const limiter = new SharedRateLimiter({
+        policy,
+        store,
+        fallback: new FixedWindowRateLimiter(policy),
+      });
+      const verdict = await limiter.check(key);
+      expect(verdict.degraded).toBe(false);
+      expect(verdict.allowed).toBe(true);
+    } finally {
+      await session.query(`SELECT pg_advisory_unlock($1)`, [MIGRATION_LOCK_KEY]).catch(() => {});
+      session.release();
+      await holder.end();
+    }
+  });
 });

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="AFTERMATH">
+  <rect width="64" height="64" rx="14" fill="#06080b"/>
+  <path d="M32 12 L50 50 H14 Z" fill="none" stroke="#5b9dff" stroke-width="5" stroke-linejoin="round"/>
+  <line x1="32" y1="24" x2="32" y2="50" stroke="#5b9dff" stroke-width="5" stroke-linecap="round"/>
+</svg>

@@ -264,6 +264,21 @@ describe("POST /api/ai/verify — inference status", () => {
     const body = (await res.json()) as { error: string };
     expect(body.error).toBe("invalid_submission");
   });
+
+  it("refuses an oversized body with 413 before parsing it", async () => {
+    process.env.GROQ_API_KEY = GROQ_KEY;
+    globalThis.fetch = async () => {
+      throw new Error("must not be reached: the body is rejected first");
+    };
+    // The default limit is 64 KiB; a 256 KiB body must be refused with the
+    // same payload_too_large contract the submission route uses, not buffered
+    // and parsed as JSON.
+    const huge = "A".repeat(256 * 1024);
+    const res = await call({ text: huge }, { ip: "10.6.6.7" });
+    expect(res.status).toBe(413);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("payload_too_large");
+  });
 });
 
 describe("POST /api/ai/verify — persistence safety", () => {

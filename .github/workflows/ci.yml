@@ -1,0 +1,103 @@
+# Continuous integration for the AFTERMATH application.
+#
+# Runs the same five gates a release depends on — lint, type check, unit tests,
+# production build, and the end-to-end suite — on every push to master and every
+# pull request that targets it. No step needs a secret: the unit and end-to-end
+# suites use an isolated SQLite database and a simulated memory backend, so a
+# fork's pull request can run the full pipeline without access to credentials.
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+# Least privilege: every step only reads the repository.
+permissions:
+  contents: read
+
+# A new push supersedes an in-flight run for the same ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Lint, type check, test, build, e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      # The end-to-end suite drives `next start`, so the production build must
+      # exist before Playwright launches the server.
+      - name: Production build
+        run: npm run build
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: End-to-end tests
+        run: npm run test:e2e
+
+  # The PostgreSQL-gated integration suites are skipped when no test database is
+  # configured, so without this job the durable paths production actually runs —
+  # the atomic rate-limit increment, cross-instance counters, cross-process
+  # durability, and the aggregate counts — would never be exercised in CI. The
+  # service container is a throwaway database owned by the runner; no secret and
+  # no external service are involved.
+  postgres:
+    name: PostgreSQL integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: aftermath
+          POSTGRES_PASSWORD: aftermath
+          POSTGRES_DB: aftermath_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aftermath -d aftermath_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      AFTERMATH_TEST_DATABASE_URL: postgres://aftermath:aftermath@127.0.0.1:5432/aftermath_test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Unit and integration tests (PostgreSQL)
+        run: npm test

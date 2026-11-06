@@ -107,6 +107,23 @@ function returnsRows(sql: string): boolean {
   return s.startsWith("select") || /\breturning\b/.test(s);
 }
 
+/**
+ * Coerce a parameter to a type `node:sqlite` accepts on every supported Node
+ * version.
+ *
+ * `node:sqlite` refuses a raw `boolean` in the Node 22 line ("Provided value
+ * cannot be bound to SQLite parameter"), while Node 24 happens to coerce it to
+ * 0/1. `package.json` allows Node >=22.13.0, so binding a boolean directly is a
+ * portability bug: the same code fails under one supported runtime and passes
+ * under another. SQLite has no boolean type — it stores 0/1 — and every read
+ * path already accepts either (`x === true || x === 1`), so normalising here
+ * keeps behaviour identical everywhere without touching each call site.
+ */
+function bindable(value: unknown): unknown {
+  if (typeof value === "boolean") return value ? 1 : 0;
+  return value;
+}
+
 export class SqliteDb implements Db {
   private readonly db: DatabaseSync;
   private readonly ownsDb: boolean;
@@ -141,7 +158,7 @@ export class SqliteDb implements Db {
     // back to its parameter by index rather than relying on array order.
     const expanded: unknown[] = [];
     const translated = sql.replace(/\$(\d+)/g, (_m, n: string) => {
-      expanded.push(params[Number(n) - 1]);
+      expanded.push(bindable(params[Number(n) - 1]));
       return "?";
     });
     const stmt = this.db.prepare(translated);
