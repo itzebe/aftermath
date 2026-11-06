@@ -103,6 +103,60 @@ describe("resumable demonstration runner", () => {
     await finalInst.stores.close();
   });
 
+  it("does not silently re-run a completed job when asked to continue", async () => {
+    const base = await tempDir();
+
+    // Drive the plan to completion in bounded batches.
+    let done = false;
+    let guard = 0;
+    let completedJobId: string | null = null;
+    while (!done && guard < 40) {
+      guard += 1;
+      const inst = await newInstance(base);
+      const result = await runDemoBatch({
+        stores: inst.stores,
+        config: inst.config,
+        memory: inst.memory,
+        budgetMs: 1,
+      });
+      done = result.done;
+      completedJobId = result.jobId;
+      await inst.stores.close();
+    }
+    expect(done).toBe(true);
+
+    // A non-restart call against a finished job must do nothing: it must not
+    // create a new job and must not re-run (and thus re-write) any scenario.
+    const inst = await newInstance(base);
+    const again = await runDemoBatch({
+      stores: inst.stores,
+      config: inst.config,
+      memory: inst.memory,
+      budgetMs: 60_000,
+    });
+    expect(again.completedThisRequest).toBe(0);
+    expect(again.failedThisRequest).toBe(0);
+    expect(again.jobId).toBe(completedJobId);
+    expect(again.done).toBe(true);
+    expect(again.continuationRequired).toBe(false);
+
+    // Exactly one job exists — no hidden restart created a second one.
+    const jobs = await inst.stores.jobs.listScenarios(completedJobId!);
+    expect(jobs.filter((r) => !r.internal).every((r) => r.state === "completed")).toBe(true);
+
+    // A restart *is* the explicit way to run again, and it produces a new job.
+    const restarted = await runDemoBatch({
+      stores: inst.stores,
+      config: inst.config,
+      memory: inst.memory,
+      restart: true,
+      budgetMs: 1,
+    });
+    expect(restarted.jobId).not.toBe(completedJobId);
+    expect(restarted.completedThisRequest).toBeGreaterThan(0);
+    await inst.stores.close();
+  });
+
   it("reports continuation required until the plan is finished", async () => {
     const base = await tempDir();
     const first = await newInstance(base);

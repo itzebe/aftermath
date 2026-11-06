@@ -1,0 +1,61 @@
+# Continuous integration for the AFTERMATH application.
+#
+# Runs the same five gates a release depends on — lint, type check, unit tests,
+# production build, and the end-to-end suite — on every push to master and every
+# pull request that targets it. No step needs a secret: the unit and end-to-end
+# suites use an isolated SQLite database and a simulated memory backend, so a
+# fork's pull request can run the full pipeline without access to credentials.
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+# Least privilege: every step only reads the repository.
+permissions:
+  contents: read
+
+# A new push supersedes an in-flight run for the same ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Lint, type check, test, build, e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      # The end-to-end suite drives `next start`, so the production build must
+      # exist before Playwright launches the server.
+      - name: Production build
+        run: npm run build
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: End-to-end tests
+        run: npm run test:e2e

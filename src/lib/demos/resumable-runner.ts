@@ -168,14 +168,27 @@ async function reconcilePendingWrites(
 }
 
 /** Load the active job, creating one when none is resumable. */
+type OpenJobResult =
+  | { kind: "job"; job: DemoJob }
+  | { kind: "already-complete"; job: DemoJob };
+
 async function openJob(
   stores: DurableStores,
   memory: MemoryAdapter,
   restart: boolean,
-): Promise<DemoJob> {
+): Promise<OpenJobResult> {
   if (!restart) {
     const latest = await stores.jobs.latestJob();
-    if (latest && latest.status !== "completed") return latest;
+    if (latest) {
+      // `restart:false` means "continue". Resume an unfinished job; report a
+      // *finished* one as such rather than silently re-running it. Re-running a
+      // completed plan repeats its irreversible Mainnet writes while the
+      // response still claims nothing was restarted. A deliberate re-run must
+      // ask for it with `restart:true`.
+      return latest.status === "completed"
+        ? { kind: "already-complete", job: latest }
+        : { kind: "job", job: latest };
+    }
   }
   const jobId = `demo-${Date.now()}-${randomUUID().slice(0, 8)}`;
   // A fresh demonstration starts from a known state: prior simulated incidents,
@@ -185,7 +198,7 @@ async function openJob(
   await stores.workflow.resetAll();
   if (!memory.isLive) await memory.reset?.();
   await stores.jobs.createJob(jobId, planSteps(DEMO_STEPS));
-  return (await stores.jobs.getJob(jobId))!;
+  return { kind: "job", job: (await stores.jobs.getJob(jobId))! };
 }
 
 export async function runDemoBatch(opts: BatchOptions): Promise<BatchResult> {
@@ -195,7 +208,43 @@ export async function runDemoBatch(opts: BatchOptions): Promise<BatchResult> {
   const { stores, memory } = opts;
 
   await stores.migrate();
-  const job = await openJob(stores, memory, opts.restart ?? false);
+  const opened = await openJob(stores, memory, opts.restart ?? false);
+  if (opened.kind === "already-complete") {
+    // A non-restart call found the latest job already finished. Report the
+    // completed job and do nothing — no scenarios re-run, no Mainnet writes.
+    const job = opened.job;
+    const rows = await stores.jobs.listScenarios(job.jobId);
+    const visible = rows.filter((r) => !r.internal);
+    const completed = visible.filter((r) => r.state === "completed").length;
+    const failed = visible.filter((r) => r.state === "failed").length;
+    return {
+      jobId: job.jobId,
+      completedThisRequest: 0,
+      failedThisRequest: 0,
+      remaining: 0,
+      done: true,
+      continuationRequired: false,
+      busy: false,
+      progress: {
+        jobId: job.jobId,
+        status: job.status,
+        total: visible.length,
+        completed,
+        failed,
+        remaining: 0,
+        executing: 0,
+      },
+      reports: [],
+      failures: [],
+      deferred: [],
+      retryAfterMs: null,
+      memorySimulated: !memory.isLive,
+      detail:
+        "The most recent demonstration is already complete; nothing was re-run. " +
+        "Use a restart to run it again from scratch.",
+    };
+  }
+  const job = opened.job;
   const owner = `worker-${randomUUID()}`;
   const start = now();
 
