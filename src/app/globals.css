@@ -72,14 +72,179 @@ body {
   color: #eaf2ff;
 }
 
-/* The console texture is a single fixed hairline grid, kept very faint so it
-   reads as a material rather than a pattern. */
-.grid-bg {
+/* =====================================================================
+   AFTERMATH — background architecture
+
+   The product is a causal chain: a failure and the safeguard it leaves are
+   the same object seen at two ends of one rail. The background system is the
+   same idea at architectural scale, in four calm, separated layers so that
+   no layer ever competes with the interface:
+
+     base      the page field — a single quiet vertical light, off-centre
+     lattice   a survey grid; a finer grid inside a heavier one, like the
+               instrument overlay on an engineering drawing
+     traces    node-and-link diagrams that read as a verification network
+               (SVG, drawn once, never animated)
+     surfaces  panel / tile treatments with a defined top edge and one
+               restrained ambient wash
+
+   Every tone is derived from the existing palette (--bg, --panel, --accent,
+   the signal colours). Nothing here introduces a new brand colour.
+   ===================================================================== */
+
+/* ---- base field ------------------------------------------------------ *
+   `isolation: isolate` makes this the one stacking context the whole page
+   lives in, so the negative-z layers below stay above the field colour and
+   below every piece of content — never behind the page, never over the text. */
+
+.bg-field {
+  position: relative;
+  isolation: isolate;
+  background-color: var(--bg);
+  /* Three washes: an off-centre key light at the top, a cooler rim from the
+     left, and a faint floor. Soft enough to be felt, never read. */
   background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.017) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.017) 1px, transparent 1px);
-  background-size: 56px 56px;
+    radial-gradient(
+      115% 72% at 68% -14%,
+      rgba(91, 157, 255, 0.095) 0%,
+      rgba(91, 157, 255, 0) 62%
+    ),
+    radial-gradient(
+      90% 55% at 6% -6%,
+      rgba(169, 139, 245, 0.05) 0%,
+      rgba(169, 139, 245, 0) 58%
+    ),
+    radial-gradient(
+      120% 60% at 50% 118%,
+      rgba(47, 111, 196, 0.075) 0%,
+      rgba(47, 111, 196, 0) 60%
+    );
+  background-repeat: no-repeat;
+}
+
+/* ---- lattice --------------------------------------------------------- *
+   Two grids at two scales. The coarse grid is slightly brighter so the
+   finer one reads as a subdivision, not as noise. Masked so it dissolves
+   before it can sit behind body text. */
+.bg-lattice {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.032) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.032) 1px, transparent 1px),
+    linear-gradient(to right, rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  background-size:
+    132px 132px,
+    132px 132px,
+    33px 33px,
+    33px 33px;
   background-position: center top;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 0%,
+    rgba(0, 0, 0, 0.55) 34%,
+    transparent 82%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    #000 0%,
+    rgba(0, 0, 0, 0.55) 34%,
+    transparent 82%
+  );
+}
+
+/* ---- traces ---------------------------------------------------------- *
+   Node-and-link diagrams, one per band of the page. Fixed so they read as
+   a deep, still backdrop the content moves across. */
+.bg-traces {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  color: var(--line-2);
+  opacity: 0.5;
+}
+.bg-traces svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ---- surfaces -------------------------------------------------------- *
+   A panel/tile treatment for the larger structural blocks: a defined top
+   edge (so the surface reads as lit from above), a single ambient wash
+   instead of a flat fill, and an optional hairline lattice for technical
+   tiles. */
+.surface {
+  position: relative;
+  border: 1px solid var(--line);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.022), rgba(255, 255, 255, 0)),
+    var(--panel);
+  border-radius: 8px;
+}
+.surface::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  border-radius: 8px 8px 0 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.14) 22%,
+    rgba(91, 157, 255, 0.28) 50%,
+    rgba(255, 255, 255, 0.14) 78%,
+    transparent
+  );
+}
+.surface-tile {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0)),
+    var(--panel-2);
+}
+/* A faint lattice for surfaces that should read as instrumented. It keeps the
+   surface's top sheen as the first layer, so the "lit from above" cue survives
+   the lattice rather than being replaced by it. */
+.surface-grid {
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.022), rgba(255, 255, 255, 0)),
+    linear-gradient(to right, rgba(255, 255, 255, 0.016) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.016) 1px, transparent 1px);
+  background-size:
+    auto,
+    26px 26px,
+    26px 26px;
+}
+
+/* ---- section separators --------------------------------------------- *
+   A divider that carries the chain motif: a hairline that is interrupted by
+   a short segment of the spine, so the sections read as one structure. */
+.section-rule {
+  position: relative;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--line) 12%,
+    var(--line) 88%,
+    transparent
+  );
+}
+.section-rule::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: -1px;
+  width: 3.5rem;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), rgba(91, 157, 255, 0));
 }
 
 /* ---- surfaces ------------------------------------------------------- */

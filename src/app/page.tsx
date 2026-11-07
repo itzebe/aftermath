@@ -85,7 +85,9 @@ export default async function HomePage() {
             Sui transaction sample to watch that path run.
           </p>
         </div>
-        <PublicInvestigation />
+        <div className="surface surface-grid p-4 sm:p-6 md:p-8">
+          <PublicInvestigation />
+        </div>
         <div className="mt-4">
           <Notice tone="info" title="What a Safeguard Record contains">
             Every record is a connected argument: the incident, the evidence with
@@ -100,6 +102,8 @@ export default async function HomePage() {
         </div>
       </section>
 
+      <div className="section-rule" aria-hidden />
+
       {/* ---- how it works -------------------------------------------- */}
       <section id="how-it-works" className="scroll-mt-24">
         <div className="mb-10 max-w-prose">
@@ -113,8 +117,12 @@ export default async function HomePage() {
             chain.
           </p>
         </div>
-        <ChainDiagram />
+        <div className="surface surface-grid p-5 sm:p-7 md:p-9">
+          <ChainDiagram />
+        </div>
       </section>
+
+      <div className="section-rule" aria-hidden />
 
       {/* ---- product principles -------------------------------------- */}
       <section>
@@ -142,7 +150,8 @@ export default async function HomePage() {
       </section>
 
       {/* ---- technical status ---------------------------------------- */}
-      <section className="border-t hairline pt-12">
+      <div className="section-rule" aria-hidden />
+      <section className="pt-12">
         <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
           <div className="max-w-prose">
             <div className="label mb-3">Technical status</div>
