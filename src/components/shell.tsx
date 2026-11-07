@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { fetchJson } from "@/lib/util/api-get";
+import { Background } from "@/components/background";
 
 /**
  * The application frame: one authoritative primary navigation.
@@ -104,7 +105,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const systemActive = SYSTEM.some((s) => isActive(pathname, s.href));
 
   return (
-    <div className="grid-bg min-h-screen">
+    <div className="bg-field min-h-screen">
+      <Background />
       <a href="#main" className="skip-link">
         Skip to content
       </a>

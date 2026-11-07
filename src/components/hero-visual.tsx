@@ -8,14 +8,14 @@
  */
 export function HeroVisual() {
   return (
-    <figure className="rounded-lg border hairline bg-[#090c11] p-5">
+    <figure className="surface surface-grid p-5">
       <figcaption className="label mb-4 flex items-center gap-2">
         Illustration
         <span className="h-px flex-1 bg-ink-700" aria-hidden />
       </figcaption>
 
       <div className="space-y-3">
-        <div className="rounded-md border hairline bg-[#06080b] px-3.5 py-3">
+        <div className="surface-tile px-3.5 py-3">
           <div className="label mb-2">Incident material</div>
           <p className="mono text-[0.75rem] leading-relaxed text-paper-500">
             A log line, an error, a failed request — treated strictly as data.
